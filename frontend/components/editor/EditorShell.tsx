@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMapBundle, fetchMapList, saveMapBundle, toggleActiveMap, EditorApiError } from "../../lib/editor/api";
 import { LAYER_NAMES, type ExpandedTile, type MapSummary } from "../../lib/editor/types";
+import type { GraphicsDB } from "../../types/game";
+import { loadGraphicsDB } from "../../utils/gameLoader";
 import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
 import { GraphicsPicker } from "./GraphicsPicker";
 import { NpcPanel } from "./NpcPanel";
@@ -57,6 +59,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [tool, setTool] = useState<EditorTool>("select");
     const [paintMode, setPaintMode] = useState<PaintMode>("graphic");
     const [brushGraphic, setBrushGraphic] = useState<number | null>(null);
+    const [graphicsDB, setGraphicsDB] = useState<GraphicsDB | null>(null);
 
     const historyRef = useRef(new History());
     const [revision, setRevision] = useState(0);
@@ -94,6 +97,22 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     setError(err instanceof EditorApiError ? err.message : "No se pudo listar los mapas.");
                 }
             });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
+    // Compartida con EditorCanvas: el navegador la cachea, esto no dispara un
+    // segundo fetch. Solo la necesita el GraphicsPicker para las miniaturas.
+    useEffect(() => {
+        let cancelled = false;
+
+        void loadGraphicsDB().then((db) => {
+            if (!cancelled) {
+                setGraphicsDB(db);
+            }
+        });
 
         return () => {
             cancelled = true;
@@ -426,6 +445,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                                     layer={activeLayer}
                                     value={brushGraphic}
                                     onChange={setBrushGraphic}
+                                    graphicsDB={graphicsDB}
                                 />
                             )}
 
