@@ -191,9 +191,13 @@ const pkg = require("./package") as PackageApi;
 const npcs = require("./npcs") as NpcsApi;
 const runtimeTiming = require("./runtimeTiming");
 const handleProtocol = require("./handleProtocol") as HandleProtocolApi;
+const editorHttp = require("./editorHttp") as typeof import("./editorHttp");
 
 function handleHttpRequest(request: any, response: any) {
-    void request;
+    if (editorHttp.isEditorRequest(request.url)) {
+        void editorHttp.handleEditorRequest(request, response);
+        return;
+    }
 
     response.statusCode = 404;
     response.setHeader("Content-Type", "application/json; charset=utf-8");

@@ -11,6 +11,10 @@ type RuntimeConfig = {
     tokenAuth: string;
     projectRoot: string;
     distRoot: string;
+    /** Habilita el router HTTP del editor de mapas (`/editor/*`). */
+    editorEnabled: boolean;
+    /** Permite que el editor escriba a disco con NODE_ENV=production. */
+    editorAllowProduction: boolean;
 };
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -65,6 +69,12 @@ const config: RuntimeConfig = {
     tokenAuth: getRequiredEnv("TOKEN_AUTH", "changeme"),
     projectRoot,
     distRoot,
+    // Por defecto activo solo fuera de produccion: el editor es una
+    // herramienta de autoria que escribe sobre el checkout del repo.
+    editorEnabled: process.env.EDITOR_ENABLED
+        ? process.env.EDITOR_ENABLED === "true"
+        : (process.env.NODE_ENV ?? "development") !== "production",
+    editorAllowProduction: process.env.EDITOR_ALLOW_PRODUCTION === "true",
 };
 
 export = config;

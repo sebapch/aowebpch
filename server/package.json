@@ -33,6 +33,7 @@
         "export-client-objs": "tsx src/scripts/exportClientObjs.ts",
         "verify-map-roundtrip": "tsx src/scripts/verifyMapRoundtrip.ts",
         "normalize-map-source": "tsx src/scripts/normalizeMapSource.ts",
+        "editor-dev": "tsx src/scripts/editorHttpDevServer.ts",
         "start": "node dist/server.js",
         "lint": "eslint './src/**/*.ts'",
         "world-map": "node scripts/build-world-map.cjs",

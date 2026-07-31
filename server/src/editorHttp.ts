@@ -1,0 +1,193 @@
+import type { IncomingMessage, ServerResponse } from "node:http";
+import config = require("./config");
+import {
+    FRONTEND_MAPS_DIR,
+    FRONTEND_MAPS_OPTIMIZED_DIR,
+    MAPS_SOURCE_DIR,
+    API_MAPS_SOURCE_DIR,
+    listMapSummaries,
+    mapExists,
+    readMapBundle,
+} from "./mapSource";
+import fs from "node:fs";
+
+/**
+ * API HTTP del editor de mapas, montada sobre el mismo `http.Server` que ya usa
+ * el websocket del juego. Este proceso es el unico que tiene el filesystem de
+ * `mapas_source` y el estado vivo del mundo, asi que es el unico que puede
+ * leer, escribir y recargar mapas.
+ *
+ * El navegador nunca llega hasta aca: el frontend de Next hace de proxy,
+ * valida la sesion del usuario contra la api y agrega el TOKEN_AUTH.
+ */
+
+const EDITOR_PREFIX = "/editor/";
+
+type EditorRoute = {
+    method: string;
+    pattern: RegExp;
+    handler: (params: string[], body: unknown) => Promise<unknown> | unknown;
+};
+
+export class EditorHttpError extends Error {
+    status: number;
+    issues?: string[];
+
+    constructor(status: number, message: string, issues?: string[]) {
+        super(message);
+        this.name = "EditorHttpError";
+        this.status = status;
+        this.issues = issues;
+    }
+}
+
+export function isEditorRequest(url: string | undefined): boolean {
+    if (!url) {
+        return false;
+    }
+
+    const pathname = url.split("?")[0];
+
+    return pathname === "/editor" || pathname.startsWith(EDITOR_PREFIX);
+}
+
+function parseMapId(raw: string): number {
+    const mapId = Number.parseInt(raw, 10);
+
+    if (!Number.isInteger(mapId) || mapId <= 0) {
+        throw new EditorHttpError(400, `Id de mapa invalido: ${raw}`);
+    }
+
+    return mapId;
+}
+
+const routes: EditorRoute[] = [
+    {
+        method: "GET",
+        pattern: /^\/editor\/health$/,
+        handler: () => ({
+            ok: true,
+            editorEnabled: config.editorEnabled,
+            nodeEnv: config.nodeEnv,
+            writesAllowed: config.nodeEnv !== "production" || config.editorAllowProduction,
+            sinks: {
+                source: fs.existsSync(MAPS_SOURCE_DIR),
+                api: fs.existsSync(API_MAPS_SOURCE_DIR),
+                frontendMaps: fs.existsSync(FRONTEND_MAPS_DIR),
+                frontendMapsOptimized: fs.existsSync(FRONTEND_MAPS_OPTIMIZED_DIR),
+            },
+        }),
+    },
+    {
+        method: "GET",
+        pattern: /^\/editor\/maps$/,
+        handler: () => ({ maps: listMapSummaries() }),
+    },
+    {
+        method: "GET",
+        pattern: /^\/editor\/maps\/(\d+)$/,
+        handler: (params) => {
+            const mapId = parseMapId(params[0]);
+
+            if (!mapExists(mapId)) {
+                throw new EditorHttpError(404, `El mapa ${mapId} no existe.`);
+            }
+
+            return readMapBundle(mapId);
+        },
+    },
+];
+
+function sendJson(response: ServerResponse, status: number, payload: unknown): void {
+    const body = JSON.stringify(payload);
+    response.statusCode = status;
+    response.setHeader("Content-Type", "application/json; charset=utf-8");
+    response.setHeader("Cache-Control", "no-store");
+    response.end(body);
+}
+
+const MAX_BODY_BYTES = 16 * 1024 * 1024;
+
+function readBody(request: IncomingMessage): Promise<string> {
+    return new Promise((resolve, reject) => {
+        const chunks: Buffer[] = [];
+        let size = 0;
+
+        request.on("data", (chunk: Buffer) => {
+            size += chunk.length;
+
+            if (size > MAX_BODY_BYTES) {
+                reject(new EditorHttpError(413, "El cuerpo de la peticion es demasiado grande."));
+                request.destroy();
+                return;
+            }
+
+            chunks.push(chunk);
+        });
+        request.on("end", () => resolve(Buffer.concat(chunks).toString("utf8")));
+        request.on("error", (error) => reject(error));
+    });
+}
+
+export async function handleEditorRequest(request: IncomingMessage, response: ServerResponse): Promise<void> {
+    try {
+        if (!config.editorEnabled) {
+            throw new EditorHttpError(404, "El editor de mapas esta deshabilitado.");
+        }
+
+        if (request.headers.authorization !== config.tokenAuth) {
+            throw new EditorHttpError(401, "No autorizado.");
+        }
+
+        const pathname = (request.url ?? "").split("?")[0];
+        const method = (request.method ?? "GET").toUpperCase();
+
+        const matchedPath = routes.filter((route) => route.pattern.test(pathname));
+
+        if (matchedPath.length === 0) {
+            throw new EditorHttpError(404, `Ruta desconocida: ${pathname}`);
+        }
+
+        const route = matchedPath.find((candidate) => candidate.method === method);
+
+        if (!route) {
+            throw new EditorHttpError(405, `Metodo ${method} no permitido en ${pathname}`);
+        }
+
+        const params = (pathname.match(route.pattern) ?? []).slice(1);
+        const isWrite = method !== "GET";
+
+        if (isWrite && config.nodeEnv === "production" && !config.editorAllowProduction) {
+            throw new EditorHttpError(
+                403,
+                "El editor es de solo lectura en produccion. Activa EDITOR_ALLOW_PRODUCTION para permitir escrituras.",
+            );
+        }
+
+        let body: unknown = undefined;
+
+        if (isWrite) {
+            const raw = await readBody(request);
+
+            if (raw.trim()) {
+                try {
+                    body = JSON.parse(raw);
+                } catch {
+                    throw new EditorHttpError(400, "El cuerpo de la peticion no es JSON valido.");
+                }
+            }
+        }
+
+        sendJson(response, 200, await route.handler(params, body));
+    } catch (error) {
+        if (error instanceof EditorHttpError) {
+            sendJson(response, error.status, { error: error.message, issues: error.issues });
+            return;
+        }
+
+        console.error("[EDITOR] Error no controlado:", error);
+        sendJson(response, 500, {
+            error: error instanceof Error ? error.message : "Error inesperado.",
+        });
+    }
+}
