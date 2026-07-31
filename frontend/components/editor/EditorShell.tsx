@@ -8,6 +8,7 @@ import { loadGraphicsDB } from "../../utils/gameLoader";
 import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
 import { GraphicsPicker } from "./GraphicsPicker";
 import { NpcPanel } from "./NpcPanel";
+import { NpcSelectorModal } from "./NpcSelectorModal";
 import { TileInspector } from "./TileInspector";
 import { History } from "./model/History";
 import { EditorMapModel, type LayerIndex } from "./model/EditorMapModel";
@@ -38,6 +39,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [hoverTile, setHoverTile] = useState<{ x: number; y: number } | null>(null);
     const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
     const [npcPanelIndex, setNpcPanelIndex] = useState<number | null>(null);
+    const [catalogOpen, setCatalogOpen] = useState(false);
 
     const [activeLayer, setActiveLayer] = useState<LayerIndex>(1);
     const [isolateLayer, setIsolateLayer] = useState(false);
@@ -205,6 +207,36 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         setDirty(true);
         setRevision((current) => current + 1);
     }, []);
+
+    const handleAddNpc = useCallback(
+        (x: number, y: number, npcIndex: number) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.spawn = { npcIndex, movement: 0 };
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: "agregar npc",
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
 
     const handleRemoveNpc = useCallback(
         (x: number, y: number) => {
@@ -743,6 +775,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         tile={inspectedTile}
                         x={inspectedCoords?.x ?? null}
                         y={inspectedCoords?.y ?? null}
+                        onAddNpc={handleAddNpc}
+                        onOpenCatalog={() => setCatalogOpen(true)}
                         onRemoveObject={handleRemoveObject}
                         onRemoveNpc={handleRemoveNpc}
                         onRemoveTrigger={handleRemoveTrigger}
@@ -766,6 +800,16 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             {npcPanelIndex !== null && (
                 <NpcPanel npcIndex={npcPanelIndex} onClose={() => setNpcPanelIndex(null)} />
             )}
+
+            <NpcSelectorModal
+                isOpen={catalogOpen}
+                onClose={() => setCatalogOpen(false)}
+                onSelectNpc={(npcIndex) => {
+                    if (selectedTile) {
+                        handleAddNpc(selectedTile.x, selectedTile.y, npcIndex);
+                    }
+                }}
+            />
         </div>
     );
 }

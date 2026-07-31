@@ -7,6 +7,8 @@ type Props = {
     tile: ExpandedTile | null;
     x: number | null;
     y: number | null;
+    onAddNpc?: (x: number, y: number, npcIndex: number) => void;
+    onOpenCatalog?: () => void;
     onRemoveObject?: (x: number, y: number) => void;
     onRemoveNpc?: (x: number, y: number) => void;
     onRemoveTrigger?: (x: number, y: number) => void;
@@ -28,6 +30,8 @@ export function TileInspector({
     tile,
     x,
     y,
+    onAddNpc,
+    onOpenCatalog,
     onRemoveObject,
     onRemoveNpc,
     onRemoveTrigger,
@@ -114,7 +118,7 @@ export function TileInspector({
                     </div>
                 )}
 
-                {(tile.spawn || tile.npc !== undefined) && (
+                {tile.spawn || tile.npc !== undefined ? (
                     <div className="py-2">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] uppercase tracking-wide text-slate-500">NPC</span>
@@ -140,6 +144,48 @@ export function TileInspector({
                                 <>Inline #{tile.npc}</>
                             )}
                         </div>
+                    </div>
+                ) : (
+                    <div className="py-2 space-y-1.5">
+                        <div className="flex items-center justify-between">
+                            <span className="text-[11px] uppercase tracking-wide text-slate-500">Agregar NPC</span>
+                            {onOpenCatalog && (
+                                <button
+                                    type="button"
+                                    onClick={onOpenCatalog}
+                                    className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 underline"
+                                >
+                                    🔍 Catálogo (Amistosos / Monstruos)
+                                </button>
+                            )}
+                        </div>
+                        <form
+                            onSubmit={(e) => {
+                                e.preventDefault();
+                                const form = e.currentTarget;
+                                const input = form.elements.namedItem("npcId") as HTMLInputElement;
+                                const val = Number.parseInt(input.value, 10);
+                                if (Number.isInteger(val) && val > 0) {
+                                    onAddNpc?.(x, y, val);
+                                    input.value = "";
+                                }
+                            }}
+                            className="flex gap-1"
+                        >
+                            <input
+                                name="npcId"
+                                type="number"
+                                min={1}
+                                placeholder="ID NPC (ej. 1)"
+                                className="w-24 rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-200"
+                            />
+                            <button
+                                type="submit"
+                                className="rounded border border-amber-600/80 bg-amber-950/80 px-2 py-0.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-900"
+                            >
+                                Colocar
+                            </button>
+                        </form>
                     </div>
                 )}
 
