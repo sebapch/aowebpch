@@ -206,6 +206,193 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         setRevision((current) => current + 1);
     }, []);
 
+    const handleRemoveNpc = useCallback(
+        (x: number, y: number) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.spawn = undefined;
+                tile.npc = undefined;
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: "eliminar npc",
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
+
+    const handleRemoveObject = useCallback(
+        (x: number, y: number) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.object = undefined;
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: "eliminar objeto",
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
+
+    const handleRemoveTrigger = useCallback(
+        (x: number, y: number) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.trigger = undefined;
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: "eliminar trigger",
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
+
+    const handleRemoveExit = useCallback(
+        (x: number, y: number) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.exit = undefined;
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: "eliminar salida",
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
+
+    const handleClearLayer = useCallback(
+        (x: number, y: number, layer: LayerIndex) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.graphics[layer - 1] = null;
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: `borrar capa ${layer}`,
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
+
+    const handleClearTile = useCallback(
+        (x: number, y: number) => {
+            if (!model) return;
+            const edit = model.applyEdit(x, y, (tile) => {
+                tile.graphics = [null, null, null, null];
+                tile.blocked = false;
+                tile.object = undefined;
+                tile.spawn = undefined;
+                tile.npc = undefined;
+                tile.trigger = undefined;
+                tile.exit = undefined;
+                return tile;
+            });
+
+            if (!edit) return;
+
+            canvasHandle?.markAllDirty();
+            historyRef.current.push({
+                label: "limpiar tile completo",
+                undo: () => {
+                    model.restoreTile(edit.index, edit.before);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    model.restoreTile(edit.index, edit.after);
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit],
+    );
+
     const handleSave = useCallback(async () => {
         if (!model || saving) {
             return;
@@ -556,6 +743,12 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         tile={inspectedTile}
                         x={inspectedCoords?.x ?? null}
                         y={inspectedCoords?.y ?? null}
+                        onRemoveObject={handleRemoveObject}
+                        onRemoveNpc={handleRemoveNpc}
+                        onRemoveTrigger={handleRemoveTrigger}
+                        onRemoveExit={handleRemoveExit}
+                        onClearLayer={handleClearLayer}
+                        onClearTile={handleClearTile}
                     />
                 </aside>
             </div>

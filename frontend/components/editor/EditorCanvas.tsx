@@ -534,6 +534,31 @@ export function EditorCanvas({
         onZoomRef.current?.(scene.getZoom());
     }, []);
 
+    const handleZoomIn = () => {
+        const scene = sceneRef.current;
+        if (!scene) return;
+        const currentZoom = scene.getZoom();
+        const camera = scene.getCamera();
+        scene.setCamera(camera.x, camera.y, currentZoom * 1.25);
+        onZoomRef.current?.(scene.getZoom());
+    };
+
+    const handleZoomOut = () => {
+        const scene = sceneRef.current;
+        if (!scene) return;
+        const currentZoom = scene.getZoom();
+        const camera = scene.getCamera();
+        scene.setCamera(camera.x, camera.y, currentZoom / 1.25);
+        onZoomRef.current?.(scene.getZoom());
+    };
+
+    const handleFitToScreen = () => {
+        const scene = sceneRef.current;
+        if (!scene) return;
+        scene.fitToScreen();
+        onZoomRef.current?.(scene.getZoom());
+    };
+
     return (
         <div
             ref={hostRef}
@@ -559,8 +584,40 @@ export function EditorCanvas({
                     No se pudo inicializar el editor: {errorMessage}
                 </div>
             )}
-            <div className="pointer-events-none absolute bottom-2 right-2 rounded bg-black/60 px-2 py-1 text-[11px] text-slate-300">
-                {model.width}x{model.height} · {TILE_SIZE}px/tile
+
+            {/* Controles de zoom abajo a la derecha de la vista previa */}
+            <div
+                className="absolute bottom-3 right-3 flex items-center gap-1.5 rounded-lg border border-slate-800 bg-slate-900/90 p-1.5 shadow-xl backdrop-blur-sm text-xs text-slate-200 select-none z-10"
+                onPointerDown={(e) => e.stopPropagation()}
+            >
+                <button
+                    type="button"
+                    onClick={handleZoomOut}
+                    className="flex h-7 w-7 items-center justify-center rounded border border-slate-700 bg-slate-800 font-bold text-slate-200 hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                    title="Alejar zoom (-)"
+                >
+                    −
+                </button>
+
+                <button
+                    type="button"
+                    onClick={handleZoomIn}
+                    className="flex h-7 w-7 items-center justify-center rounded border border-slate-700 bg-slate-800 font-bold text-slate-200 hover:bg-slate-700 active:bg-slate-600 transition-colors"
+                    title="Acercar zoom (+)"
+                >
+                    +
+                </button>
+
+                <div className="h-4 w-px bg-slate-800 mx-0.5" />
+
+                <button
+                    type="button"
+                    onClick={handleFitToScreen}
+                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px] text-slate-300 hover:bg-slate-700 transition-colors"
+                    title="Ajustar mapa en pantalla"
+                >
+                    {model.width}x{model.height} · {TILE_SIZE}px
+                </button>
             </div>
         </div>
     );

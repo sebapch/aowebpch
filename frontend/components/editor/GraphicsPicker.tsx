@@ -118,17 +118,23 @@ export function GraphicsPicker({ model, layer, value, onChange, graphicsDB }: Pr
                 </button>
             </div>
 
+            <button
+                type="button"
+                className={`flex w-full items-center justify-center gap-1.5 rounded border px-2 py-1 text-xs font-medium transition-colors ${
+                    value === null
+                        ? "border-amber-500/80 bg-amber-950/80 text-amber-200"
+                        : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                }`}
+                onClick={() => onChange(null)}
+                title={`Usar la goma de borrar sobre la Capa ${layer}`}
+            >
+                🧹 Goma de borrar (Vaciar Capa {layer})
+            </button>
+
             {value !== null && (
                 <div className="flex items-center gap-2 text-xs text-slate-400">
                     <GraphicThumbnail grhId={value} graphicsDB={graphicsDB} size={22} />
                     Pincel: <span className="font-mono text-slate-200">{value}</span>
-                    <button
-                        type="button"
-                        className="text-slate-500 underline hover:text-slate-300"
-                        onClick={() => onChange(null)}
-                    >
-                        limpiar
-                    </button>
                 </div>
             )}
 
