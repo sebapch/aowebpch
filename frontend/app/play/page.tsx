@@ -141,7 +141,7 @@ function isPrivateHostname(hostname: string): boolean {
 }
 
 function resolveWebSocketUrl(configuredUrl: string): string {
-    if (typeof window === "undefined") {
+    if (typeof window === "undefined" || !configuredUrl) {
         return configuredUrl;
     }
 
@@ -150,6 +150,15 @@ function resolveWebSocketUrl(configuredUrl: string): string {
     try {
         const configured = new URL(configuredUrl);
         const currentHost = window.location.hostname;
+
+        if (
+            configured.hostname.endsWith("trycloudflare.com") ||
+            configured.hostname.endsWith("aoweb.app") ||
+            !isPrivateHostname(configured.hostname)
+        ) {
+            configured.protocol = pageProtocol;
+            return configured.toString();
+        }
 
         if (configured.hostname === currentHost) {
             configured.protocol = pageProtocol;

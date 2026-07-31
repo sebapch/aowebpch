@@ -5,11 +5,17 @@ import {
     FRONTEND_MAPS_OPTIMIZED_DIR,
     MAPS_SOURCE_DIR,
     API_MAPS_SOURCE_DIR,
+    type EditorMapBundle,
+    type MapNpcPlacement,
     listMapSummaries,
     mapExists,
     readMapBundle,
+    getActiveMapIds,
+    setActiveMapIds,
 } from "./mapSource";
+import { saveMapBundle, saveMapNpcs } from "./mapWrites";
 import fs from "node:fs";
+import vars = require("./vars");
 
 /**
  * API HTTP del editor de mapas, montada sobre el mismo `http.Server` que ya usa
@@ -61,6 +67,28 @@ function parseMapId(raw: string): number {
     return mapId;
 }
 
+function requireMapBundle(body: unknown): EditorMapBundle {
+    if (!body || typeof body !== "object") {
+        throw new EditorHttpError(400, "Se esperaba un bundle de mapa.");
+    }
+
+    const candidate = body as Partial<EditorMapBundle>;
+
+    if (!candidate.meta || !Array.isArray(candidate.tiles) || typeof candidate.width !== "number" || typeof candidate.height !== "number") {
+        throw new EditorHttpError(400, "El bundle de mapa tiene forma invalida.");
+    }
+
+    return candidate as EditorMapBundle;
+}
+
+function requireNpcPlacements(body: unknown): MapNpcPlacement[] {
+    if (!Array.isArray(body)) {
+        throw new EditorHttpError(400, "Se esperaba un array de spawns de NPC.");
+    }
+
+    return body as MapNpcPlacement[];
+}
+
 const routes: EditorRoute[] = [
     {
         method: "GET",
@@ -81,7 +109,44 @@ const routes: EditorRoute[] = [
     {
         method: "GET",
         pattern: /^\/editor\/maps$/,
-        handler: () => ({ maps: listMapSummaries() }),
+        handler: () => ({ maps: listMapSummaries(), activeMapIds: getActiveMapIds() }),
+    },
+    {
+        method: "GET",
+        pattern: /^\/editor\/active-maps$/,
+        handler: () => ({ activeMapIds: getActiveMapIds() }),
+    },
+    {
+        method: "POST",
+        pattern: /^\/editor\/active-maps\/toggle$/,
+        handler: async (_params, body) => {
+            const payload = body as { mapId?: number; active?: boolean };
+            const mapId = parseMapId(String(payload?.mapId));
+            const active = Boolean(payload?.active);
+
+            if (!mapExists(mapId)) {
+                throw new EditorHttpError(404, `El mapa ${mapId} no existe.`);
+            }
+
+            const currentActiveIds = getActiveMapIds();
+            let newActiveIds: number[];
+
+            if (active) {
+                newActiveIds = Array.from(new Set([...currentActiveIds, mapId]));
+                if ((vars as any).loadMapsInstance) {
+                    await (vars as any).loadMapsInstance.loadSingleMap(mapId);
+                }
+            } else {
+                newActiveIds = currentActiveIds.filter((id) => id !== mapId);
+                if ((vars as any).loadMapsInstance) {
+                    (vars as any).loadMapsInstance.unloadMap(mapId);
+                }
+            }
+
+            setActiveMapIds(newActiveIds);
+
+            return { ok: true, mapId, active, activeMapIds: newActiveIds };
+        },
     },
     {
         method: "GET",
@@ -94,6 +159,40 @@ const routes: EditorRoute[] = [
             }
 
             return readMapBundle(mapId);
+        },
+    },
+    {
+        method: "PUT",
+        pattern: /^\/editor\/maps\/(\d+)$/,
+        handler: (params, body) => {
+            const mapId = parseMapId(params[0]);
+
+            if (!mapExists(mapId)) {
+                throw new EditorHttpError(404, `El mapa ${mapId} no existe.`);
+            }
+
+            try {
+                return saveMapBundle(mapId, requireMapBundle(body));
+            } catch (error) {
+                throw new EditorHttpError(400, error instanceof Error ? error.message : "No se pudo guardar el mapa.");
+            }
+        },
+    },
+    {
+        method: "PUT",
+        pattern: /^\/editor\/maps\/(\d+)\/npcs$/,
+        handler: (params, body) => {
+            const mapId = parseMapId(params[0]);
+
+            if (!mapExists(mapId)) {
+                throw new EditorHttpError(404, `El mapa ${mapId} no existe.`);
+            }
+
+            try {
+                return { spawns: saveMapNpcs(mapId, requireNpcPlacements(body)) };
+            } catch (error) {
+                throw new EditorHttpError(400, error instanceof Error ? error.message : "No se pudieron guardar los spawns.");
+            }
         },
     },
 ];
@@ -162,6 +261,12 @@ export async function handleEditorRequest(request: IncomingMessage, response: Se
                 403,
                 "El editor es de solo lectura en produccion. Activa EDITOR_ALLOW_PRODUCTION para permitir escrituras.",
             );
+        }
+
+        if (isWrite) {
+            const rawActor = request.headers["x-editor-actor"];
+            const actor = typeof rawActor === "string" ? decodeURIComponent(rawActor) : "desconocido";
+            console.log(`[EDITOR] ${method} ${pathname} actor=${actor}`);
         }
 
         let body: unknown = undefined;

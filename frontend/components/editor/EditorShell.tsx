@@ -1,10 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { fetchMapBundle, fetchMapList, EditorApiError } from "../../lib/editor/api";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { fetchMapBundle, fetchMapList, saveMapBundle, toggleActiveMap, EditorApiError } from "../../lib/editor/api";
 import { LAYER_NAMES, type ExpandedTile, type MapSummary } from "../../lib/editor/types";
-import { EditorCanvas, type EditorCanvasHandle } from "./EditorCanvas";
+import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
+import { GraphicsPicker } from "./GraphicsPicker";
+import { NpcPanel } from "./NpcPanel";
 import { TileInspector } from "./TileInspector";
+import { History } from "./model/History";
 import { EditorMapModel, type LayerIndex } from "./model/EditorMapModel";
 import type { LayerVisibility, OverlayFlags } from "./render/EditorScene";
 
@@ -21,6 +24,8 @@ const OVERLAY_LABELS: Record<keyof OverlayFlags, string> = {
 
 export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [maps, setMaps] = useState<MapSummary[]>([]);
+    const [activeMapIds, setActiveMapIds] = useState<number[]>([]);
+    const [togglingActive, setTogglingActive] = useState(false);
     const [mapId, setMapId] = useState(initialMapId);
     const [model, setModel] = useState<EditorMapModel | null>(null);
     const [loading, setLoading] = useState(true);
@@ -30,6 +35,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
     const [hoverTile, setHoverTile] = useState<{ x: number; y: number } | null>(null);
     const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
+    const [npcPanelIndex, setNpcPanelIndex] = useState<number | null>(null);
 
     const [activeLayer, setActiveLayer] = useState<LayerIndex>(1);
     const [isolateLayer, setIsolateLayer] = useState(false);
@@ -47,6 +53,16 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         npcs: true,
         triggers: false,
     });
+
+    const [tool, setTool] = useState<EditorTool>("select");
+    const [paintMode, setPaintMode] = useState<PaintMode>("graphic");
+    const [brushGraphic, setBrushGraphic] = useState<number | null>(null);
+
+    const historyRef = useRef(new History());
+    const [revision, setRevision] = useState(0);
+    const [dirty, setDirty] = useState(false);
+    const [saving, setSaving] = useState(false);
+    const [saveError, setSaveError] = useState<string | null>(null);
 
     // Aislar la capa activa atenua las demas en vez de ocultarlas, para no
     // perder la referencia visual de lo que hay alrededor.
@@ -67,9 +83,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         let cancelled = false;
 
         void fetchMapList()
-            .then((list) => {
+            .then(({ maps: list, activeMapIds: activeIds }) => {
                 if (!cancelled) {
                     setMaps(list);
+                    setActiveMapIds(activeIds);
                 }
             })
             .catch((err: unknown) => {
@@ -82,6 +99,20 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             cancelled = true;
         };
     }, []);
+
+    const isCurrentMapActive = activeMapIds.includes(mapId);
+
+    const handleToggleActiveMap = async () => {
+        setTogglingActive(true);
+        try {
+            const updated = await toggleActiveMap(mapId, !isCurrentMapActive);
+            setActiveMapIds(updated);
+        } catch (err: unknown) {
+            setError(err instanceof EditorApiError ? err.message : "Error al cambiar estado del mapa.");
+        } finally {
+            setTogglingActive(false);
+        }
+    };
 
     useEffect(() => {
         let cancelled = false;
@@ -112,6 +143,15 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         };
     }, [mapId]);
 
+    // Cada mapa nuevo empieza con su propio historial y sin cambios sin guardar.
+    // Esto no se dispara al guardar: el guardado no reemplaza `model`.
+    useEffect(() => {
+        historyRef.current = new History();
+        setDirty(false);
+        setSaveError(null);
+        setRevision(0);
+    }, [model]);
+
     const inspectedTile: ExpandedTile | null = useMemo(() => {
         const target = selectedTile ?? hoverTile;
 
@@ -120,13 +160,76 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         }
 
         return model.get(target.x, target.y);
-    }, [model, selectedTile, hoverTile]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [model, selectedTile, hoverTile, revision]);
 
     const inspectedCoords = selectedTile ?? hoverTile;
+
+    // Tocar un NPC (click sin arrastrar, o el tile donde quedo tras moverlo)
+    // abre su plantilla compartida en un panel.
+    useEffect(() => {
+        if (!model || !selectedTile) {
+            return;
+        }
+
+        const tile = model.get(selectedTile.x, selectedTile.y);
+
+        if (tile?.spawn) {
+            setNpcPanelIndex(tile.spawn.npcIndex);
+        }
+        // Se dispara solo con un click nuevo, no con cada edicion posterior:
+        // si el usuario cierra el panel, no debe reabrirse solo.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedTile]);
+
+    const handleEdit = useCallback(() => {
+        setDirty(true);
+        setRevision((current) => current + 1);
+    }, []);
+
+    const handleSave = useCallback(async () => {
+        if (!model || saving) {
+            return;
+        }
+
+        setSaving(true);
+        setSaveError(null);
+
+        try {
+            await saveMapBundle(model.meta.id, model.toBundle());
+            setDirty(false);
+        } catch (err) {
+            setSaveError(err instanceof EditorApiError ? err.message : "No se pudo guardar el mapa.");
+        } finally {
+            setSaving(false);
+        }
+    }, [model, saving]);
 
     const handleKeyDown = useCallback(
         (event: KeyboardEvent) => {
             if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+                event.preventDefault();
+                if (event.shiftKey) {
+                    historyRef.current.redo();
+                } else {
+                    historyRef.current.undo();
+                }
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+                event.preventDefault();
+                historyRef.current.redo();
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
+                event.preventDefault();
+                void handleSave();
                 return;
             }
 
@@ -146,7 +249,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 canvasHandle?.fitToScreen();
             }
         },
-        [canvasHandle],
+        [canvasHandle, handleSave],
     );
 
     useEffect(() => {
@@ -167,12 +270,37 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     onChange={(event) => setMapId(Number(event.target.value))}
                 >
                     {maps.length === 0 && <option value={mapId}>Mapa {mapId}</option>}
-                    {maps.map((summary) => (
-                        <option key={summary.id} value={summary.id}>
-                            {summary.id} · {summary.name || "(sin nombre)"}
-                        </option>
-                    ))}
+                    {maps.map((summary) => {
+                        const isActive = activeMapIds.includes(summary.id);
+                        return (
+                            <option key={summary.id} value={summary.id}>
+                                {isActive ? "🟢" : "⚪"} {summary.id} · {summary.name || "(sin nombre)"}
+                            </option>
+                        );
+                    })}
                 </select>
+
+                <button
+                    type="button"
+                    disabled={togglingActive}
+                    onClick={() => void handleToggleActiveMap()}
+                    className={`rounded px-2.5 py-1 text-xs font-semibold border transition-colors ${
+                        isCurrentMapActive
+                            ? "bg-emerald-950/70 border-emerald-600 text-emerald-300 hover:bg-emerald-900/80"
+                            : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700 hover:text-slate-200"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                    title={
+                        isCurrentMapActive
+                            ? "Mapa cargado en memoria del servidor. Haz clic para desactivarlo."
+                            : "Mapa inactivo. Haz clic para cargarlo en la memoria del servidor."
+                    }
+                >
+                    {togglingActive
+                        ? "Procesando..."
+                        : isCurrentMapActive
+                          ? "🟢 Servidor: Activo"
+                          : "⚪ Servidor: Inactivo"}
+                </button>
 
                 {currentSummary && (
                     <span className="text-xs text-slate-500">
@@ -180,6 +308,44 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         {currentSummary.pk === 1 ? "zona segura" : "PK"}
                     </span>
                 )}
+
+                <button
+                    type="button"
+                    disabled={!model || saving}
+                    onClick={() => void handleSave()}
+                    className={`rounded px-3 py-1 text-xs font-semibold ${
+                        dirty
+                            ? "bg-sky-600 text-white hover:bg-sky-500"
+                            : "bg-slate-800 text-slate-500"
+                    } disabled:cursor-not-allowed disabled:opacity-60`}
+                >
+                    {saving ? "Guardando..." : dirty ? "Guardar (Ctrl+S)" : "Guardado"}
+                </button>
+
+                <div className="flex items-center gap-1 text-xs">
+                    <button
+                        type="button"
+                        className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!historyRef.current.canUndo}
+                        onClick={() => {
+                            historyRef.current.undo();
+                        }}
+                        title="Deshacer (Ctrl+Z)"
+                    >
+                        Deshacer
+                    </button>
+                    <button
+                        type="button"
+                        className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                        disabled={!historyRef.current.canRedo}
+                        onClick={() => {
+                            historyRef.current.redo();
+                        }}
+                        title="Rehacer (Ctrl+Shift+Z)"
+                    >
+                        Rehacer
+                    </button>
+                </div>
 
                 <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
                     <span>zoom {Math.round(zoom * 100)}%</span>
@@ -195,6 +361,82 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
             <div className="flex min-h-0 flex-1">
                 <aside className="w-56 shrink-0 overflow-y-auto border-r border-slate-800 bg-slate-900 p-3">
+                    <h2 className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">Herramienta</h2>
+                    <div className="mb-4 flex gap-1 text-xs">
+                        <button
+                            type="button"
+                            className={`flex-1 rounded border px-2 py-1 ${
+                                tool === "select"
+                                    ? "border-sky-400 bg-sky-950 text-sky-200"
+                                    : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                            }`}
+                            onClick={() => setTool("select")}
+                        >
+                            Seleccionar / mover
+                        </button>
+                        <button
+                            type="button"
+                            className={`flex-1 rounded border px-2 py-1 ${
+                                tool === "paint"
+                                    ? "border-sky-400 bg-sky-950 text-sky-200"
+                                    : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                            }`}
+                            onClick={() => setTool("paint")}
+                        >
+                            Pintar
+                        </button>
+                    </div>
+
+                    {tool === "select" && (
+                        <p className="mb-4 text-[11px] leading-relaxed text-slate-600">
+                            Arrastra un NPC u objeto para moverlo a otro tile.
+                        </p>
+                    )}
+
+                    {tool === "paint" && (
+                        <div className="mb-4 space-y-2">
+                            <div className="flex gap-1 text-xs">
+                                <button
+                                    type="button"
+                                    className={`flex-1 rounded border px-2 py-1 ${
+                                        paintMode === "graphic"
+                                            ? "border-sky-400 bg-sky-950 text-sky-200"
+                                            : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                    }`}
+                                    onClick={() => setPaintMode("graphic")}
+                                >
+                                    Grafico
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`flex-1 rounded border px-2 py-1 ${
+                                        paintMode === "blocked"
+                                            ? "border-sky-400 bg-sky-950 text-sky-200"
+                                            : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                    }`}
+                                    onClick={() => setPaintMode("blocked")}
+                                >
+                                    Bloqueo
+                                </button>
+                            </div>
+
+                            {paintMode === "graphic" && model && (
+                                <GraphicsPicker
+                                    model={model}
+                                    layer={activeLayer}
+                                    value={brushGraphic}
+                                    onChange={setBrushGraphic}
+                                />
+                            )}
+
+                            {paintMode === "blocked" && (
+                                <p className="text-[11px] leading-relaxed text-slate-600">
+                                    Click o arrastre alterna el bloqueo de cada tile tocado.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     <h2 className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">Capas</h2>
                     <div className="space-y-1">
                         {LAYERS.map((layer) => (
@@ -251,14 +493,14 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
                     <p className="mt-5 text-[11px] leading-relaxed text-slate-600">
                         Rueda: zoom · Boton derecho o central: desplazar · 1-4: capa activa · ` grilla · K bloqueos ·
-                        Home: ajustar
+                        Home: ajustar · Ctrl+Z / Ctrl+Shift+Z: deshacer/rehacer · Ctrl+S: guardar
                     </p>
                 </aside>
 
                 <main className="relative min-w-0 flex-1">
-                    {error && (
+                    {(error || saveError) && (
                         <div className="absolute inset-x-0 top-0 z-10 bg-red-950/90 px-4 py-2 text-sm text-red-200">
-                            {error}
+                            {error ?? saveError}
                         </div>
                     )}
                     {loading && (
@@ -272,10 +514,16 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             layerVisibility={layerVisibility}
                             layerAlpha={layerAlpha}
                             overlays={overlays}
+                            tool={tool}
+                            activeLayer={activeLayer}
+                            paintMode={paintMode}
+                            brushGraphic={brushGraphic}
+                            history={historyRef.current}
                             onHoverTile={setHoverTile}
                             onPickTile={setSelectedTile}
                             onReady={setCanvasHandle}
                             onZoomChange={setZoom}
+                            onEdit={handleEdit}
                         />
                     )}
                 </main>
@@ -299,8 +547,12 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         mapa {model.meta.id} · {model.width}x{model.height}
                     </span>
                 )}
-                <span className="ml-auto">solo lectura (M1)</span>
+                <span className="ml-auto">{dirty ? "cambios sin guardar" : "guardado"}</span>
             </footer>
+
+            {npcPanelIndex !== null && (
+                <NpcPanel npcIndex={npcPanelIndex} onClose={() => setNpcPanelIndex(null)} />
+            )}
         </div>
     );
 }

@@ -21,7 +21,6 @@ const initialLoginForm = {
 
 const initialRegisterForm = {
     name: "",
-    email: "",
     password: "",
     confirmPassword: "",
 };
@@ -124,50 +123,35 @@ export default function AuthCard({ mode }: AuthCardProps) {
             <div className="p-6">
                 <form className="space-y-3" onSubmit={submit}>
                     {mode === "register" ? (
-                        <>
-                            <input
-                                value={registerForm.name}
-                                onChange={(event) =>
-                                    setRegisterForm((current) => ({
-                                        ...current,
-                                        name: event.target.value,
-                                    }))
-                                }
-                                className="w-full rounded-2xl border border-stone-700 bg-stone-900/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
-                                placeholder="Nombre de usuario"
-                                maxLength={DISPLAY_NAME_MAX_LENGTH}
-                                required
-                            />
-                        </>
-                    ) : null}
-
-                    <input
-                        value={
-                            mode === "login"
-                                ? loginForm.identifier
-                                : registerForm.email
-                        }
-                        onChange={(event) =>
-                            mode === "login"
-                                ? setLoginForm((current) => ({
-                                      ...current,
-                                      identifier: event.target.value,
-                                  }))
-                                : setRegisterForm((current) => ({
-                                      ...current,
-                                      email: event.target.value,
-                                  }))
-                        }
-                        className="w-full rounded-2xl border border-stone-700 bg-stone-900/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
-                        placeholder={
-                            mode === "login"
-                                ? "Email o nombre de usuario"
-                                : "Email"
-                        }
-                        type={mode === "login" ? "text" : "email"}
-                        autoComplete={mode === "login" ? "username" : "email"}
-                        required
-                    />
+                        <input
+                            value={registerForm.name}
+                            onChange={(event) =>
+                                setRegisterForm((current) => ({
+                                    ...current,
+                                    name: event.target.value,
+                                }))
+                            }
+                            className="w-full rounded-2xl border border-stone-700 bg-stone-900/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
+                            placeholder="Usuario"
+                            maxLength={DISPLAY_NAME_MAX_LENGTH}
+                            required
+                        />
+                    ) : (
+                        <input
+                            value={loginForm.identifier}
+                            onChange={(event) =>
+                                setLoginForm((current) => ({
+                                    ...current,
+                                    identifier: event.target.value,
+                                }))
+                            }
+                            className="w-full rounded-2xl border border-stone-700 bg-stone-900/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
+                            placeholder="Usuario"
+                            type="text"
+                            autoComplete="username"
+                            required
+                        />
+                    )}
 
                     <input
                         value={
@@ -189,7 +173,7 @@ export default function AuthCard({ mode }: AuthCardProps) {
                         className="w-full rounded-2xl border border-stone-700 bg-stone-900/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
                         placeholder="Contraseña"
                         type="password"
-                        minLength={mode === "register" ? 8 : undefined}
+                        minLength={mode === "register" ? 4 : undefined}
                         required
                     />
 
@@ -203,9 +187,9 @@ export default function AuthCard({ mode }: AuthCardProps) {
                                 }))
                             }
                             className="w-full rounded-2xl border border-stone-700 bg-stone-900/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
-                            placeholder="Confirmar password"
+                            placeholder="Confirmar contraseña"
                             type="password"
-                            minLength={8}
+                            minLength={4}
                             required
                         />
                     ) : null}

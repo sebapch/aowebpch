@@ -1,0 +1,7 @@
+
+> argentumonlineweb-api@1.0.0 dev
+> tsx watch src/server.ts
+
+PostgreSQL connected successfully
+[API] pg_stat_statements no pudo habilitarse automaticamente: pg_stat_statements must be loaded via "shared_preload_libraries"
+API listening on port 3002

@@ -8,6 +8,7 @@ function Vars(this: any) {
 
     this.serverReady = false;
     this.debugNpcPathfinding = false;
+    this.loadMapsInstance = null;
 
     this.mapData = {};
     this.mapa = {};
@@ -122,8 +123,8 @@ function Vars(this: any) {
         xxgrande: 34,
     };
 
-    this.multiplicadorExp = 5;
-    this.multiplicadorGold = 3;
+    this.multiplicadorExp = 200;
+    this.multiplicadorGold = 200;
     this.partyExpBonusPct = 15;
 
     this.clases = {

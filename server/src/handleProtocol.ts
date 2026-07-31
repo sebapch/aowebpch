@@ -1425,12 +1425,13 @@ const handleServer: HandleProtocolApi = {
 
         for (const { indexObj, item, idItem } of serializedTradeItems) {
             const objItem = getObject(idItem);
+            const itemPrice = typeof (item as any).price === "number" ? (item as any).price * 2 : objItem.valor;
 
             pkg.writeByte(Number(indexObj));
             pkg.writeShort(objItem.grhIndex);
             pkg.writeString(objItem.name);
             pkg.writeShort(item.cant);
-            pkg.writeInt(isBankTrade ? 0 : objItem.valor);
+            pkg.writeInt(isBankTrade ? 0 : itemPrice);
             pkg.writeByte(itemValidUser(idUser, idItem));
             pkg.writeString(dataObj(idItem));
         }

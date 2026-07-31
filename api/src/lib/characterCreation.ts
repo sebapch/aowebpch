@@ -278,11 +278,11 @@ export function getBaseStats(
         inteligencia,
         carisma,
         constitucion,
-        hp: getMaxHpForLevel(classId, constitucion, 1),
-        mana: getMaxManaForLevel(classId, inteligencia, 1),
-        minHit: getMinHitForLevel(classId, 1),
-        maxHit: getMaxHitForLevel(classId, 1),
-        expNextLevel: getLegacyExpNextLevelForLevel(1),
+        hp: getMaxHpForLevel(classId, constitucion, MAX_LEVEL),
+        mana: getMaxManaForLevel(classId, inteligencia, MAX_LEVEL),
+        minHit: getMinHitForLevel(classId, MAX_LEVEL),
+        maxHit: getMaxHitForLevel(classId, MAX_LEVEL),
+        expNextLevel: getLegacyExpNextLevelForLevel(MAX_LEVEL),
     };
 }
 

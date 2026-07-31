@@ -365,10 +365,10 @@ export function getBaseStats(
         inteligencia,
         carisma,
         constitucion,
-        vida: getMaxHpForLevel(characterClassKey, constitucion, 1),
-        mana: getMaxManaForLevel(characterClassKey, inteligencia, 1),
-        golpeMin: 1 + getHitModifierForLevel(characterClassKey, 1),
-        golpeMax: 2 + getHitModifierForLevel(characterClassKey, 1),
-        expProximoNivel: getLegacyExpNextLevelForLevel(1),
+        vida: getMaxHpForLevel(characterClassKey, constitucion, MAX_LEVEL),
+        mana: getMaxManaForLevel(characterClassKey, inteligencia, MAX_LEVEL),
+        golpeMin: 1 + getHitModifierForLevel(characterClassKey, MAX_LEVEL),
+        golpeMax: 2 + getHitModifierForLevel(characterClassKey, MAX_LEVEL),
+        expProximoNivel: getLegacyExpNextLevelForLevel(MAX_LEVEL),
     };
 }

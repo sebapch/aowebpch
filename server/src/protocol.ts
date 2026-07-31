@@ -2808,11 +2808,6 @@ function equiparItem(ws: RuntimeClient) {
             const idItem = itemInventary.idItem;
             const item = vars.datObj[idItem];
 
-            if (item.newbie && !game.isNewbieCharacter(user)) {
-                handleProtocol.console("Solo los personajes newbie pueden equipar este item.", "white", 0, 0, ws);
-                return;
-            }
-
             if (item.clasesNoPermitidas.indexOf(user.idClase) >= 0 && !ignoresClassRestrictionForItem(idItem)) {
                 handleProtocol.console("Tu clase no puede equipar ese item.", "white", 0, 0, ws);
                 return;

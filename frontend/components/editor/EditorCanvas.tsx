@@ -2,11 +2,16 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Application } from "pixi.js";
-import { loadGraphicsDB } from "../../utils/gameLoader";
+import { loadBodiesDB, loadGraphicsDB, loadHeadsDB, loadNPCsDB } from "../../utils/gameLoader";
 import { TILE_SIZE } from "../../lib/viewport";
+import type { ExpandedTile, NpcSpawn, ObjectInfo } from "../../lib/editor/types";
 import type { EditorMapModel, LayerIndex } from "./model/EditorMapModel";
+import type { History } from "./model/History";
 import { EditorScene, type LayerVisibility, type OverlayFlags } from "./render/EditorScene";
 import { EditorTextureCache } from "./render/editorTextures";
+
+export type EditorTool = "select" | "paint";
+export type PaintMode = "graphic" | "blocked";
 
 export type EditorCanvasHandle = {
     fitToScreen: () => void;
@@ -18,21 +23,47 @@ type Props = {
     layerVisibility: LayerVisibility;
     layerAlpha: Record<LayerIndex, number>;
     overlays: OverlayFlags;
+    tool: EditorTool;
+    activeLayer: LayerIndex;
+    paintMode: PaintMode;
+    brushGraphic: number | null;
+    history: History;
     onHoverTile: (tile: { x: number; y: number } | null) => void;
     onPickTile: (tile: { x: number; y: number }) => void;
     onReady?: (handle: EditorCanvasHandle) => void;
     onZoomChange?: (zoom: number) => void;
+    /** Se dispara despues de cualquier mutacion aplicada o deshecha/rehecha. */
+    onEdit: () => void;
 };
+
+type PaintStrokeEntry = { x: number; y: number; before: ExpandedTile; after: ExpandedTile };
+
+type EntityDragState = {
+    phase: "maybe" | "dragging";
+    startClientX: number;
+    startClientY: number;
+    fromX: number;
+    fromY: number;
+    kind: "spawn" | "object";
+};
+
+const DRAG_THRESHOLD_PX = 4;
 
 export function EditorCanvas({
     model,
     layerVisibility,
     layerAlpha,
     overlays,
+    tool,
+    activeLayer,
+    paintMode,
+    brushGraphic,
+    history,
     onHoverTile,
     onPickTile,
     onReady,
     onZoomChange,
+    onEdit,
 }: Props) {
     const hostRef = useRef<HTMLDivElement | null>(null);
     const appRef = useRef<Application | null>(null);
@@ -45,12 +76,26 @@ export function EditorCanvas({
     const onHoverRef = useRef(onHoverTile);
     const onPickRef = useRef(onPickTile);
     const onZoomRef = useRef(onZoomChange);
+    const onEditRef = useRef(onEdit);
+    const toolRef = useRef(tool);
+    const activeLayerRef = useRef(activeLayer);
+    const paintModeRef = useRef(paintMode);
+    const brushGraphicRef = useRef(brushGraphic);
+    const modelRef = useRef(model);
+    const historyRef = useRef(history);
 
     useEffect(() => {
         onHoverRef.current = onHoverTile;
         onPickRef.current = onPickTile;
         onZoomRef.current = onZoomChange;
-    }, [onHoverTile, onPickTile, onZoomChange]);
+        onEditRef.current = onEdit;
+        toolRef.current = tool;
+        activeLayerRef.current = activeLayer;
+        paintModeRef.current = paintMode;
+        brushGraphicRef.current = brushGraphic;
+        modelRef.current = model;
+        historyRef.current = history;
+    }, [onHoverTile, onPickTile, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, model, history]);
 
     useEffect(() => {
         let cancelled = false;
@@ -76,7 +121,15 @@ export function EditorCanvas({
                     return;
                 }
 
-                const graphicsDB = await loadGraphicsDB();
+                // Las DBs de NPC son opcionales para el editor: si fallan, se
+                // sigue pudiendo editar el mapa, solo sin el sprite del NPC
+                // (queda el badge de color como referencia).
+                const [graphicsDB, npcsDB, bodiesDB, headsDB] = await Promise.all([
+                    loadGraphicsDB(),
+                    loadNPCsDB().catch(() => undefined),
+                    loadBodiesDB().catch(() => undefined),
+                    loadHeadsDB().catch(() => undefined),
+                ]);
 
                 if (cancelled) {
                     app.destroy(true, { children: true });
@@ -89,7 +142,7 @@ export function EditorCanvas({
                 app.canvas.style.display = "block";
 
                 const textures = new EditorTextureCache(graphicsDB);
-                const scene = new EditorScene(app, textures, model);
+                const scene = new EditorScene(app, textures, model, { npcsDB, bodiesDB, headsDB });
                 scene.fitToScreen();
 
                 appRef.current = app;
@@ -160,6 +213,8 @@ export function EditorCanvas({
         lastX: 0,
         lastY: 0,
     });
+    const paintState = useRef<{ active: boolean; touched: Map<number, PaintStrokeEntry> } | null>(null);
+    const dragState = useRef<EntityDragState | null>(null);
 
     const toLocal = useCallback((event: React.PointerEvent | React.MouseEvent) => {
         const host = hostRef.current;
@@ -173,6 +228,156 @@ export function EditorCanvas({
         return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     }, []);
 
+    /** Pinta (o alterna bloqueo de) un tile, si todavia no fue tocado en este trazo. */
+    const applyPaintAtTile = useCallback((x: number, y: number) => {
+        const stroke = paintState.current;
+        const model = modelRef.current;
+
+        if (!stroke) {
+            return;
+        }
+
+        const index = model.indexOf(x, y);
+
+        if (stroke.touched.has(index)) {
+            return;
+        }
+
+        const mode = paintModeRef.current;
+        const layer = activeLayerRef.current;
+        const graphic = brushGraphicRef.current;
+
+        const edit = model.applyEdit(x, y, (tile) => {
+            if (mode === "blocked") {
+                tile.blocked = !tile.blocked;
+            } else {
+                tile.graphics[layer - 1] = graphic;
+            }
+            return tile;
+        });
+
+        if (!edit) {
+            return;
+        }
+
+        stroke.touched.set(index, { x, y, before: edit.before, after: edit.after });
+        sceneRef.current?.markTileDirty(x, y);
+    }, []);
+
+    const commitPaintStroke = useCallback(() => {
+        const stroke = paintState.current;
+        paintState.current = null;
+
+        if (!stroke || stroke.touched.size === 0) {
+            return;
+        }
+
+        const entries = [...stroke.touched.values()];
+        const model = modelRef.current;
+
+        historyRef.current.push({
+            label: "pintar",
+            undo: () => {
+                for (const entry of entries) {
+                    model.restoreTile(model.indexOf(entry.x, entry.y), entry.before);
+                    sceneRef.current?.markTileDirty(entry.x, entry.y);
+                }
+                onEditRef.current();
+            },
+            redo: () => {
+                for (const entry of entries) {
+                    model.restoreTile(model.indexOf(entry.x, entry.y), entry.after);
+                    sceneRef.current?.markTileDirty(entry.x, entry.y);
+                }
+                onEditRef.current();
+            },
+        });
+
+        onEditRef.current();
+    }, []);
+
+    const isValidDropTarget = useCallback((tile: { x: number; y: number } | null, state: EntityDragState) => {
+        if (!tile) {
+            return false;
+        }
+
+        if (tile.x === state.fromX && tile.y === state.fromY) {
+            return false;
+        }
+
+        const targetTile = modelRef.current.get(tile.x, tile.y);
+
+        if (!targetTile || targetTile.blocked) {
+            return false;
+        }
+
+        if (state.kind === "spawn" && targetTile.spawn) {
+            return false;
+        }
+
+        if (state.kind === "object" && targetTile.object) {
+            return false;
+        }
+
+        return true;
+    }, []);
+
+    const commitEntityMove = useCallback((state: EntityDragState, target: { x: number; y: number }) => {
+        const model = modelRef.current;
+        const source = model.get(state.fromX, state.fromY);
+        const payload = state.kind === "spawn" ? source?.spawn : source?.object;
+
+        if (!payload) {
+            return;
+        }
+
+        const fromEdit = model.applyEdit(state.fromX, state.fromY, (tile) => {
+            if (state.kind === "spawn") {
+                tile.spawn = undefined;
+            } else {
+                tile.object = undefined;
+            }
+            return tile;
+        });
+
+        const toEdit = model.applyEdit(target.x, target.y, (tile) => {
+            if (state.kind === "spawn") {
+                tile.spawn = { ...(payload as NpcSpawn) };
+            } else {
+                tile.object = { ...(payload as ObjectInfo) };
+            }
+            return tile;
+        });
+
+        if (!fromEdit || !toEdit) {
+            return;
+        }
+
+        sceneRef.current?.markTileDirty(state.fromX, state.fromY);
+        sceneRef.current?.markTileDirty(target.x, target.y);
+
+        historyRef.current.push({
+            label: state.kind === "spawn" ? "mover npc" : "mover objeto",
+            undo: () => {
+                model.restoreTile(fromEdit.index, fromEdit.before);
+                model.restoreTile(toEdit.index, toEdit.before);
+                sceneRef.current?.markTileDirty(state.fromX, state.fromY);
+                sceneRef.current?.markTileDirty(target.x, target.y);
+                onEditRef.current();
+            },
+            redo: () => {
+                model.restoreTile(fromEdit.index, fromEdit.after);
+                model.restoreTile(toEdit.index, toEdit.after);
+                sceneRef.current?.markTileDirty(state.fromX, state.fromY);
+                sceneRef.current?.markTileDirty(target.x, target.y);
+                onEditRef.current();
+            },
+        });
+
+        onPickRef.current(target);
+        onEditRef.current();
+    }, []);
+
     const handlePointerDown = useCallback(
         (event: React.PointerEvent) => {
             const scene = sceneRef.current;
@@ -181,7 +386,7 @@ export function EditorCanvas({
                 return;
             }
 
-            // Boton del medio o secundario: desplazar. Principal: seleccionar.
+            // Boton del medio o secundario: desplazar. Principal: seleccionar/pintar/mover.
             if (event.button === 1 || event.button === 2) {
                 panState.current = { active: true, lastX: event.clientX, lastY: event.clientY };
                 (event.target as Element).setPointerCapture?.(event.pointerId);
@@ -189,16 +394,42 @@ export function EditorCanvas({
                 return;
             }
 
-            if (event.button === 0) {
-                const local = toLocal(event);
-                const tile = scene.screenToTile(local.x, local.y);
-
-                if (tile) {
-                    onPickRef.current(tile);
-                }
+            if (event.button !== 0) {
+                return;
             }
+
+            const local = toLocal(event);
+            const tile = scene.screenToTile(local.x, local.y);
+
+            if (!tile) {
+                return;
+            }
+
+            if (toolRef.current === "paint") {
+                (event.target as Element).setPointerCapture?.(event.pointerId);
+                paintState.current = { active: true, touched: new Map() };
+                applyPaintAtTile(tile.x, tile.y);
+                return;
+            }
+
+            const modelTile = modelRef.current.get(tile.x, tile.y);
+
+            if (modelTile?.spawn || modelTile?.object) {
+                (event.target as Element).setPointerCapture?.(event.pointerId);
+                dragState.current = {
+                    phase: "maybe",
+                    startClientX: event.clientX,
+                    startClientY: event.clientY,
+                    fromX: tile.x,
+                    fromY: tile.y,
+                    kind: modelTile.spawn ? "spawn" : "object",
+                };
+                return;
+            }
+
+            onPickRef.current(tile);
         },
-        [toLocal],
+        [toLocal, applyPaintAtTile],
     );
 
     const handlePointerMove = useCallback(
@@ -216,12 +447,73 @@ export function EditorCanvas({
                 return;
             }
 
+            if (paintState.current?.active) {
+                const local = toLocal(event);
+                const tile = scene.screenToTile(local.x, local.y);
+                if (tile) {
+                    applyPaintAtTile(tile.x, tile.y);
+                    onHoverRef.current(tile);
+                }
+                return;
+            }
+
+            if (dragState.current) {
+                const state = dragState.current;
+                const dx = event.clientX - state.startClientX;
+                const dy = event.clientY - state.startClientY;
+
+                if (state.phase === "maybe" && Math.hypot(dx, dy) > DRAG_THRESHOLD_PX) {
+                    state.phase = "dragging";
+                }
+
+                if (state.phase === "dragging") {
+                    const local = toLocal(event);
+                    const tile = scene.screenToTile(local.x, local.y);
+                    scene.setHover(tile);
+                    onHoverRef.current(tile);
+                }
+                return;
+            }
+
             const local = toLocal(event);
             const tile = scene.screenToTile(local.x, local.y);
             scene.setHover(tile);
             onHoverRef.current(tile);
         },
-        [toLocal],
+        [toLocal, applyPaintAtTile],
+    );
+
+    const handlePointerUp = useCallback(
+        (event: React.PointerEvent) => {
+            if (panState.current.active) {
+                panState.current.active = false;
+                return;
+            }
+
+            if (paintState.current?.active) {
+                commitPaintStroke();
+                return;
+            }
+
+            if (dragState.current) {
+                const state = dragState.current;
+                dragState.current = null;
+
+                if (state.phase !== "dragging") {
+                    onPickRef.current({ x: state.fromX, y: state.fromY });
+                    return;
+                }
+
+                const scene = sceneRef.current;
+                const local = toLocal(event);
+                const tile = scene?.screenToTile(local.x, local.y) ?? null;
+
+                if (tile && isValidDropTarget(tile, state)) {
+                    commitEntityMove(state, tile);
+                }
+            }
+        },
+        [commitPaintStroke, isValidDropTarget, commitEntityMove, toLocal],
     );
 
     const endPan = useCallback(() => {
@@ -248,7 +540,7 @@ export function EditorCanvas({
             className="relative h-full w-full overflow-hidden bg-[#11141a]"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
-            onPointerUp={endPan}
+            onPointerUp={handlePointerUp}
             onPointerLeave={() => {
                 endPan();
                 sceneRef.current?.setHover(null);

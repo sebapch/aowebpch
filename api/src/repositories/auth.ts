@@ -12,6 +12,7 @@ import {
     getAllowedAppearance,
     getBaseStats,
     isValidHeadId,
+    MAX_LEVEL,
     RACE_ID_MAP,
     type CharacterClassKey,
     type RaceKey,
@@ -128,8 +129,8 @@ const loginSchema = z
 
 const registerSchema = z.object({
     name: displayNameSchema,
-    email: z.string().email(),
-    password: z.string().min(8).max(100),
+    email: z.string().email().optional().or(z.literal("")).nullable(),
+    password: z.string().min(4).max(100),
 });
 
 const passwordResetRequestSchema = z.object({
@@ -583,7 +584,7 @@ export async function createCharacterForSession(
         1,
         50,
         60,
-        0,
+        1000000,
         $4,
         $4,
         $5,
@@ -619,7 +620,7 @@ export async function createCharacterForSession(
         0,
         0,
         $16,
-        1,
+        50,
         FALSE,
         FALSE,
         FALSE,
@@ -746,7 +747,9 @@ export async function loginAccount(payload: unknown): Promise<AuthResponse> {
 export async function registerAccount(payload: unknown): Promise<AuthResponse> {
     const { name, email, password } = registerSchema.parse(payload);
     const nameSanitized = sanitizeName(name);
-    const normalizedEmail = normalizeEmail(email);
+    const normalizedEmail = email && email.trim().length > 0
+        ? normalizeEmail(email)
+        : `${nameSanitized}@local.com`;
 
     const existingAccount = await pool.query<{ id: string }>(
         `
@@ -759,7 +762,7 @@ export async function registerAccount(payload: unknown): Promise<AuthResponse> {
     );
 
     if (existingAccount.rowCount) {
-        throw new Error("Ya existe una cuenta con ese email o nombre");
+        throw new Error("Ya existe una cuenta con ese nombre");
     }
 
     const hashedPassword = await hashPassword(password);

@@ -9,6 +9,8 @@ const login = require("./login");
 
 const _ = require("lodash");
 
+import { ensureCustomNpcs } from "./customNpcs";
+
 class LoadNpcs {
     constructor() {}
 
@@ -32,9 +34,10 @@ class LoadNpcs {
                     return;
                 }
             } catch (error) {
-                reject(error);
-                return;
+                console.warn("[GAME DATA] Falling back to default custom NPCs if API unavailable:", error);
             }
+
+            ensureCustomNpcs(vars.datNpc);
 
             const cooldownKeys = initializeNpcRespawnCooldowns((npc: any) => {
                 this.createNpcInMap(npc, true, true);
@@ -52,6 +55,27 @@ class LoadNpcs {
 
             resolve(true);
         });
+    }
+
+    loadNpcsForMap(mapNum: number) {
+        if (!vars.mapData[mapNum]) return;
+
+        const npcsInMap = loadAllMapNpcPlacements().filter((npc: any) => Number(npc.mapNum) === Number(mapNum));
+
+        npcsInMap.forEach((npc: any) => {
+            this.createNpcInMap(npc, true);
+        });
+    }
+
+    unloadNpcsForMap(mapNum: number) {
+        for (const idNpc in vars.npcs) {
+            const npc = vars.npcs[idNpc];
+
+            if (npc && Number(npc.map) === Number(mapNum)) {
+                delete vars.npcs[idNpc];
+                delete vars.areaNpc[idNpc];
+            }
+        }
     }
 
     createNpcInMap(npc: any, skipRespawnCooldownCheck = false, forceRandomSpawn = false) {

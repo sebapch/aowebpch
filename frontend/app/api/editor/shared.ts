@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { AuthSession } from "../../../lib/auth";
+import { getApiBaseUrl } from "../../../lib/api-base-url";
 import { fetchApi, getSessionTokenFromCookie } from "../auth/shared";
 
 /**
@@ -84,6 +85,74 @@ export async function requireEditorAdmin(): Promise<AdminCheck> {
             characterName: adminCharacter.name,
         },
     };
+}
+
+/**
+ * Proxea a los endpoints `/admin/game-data/*` de la api (plantillas de NPCs y
+ * objetos, en Postgres). Distinto del gate del editor: la api exige ademas
+ * que la cuenta logueada sea la cuenta admin de datos de juego configurada
+ * (`GAME_DATA_ADMIN_ACCOUNT_ID`/`GAME_DATA_ADMIN_EMAIL`), no alcanza con ser
+ * administrador de personaje. Si no esta configurada, la api devuelve 403.
+ */
+export async function forwardToGameDataApi(path: string, method: string, body?: string): Promise<NextResponse> {
+    const token = await getSessionTokenFromCookie();
+
+    if (!token) {
+        return NextResponse.json({ error: "Tu sesion no es valida o ya vencio." }, { status: 401 });
+    }
+
+    const proxyToken = process.env.GAME_DATA_ADMIN_PROXY_TOKEN ?? "";
+
+    if (!proxyToken) {
+        return NextResponse.json(
+            {
+                error:
+                    "El editor de datos de juego (NPCs/items) no esta configurado en este entorno: falta GAME_DATA_ADMIN_PROXY_TOKEN.",
+            },
+            { status: 503 },
+        );
+    }
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), GAME_SERVER_TIMEOUT_MS);
+
+    try {
+        const response = await fetch(`${getApiBaseUrl()}${path}`, {
+            method,
+            headers: {
+                Authorization: `Bearer ${token}`,
+                "x-game-data-admin-token": proxyToken,
+                "Content-Type": "application/json",
+            },
+            body,
+            cache: "no-store",
+            signal: controller.signal,
+        });
+
+        const text = await response.text();
+
+        return new NextResponse(text, {
+            status: response.status,
+            headers: {
+                "Content-Type": "application/json; charset=utf-8",
+                "Cache-Control": "no-store",
+            },
+        });
+    } catch (error) {
+        if (error instanceof Error && error.name === "AbortError") {
+            return NextResponse.json(
+                { error: `La api no respondio en ${GAME_SERVER_TIMEOUT_MS}ms.` },
+                { status: 504 },
+            );
+        }
+
+        return NextResponse.json(
+            { error: "No se pudo contactar a la api. Verifica que este corriendo." },
+            { status: 502 },
+        );
+    } finally {
+        clearTimeout(timeoutId);
+    }
 }
 
 /** Proxea al game server agregando el secreto compartido y el actor. */

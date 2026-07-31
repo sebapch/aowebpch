@@ -46,6 +46,73 @@ export type EditorMapBundle = {
     tiles: ExpandedTile[];
 };
 
+/** Una fila de `npcs.json`: el spawn persistente que instancia el servidor. */
+export type MapNpcPlacement = {
+    mapNum: number;
+    x: number;
+    y: number;
+    npcIndex: number;
+    movement?: number;
+};
+
+// ---------------------------------------------------------------------------
+// Plantillas compartidas de NPCs y objetos (`game_npcs`/`game_objects` en la
+// api, no `mapas_source`). Un npcIndex es una sola plantilla reusada por
+// todos los spawns que la referencian en cualquier mapa.
+// ---------------------------------------------------------------------------
+
+export type NpcDropEntry = { item: number; cant: number };
+
+/** Espejo de `DataNpc` (server/src/npcData.ts): campos conocidos + resto pass-through. */
+export type DataNpc = {
+    name: string;
+    npcType: number;
+    idHead: number;
+    idBody: number;
+    movement: number;
+    desc?: string;
+    exp?: number;
+    gold?: number;
+    hp?: number;
+    maxHp?: number;
+    maxHit?: number;
+    minHit?: number;
+    def?: number;
+    poderAtaque?: number;
+    poderEvasion?: number;
+    /** Botin al morir. */
+    drop?: NpcDropEntry[];
+    /** Stock de venta (relevante si npcType es vendedor). */
+    objs?: NpcDropEntry[];
+    [key: string]: unknown;
+};
+
+export type GameNpcRecord = {
+    id: number;
+    name: string;
+    npcType: number;
+    isHostile: boolean;
+    maxHp: number;
+    expReward: number;
+    goldReward: number;
+    expPerHp: number | null;
+    idHead: number;
+    idBody: number;
+    movement: number;
+    version: number;
+    updatedAt: string;
+    checksum: string;
+    data: DataNpc;
+};
+
+export type ItemTemplateSummary = {
+    id: number;
+    name: string;
+    objType: number;
+    version: number;
+    updatedAt: string;
+};
+
 export type MapSummary = {
     id: number;
     name: string;

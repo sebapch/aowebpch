@@ -1834,153 +1834,7 @@ function relocateUserIfCurrentMapLevelDenied(user: GameCharacter, client: Runtim
 }
 
 function unequipRestrictedNewbieItems(user: GameCharacter, client: RuntimeClient): void {
-    if (isNewbieCharacter(user)) {
-        return;
-    }
-
-    const removedSlots = new Set<string>();
-    const previousWeaponItemId =
-        user.idItemWeapon && user.inv[user.idItemWeapon] ? Number(user.inv[user.idItemWeapon].idItem) : 0;
-
-    const unequipSlot = (slot: number | string | undefined) => {
-        if (!slot || String(slot) === "0") {
-            return undefined;
-        }
-
-        const normalizedSlot = String(slot);
-        const inventoryItem = user.inv[normalizedSlot];
-
-        if (!inventoryItem?.equipped) {
-            return undefined;
-        }
-
-        const datObj = vars.datObj[inventoryItem.idItem] as DataObject | undefined;
-
-        if (!datObj?.newbie) {
-            return undefined;
-        }
-
-        inventoryItem.equipped = 0;
-        return { slot: normalizedSlot };
-    };
-
-    const bodySlot = unequipSlot(user.idItemBody);
-    if (bodySlot) {
-        const bodyNaked = game.bodyNaked(user.id);
-        if (user.navegando) {
-            user.idLastBody = bodyNaked;
-        } else {
-            user.idBody = bodyNaked;
-        }
-        user.idItemBody = 0;
-    }
-
-    const weaponSlot = unequipSlot(user.idItemWeapon);
-    if (weaponSlot) {
-        if (user.navegando) {
-            user.idLastWeapon = 0;
-        } else {
-            user.idWeapon = 0;
-        }
-        user.idItemWeapon = 0;
-    }
-
-    const arrowSlot = unequipSlot(user.idItemArrow);
-    if (arrowSlot) {
-        user.idItemArrow = 0;
-    }
-
-    const shieldSlot = unequipSlot(user.idItemShield);
-    if (shieldSlot) {
-        if (user.navegando) {
-            user.idLastShield = 0;
-        } else {
-            user.idShield = 0;
-        }
-        user.idItemShield = 0;
-    }
-
-    const helmetSlot = unequipSlot(user.idItemHelmet);
-    if (helmetSlot) {
-        if (user.navegando) {
-            user.idLastHelmet = 0;
-        } else {
-            user.idHelmet = 0;
-        }
-        user.idItemHelmet = 0;
-    }
-
-    const ringSlot = unequipSlot(user.idItemRing);
-    if (ringSlot) {
-        user.idItemRing = 0;
-    }
-
-    if (!user.navegando) {
-        game.loopArea(client, function (target: AreaTarget) {
-            if (!target.isNpc) {
-                withUserClient(target.id, (targetClient) => {
-                    if (!canReceiveCharacterEvent(target.id, user.id)) {
-                        return;
-                    }
-
-                    if (bodySlot) {
-                        handleProtocol.changeRopa(user.id, user.idBody, 0, targetClient);
-                    }
-
-                    if (weaponSlot) {
-                        handleProtocol.changeWeapon(user.id, user.idWeapon, 0, targetClient);
-                    }
-
-                    if (arrowSlot) {
-                        handleProtocol.changeArrow(user.id, 0, targetClient);
-                    }
-
-                    if (shieldSlot) {
-                        handleProtocol.changeShield(user.id, user.idShield, 0, targetClient);
-                    }
-
-                    if (helmetSlot) {
-                        handleProtocol.changeHelmet(user.id, user.idHelmet, 0, targetClient);
-                    }
-                });
-            }
-        });
-    }
-
-    for (const [slot, inventoryItem] of Object.entries(user.inv)) {
-        const datObj = vars.datObj[inventoryItem.idItem] as DataObject | undefined;
-
-        if (!datObj?.newbie) {
-            continue;
-        }
-
-        removedSlots.add(slot);
-        game.quitarUserInvItem(user.id, slot, inventoryItem.cant);
-    }
-
-    if (removedSlots.size === 0) {
-        return;
-    }
-
-    handleProtocol.console(
-        "Al llegar a nivel 13 dejaste de ser newbie, se eliminaron tus objetos newbie del inventario.",
-        "white",
-        1,
-        0,
-        client,
-    );
-
-    if (weaponSlot && fishing.isFishingRod(previousWeaponItemId)) {
-        fishing.cancelFishing(user.id, "La pesca se canceló porque dejaste de ser newbie.");
-    }
-
-    if (weaponSlot && harvesting.usesHarvestingTool(previousWeaponItemId)) {
-        harvesting.cancelHarvesting(user.id, "La recolección se canceló porque dejaste de ser newbie.");
-    }
-
-    void persistCharacterItems(user).catch((error) => {
-        funct.dumpError(error);
-    });
+    // Initial / newbie items are preserved across all levels
 }
 
 function getPartyRecord(partyId?: string | null): PartyRuntimeState | undefined {
@@ -4134,11 +3988,6 @@ function Game(this: GameApi) {
             const idItem = item.idItem;
 
             const obj = vars.datObj[idItem];
-
-            if (obj.newbie && !isNewbieCharacter(user)) {
-                handleProtocol.console("Solo los personajes newbie pueden usar este item.", "white", 0, 0, ws);
-                return;
-            }
 
             if (user.dead && obj.objType !== vars.objType.barcos) {
                 handleProtocol.console("Los muertos no pueden usar items.", "white", 0, 0, ws);
@@ -9005,7 +8854,10 @@ function Game(this: GameApi) {
                     return;
                 }
 
-                if (Math.floor((objItem.valor * cantBuy) / 2) > user.gold) {
+                const unitPrice = typeof (itemNpc as any).price === "number" ? (itemNpc as any).price : Math.floor(objItem.valor / 2);
+                const totalPrice = unitPrice * cantBuy;
+
+                if (totalPrice > user.gold) {
                     withUserClient(idUser, (userClient) => {
                         handleProtocol.console("No tienes oro suficiente.", "white", 1, 0, userClient);
                     });
@@ -9025,7 +8877,7 @@ function Game(this: GameApi) {
                     return;
                 }
 
-                user.gold = balance.clampGold(user.gold - Math.floor((objItem.valor * cantBuy) / 2));
+                user.gold = balance.clampGold(user.gold - totalPrice);
 
                 withUserClient(idUser, (userClient) => {
                     for (const slot of slots) {

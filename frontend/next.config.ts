@@ -18,7 +18,12 @@ function resolveBuildId(): string {
 const buildId = resolveBuildId();
 
 const nextConfig: NextConfig = {
-    allowedDevOrigins: ["127.0.0.1", "localhost"],
+    allowedDevOrigins: [
+        "127.0.0.1",
+        "localhost",
+        "*.trycloudflare.com",
+        "trycloudflare.com",
+    ],
     env: {
         NEXT_PUBLIC_NEXT_BUILD_ID: buildId,
     },

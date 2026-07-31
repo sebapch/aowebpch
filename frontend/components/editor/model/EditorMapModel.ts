@@ -86,6 +86,33 @@ export class EditorMapModel {
         this.tiles[index] = tile;
     }
 
+    /**
+     * Aplica una mutacion sobre un tile y devuelve el estado anterior y
+     * posterior (copias, seguras para guardar en `History`). `updater` recibe
+     * una copia del tile y la modifica en el lugar.
+     */
+    applyEdit(
+        x: number,
+        y: number,
+        updater: (tile: ExpandedTile) => ExpandedTile,
+    ): { index: number; before: ExpandedTile; after: ExpandedTile } | null {
+        if (!this.inBounds(x, y)) {
+            return null;
+        }
+
+        const index = this.indexOf(x, y);
+        const before = cloneTile(this.tiles[index]);
+        const after = updater(cloneTile(this.tiles[index]));
+        this.tiles[index] = after;
+
+        return { index, before, after };
+    }
+
+    /** Restaura un tile a un snapshot previo (usado por undo/redo). */
+    restoreTile(index: number, tile: ExpandedTile): void {
+        this.setByIndex(index, cloneTile(tile));
+    }
+
     /** Grh distintos presentes en el mapa, en total y por capa. */
     usedGraphics(): { all: Set<number>; byLayer: Record<LayerIndex, Set<number>> } {
         const all = new Set<number>();

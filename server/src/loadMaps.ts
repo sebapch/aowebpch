@@ -142,8 +142,14 @@ function ensureRuntimeTile(mapId: number, x: number, y: number) {
     return vars.mapa[mapId][y][x];
 }
 
+const { getActiveMapIds } = require("./mapSource");
+
 class LoadMaps {
-    constructor() {}
+    loadNpcsInstance: any;
+
+    constructor() {
+        this.loadNpcsInstance = new loadNpcs();
+    }
 
     getMapDirectory(mapNum: number) {
         return path.join(MAPS_SOURCE_DIR, `mapa_${mapNum}`);
@@ -156,28 +162,46 @@ class LoadMaps {
     }
 
     async initialize() {
+        vars.loadMapsInstance = this;
         const arMapsToLoad: Array<Promise<unknown>> = [];
+        const activeMapIds: number[] = getActiveMapIds();
         const extraTestMaps = [500, 501, 502, 503, 504, 505, 506];
 
-        for (let i = 1; i < 291; i++) {
-            if (this.mapFilesExist(i)) {
-                arMapsToLoad.push(this.readMap(i));
-            }
-        }
+        const mapsToInitialize = Array.from(new Set([...activeMapIds, ...extraTestMaps]));
 
-        for (const mapId of extraTestMaps) {
+        for (const mapId of mapsToInitialize) {
             if (this.mapFilesExist(mapId)) {
                 arMapsToLoad.push(this.readMap(mapId));
             }
         }
 
-        await Promise.all(arMapsToLoad);
+        const loadedMapIds = await Promise.all(arMapsToLoad);
 
-        console.log("Mapas Cargados.");
+        console.log(`Mapas Cargados (${loadedMapIds.length}):`, loadedMapIds);
 
-        const LoadNpcs = new loadNpcs();
-        await LoadNpcs.initialize();
+        await this.loadNpcsInstance.initialize();
     }
+
+    async loadSingleMap(mapNum: number) {
+        if (!this.mapFilesExist(mapNum)) {
+            throw new Error(`El mapa ${mapNum} no existe en disco.`);
+        }
+
+        await this.readMap(mapNum);
+        if (this.loadNpcsInstance) {
+            this.loadNpcsInstance.loadNpcsForMap(mapNum);
+        }
+        return mapNum;
+    }
+
+    unloadMap(mapNum: number) {
+        if (this.loadNpcsInstance) {
+            this.loadNpcsInstance.unloadNpcsForMap(mapNum);
+        }
+        delete vars.mapa[mapNum];
+        delete vars.mapData[mapNum];
+    }
+
 
     readMap(mapNum: number) {
         return new Promise((resolve: (value: number) => void) => {

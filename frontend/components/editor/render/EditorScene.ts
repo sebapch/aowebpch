@@ -1,7 +1,8 @@
 import { Container, Graphics, Sprite, Text, TextStyle, type Application } from "pixi.js";
 import { TILE_SIZE } from "../../../lib/viewport";
+import type { BodiesDB, HeadsDB, NPCsDB } from "../../../types/game";
 import { Z_INDEX_LAYERS, getRowZIndex } from "../../game/rendering/mapLayers";
-import { getBottomAnchoredGraphicPosition } from "../../game/rendering/characterLayout";
+import { getBottomAnchoredGraphicPosition, getHeadSpritePosition } from "../../game/rendering/characterLayout";
 import type { EditorMapModel, LayerIndex } from "../model/EditorMapModel";
 import type { EditorTextureCache } from "./editorTextures";
 
@@ -33,6 +34,26 @@ export type OverlayFlags = {
 
 export type LayerVisibility = Record<LayerIndex, boolean>;
 
+/** DBs cliente del juego, las mismas que descarga el juego para dibujar personajes. */
+export type NpcRenderAssets = {
+    npcsDB?: NPCsDB;
+    bodiesDB?: BodiesDB;
+    headsDB?: HeadsDB;
+};
+
+/**
+ * Direccion fija para la vista de pie del editor: no hay heading real que
+ * seguir (el NPC no se mueve), asi que siempre se usa la misma pose.
+ */
+const NPC_PREVIEW_FACING: "1" | "2" | "3" | "4" = "3";
+
+type ResolvedNpcVisual = {
+    bodyGrh: number;
+    headGrh?: number;
+    headOffsetX: number;
+    headOffsetY: number;
+};
+
 type Chunk = {
     key: string;
     cx: number;
@@ -47,6 +68,8 @@ export class EditorScene {
     private readonly app: Application;
     private readonly textures: EditorTextureCache;
     private model: EditorMapModel;
+    private readonly npcAssets: NpcRenderAssets;
+    private readonly npcVisualCache = new Map<number, ResolvedNpcVisual | null>();
 
     /** Se mueve/escala con la camara; todo lo demas cuelga de aca. */
     readonly world = new Container();
@@ -78,10 +101,11 @@ export class EditorScene {
     private destroyed = false;
     private pendingTextureLoad = false;
 
-    constructor(app: Application, textures: EditorTextureCache, model: EditorMapModel) {
+    constructor(app: Application, textures: EditorTextureCache, model: EditorMapModel, npcAssets: NpcRenderAssets = {}) {
         this.app = app;
         this.textures = textures;
         this.model = model;
+        this.npcAssets = npcAssets;
 
         this.world.sortableChildren = true;
 
@@ -318,10 +342,131 @@ export class EditorScene {
                         chunk.containers[layer].addChild(sprite);
                     }
                 }
+
+                if (tile.spawn) {
+                    this.appendNpcSprite(chunk, x, y, tile.spawn.npcIndex);
+                }
             }
         }
 
         chunk.built = true;
+    }
+
+    /**
+     * Resuelve npcIndex -> grh de cuerpo/cabeza via las mismas DBs que usa el
+     * juego (`npcsDB`/`bodiesDB`/`headsDB`). Cacheado: la relacion npc->grh no
+     * cambia entre mapas.
+     */
+    private resolveNpcVisual(npcIndex: number): ResolvedNpcVisual | null {
+        const cached = this.npcVisualCache.get(npcIndex);
+
+        if (cached !== undefined) {
+            return cached;
+        }
+
+        const npc = this.npcAssets.npcsDB?.[String(npcIndex)];
+        const bodyData = npc ? this.npcAssets.bodiesDB?.[String(npc.idBody)] : undefined;
+
+        if (!npc || !bodyData) {
+            this.npcVisualCache.set(npcIndex, null);
+            return null;
+        }
+
+        const headData = npc.idHead > 0 ? this.npcAssets.headsDB?.[String(npc.idHead)] : undefined;
+
+        const resolved: ResolvedNpcVisual = {
+            bodyGrh: bodyData[NPC_PREVIEW_FACING],
+            headGrh: headData ? headData[NPC_PREVIEW_FACING] : undefined,
+            headOffsetX: bodyData.headOffsetX ?? 0,
+            headOffsetY: bodyData.headOffsetY ?? 0,
+        };
+
+        this.npcVisualCache.set(npcIndex, resolved);
+        return resolved;
+    }
+
+    /** Cuerpo (+ cabeza si tiene) del NPC parado en (x,y), anclado como las capas 3/4. */
+    private appendNpcSprite(chunk: Chunk, x: number, y: number, npcIndex: number): void {
+        const visual = this.resolveNpcVisual(npcIndex);
+
+        if (!visual) {
+            return;
+        }
+
+        const resolvedBodyGrh = this.textures.resolveStaticGrh(visual.bodyGrh);
+        const bodyTexture = resolvedBodyGrh !== null ? this.textures.get(resolvedBodyGrh) : null;
+
+        if (!bodyTexture) {
+            return;
+        }
+
+        const originX = (x - 1) * TILE_SIZE;
+        const originY = (y - 1) * TILE_SIZE;
+        const zIndex = getRowZIndex(y, Z_INDEX_LAYERS.CHARACTER);
+
+        const bodyPosition = getBottomAnchoredGraphicPosition(bodyTexture.width, bodyTexture.height);
+        const bodySprite = new Sprite(bodyTexture);
+        bodySprite.x = Math.round(originX + bodyPosition.x);
+        bodySprite.y = Math.round(originY + bodyPosition.y);
+        bodySprite.zIndex = zIndex;
+        chunk.containers[3].addChild(bodySprite);
+
+        if (visual.headGrh === undefined) {
+            return;
+        }
+
+        const resolvedHeadGrh = this.textures.resolveStaticGrh(visual.headGrh);
+        const headTexture = resolvedHeadGrh !== null ? this.textures.get(resolvedHeadGrh) : null;
+
+        if (!headTexture) {
+            return;
+        }
+
+        const bodyMetrics = {
+            x: bodyPosition.x,
+            y: bodyPosition.y,
+            width: bodyTexture.width,
+            height: bodyTexture.height,
+        };
+        const headPosition = getHeadSpritePosition(bodyMetrics, visual, headTexture);
+        const headSprite = new Sprite(headTexture);
+        headSprite.x = Math.round(originX + headPosition.x);
+        headSprite.y = Math.round(originY + headPosition.y);
+        headSprite.zIndex = zIndex;
+        chunk.containers[3].addChild(headSprite);
+    }
+
+    /** Grh de cuerpo/cabeza de los NPCs en una region, para precargar junto con los tiles. */
+    private collectNpcGraphicsInRegion(minX: number, minY: number, maxX: number, maxY: number): number[] {
+        const result: number[] = [];
+        const x0 = Math.max(1, minX);
+        const y0 = Math.max(1, minY);
+        const x1 = Math.min(this.model.width, maxX);
+        const y1 = Math.min(this.model.height, maxY);
+
+        for (let y = y0; y <= y1; y++) {
+            for (let x = x0; x <= x1; x++) {
+                const tile = this.model.get(x, y);
+
+                if (!tile?.spawn) {
+                    continue;
+                }
+
+                const visual = this.resolveNpcVisual(tile.spawn.npcIndex);
+
+                if (!visual) {
+                    continue;
+                }
+
+                result.push(visual.bodyGrh);
+
+                if (visual.headGrh !== undefined) {
+                    result.push(visual.headGrh);
+                }
+            }
+        }
+
+        return result;
     }
 
     /**
@@ -437,12 +582,16 @@ export class EditorScene {
             return;
         }
 
-        const grhIds = this.model.graphicsInRegion(
-            cx0 * CHUNK_TILES + 1,
-            cy0 * CHUNK_TILES + 1,
-            (cx1 + 1) * CHUNK_TILES,
-            (cy1 + 1) * CHUNK_TILES,
-        );
+        const x0 = cx0 * CHUNK_TILES + 1;
+        const y0 = cy0 * CHUNK_TILES + 1;
+        const x1 = (cx1 + 1) * CHUNK_TILES;
+        const y1 = (cy1 + 1) * CHUNK_TILES;
+
+        const grhIds = this.model.graphicsInRegion(x0, y0, x1, y1);
+
+        for (const grhId of this.collectNpcGraphicsInRegion(x0, y0, x1, y1)) {
+            grhIds.add(grhId);
+        }
 
         const missing = [...grhIds].filter((grhId) => {
             const resolved = this.textures.resolveStaticGrh(grhId);
@@ -561,15 +710,17 @@ export class EditorScene {
                 }
 
                 if (this.overlays.npcs && (tile.spawn || tile.npc !== undefined)) {
-                    const cxp = px + TILE_SIZE / 2;
-                    const cyp = py + TILE_SIZE / 2;
-                    g.moveTo(cxp, cyp - 8)
-                        .lineTo(cxp + 8, cyp)
-                        .lineTo(cxp, cyp + 8)
-                        .lineTo(cxp - 8, cyp)
+                    // Badge chico en la esquina: el sprite real del NPC ya se dibuja
+                    // sobre el tile, esto solo es la referencia de color (amarillo =
+                    // spawn real de npcs.json; naranja = NPC inline legado).
+                    const bx = px + 5;
+                    const by = py + 5;
+                    g.moveTo(bx, by - 4)
+                        .lineTo(bx + 4, by)
+                        .lineTo(bx, by + 4)
+                        .lineTo(bx - 4, by)
                         .closePath()
-                        // Amarillo = spawn real de npcs.json; naranja = NPC inline legado.
-                        .fill({ color: tile.spawn ? 0xfacc15 : 0xfb923c, alpha: 0.75 });
+                        .fill({ color: tile.spawn ? 0xfacc15 : 0xfb923c, alpha: 0.9 });
                 }
             }
         }
