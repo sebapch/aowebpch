@@ -7,6 +7,7 @@ import type { GraphicsDB } from "../../types/game";
 import { loadGraphicsDB } from "../../utils/gameLoader";
 import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
 import { GraphicsPicker } from "./GraphicsPicker";
+import { GraphicsCatalogModal } from "./GraphicsCatalogModal";
 import { NpcPanel } from "./NpcPanel";
 import { NpcSelectorModal } from "./NpcSelectorModal";
 import { TileInspector } from "./TileInspector";
@@ -40,6 +41,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
     const [npcPanelIndex, setNpcPanelIndex] = useState<number | null>(null);
     const [catalogOpen, setCatalogOpen] = useState(false);
+    const [graphicsCatalogOpen, setGraphicsCatalogOpen] = useState(false);
 
     const [activeLayer, setActiveLayer] = useState<LayerIndex>(1);
     const [isolateLayer, setIsolateLayer] = useState(false);
@@ -61,6 +63,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [tool, setTool] = useState<EditorTool>("select");
     const [paintMode, setPaintMode] = useState<PaintMode>("graphic");
     const [brushGraphic, setBrushGraphic] = useState<number | null>(null);
+    const [brushSize, setBrushSize] = useState<1 | 2 | 3 | 5>(1);
+    const [paintToolMode, setPaintToolMode] = useState<"brush" | "bucket">("brush");
     const [graphicsDB, setGraphicsDB] = useState<GraphicsDB | null>(null);
 
     const historyRef = useRef(new History());
@@ -658,12 +662,63 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                                 </button>
                             </div>
 
+                            {/* Pincel vs Relleno (Bote) */}
+                            <div className="flex gap-1 text-xs pt-1">
+                                <button
+                                    type="button"
+                                    className={`flex-1 rounded border px-2 py-1 text-[11px] font-medium flex items-center justify-center gap-1 ${
+                                        paintToolMode === "brush"
+                                            ? "border-amber-500/80 bg-amber-950/80 text-amber-200"
+                                            : "border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700"
+                                    }`}
+                                    onClick={() => setPaintToolMode("brush")}
+                                >
+                                    🖌 Pincel
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`flex-1 rounded border px-2 py-1 text-[11px] font-medium flex items-center justify-center gap-1 ${
+                                        paintToolMode === "bucket"
+                                            ? "border-amber-500/80 bg-amber-950/80 text-amber-200"
+                                            : "border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700"
+                                    }`}
+                                    onClick={() => setPaintToolMode("bucket")}
+                                    title="Rellenar zona contigua con el mismo terreno (Flood Fill)"
+                                >
+                                    🪣 Relleno (Bote)
+                                </button>
+                            </div>
+
+                            {/* Tamaño de pincel */}
+                            {paintToolMode === "brush" && (
+                                <div className="pt-1">
+                                    <span className="text-[10px] uppercase tracking-wide text-slate-500 block mb-1">Tamaño Pincel</span>
+                                    <div className="flex gap-1 text-xs">
+                                        {([1, 2, 3, 5] as const).map((sz) => (
+                                            <button
+                                                key={sz}
+                                                type="button"
+                                                className={`flex-1 rounded border py-0.5 text-[11px] font-mono ${
+                                                    brushSize === sz
+                                                        ? "border-sky-400 bg-sky-950 text-sky-200 font-bold"
+                                                        : "border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700"
+                                                }`}
+                                                onClick={() => setBrushSize(sz)}
+                                            >
+                                                {sz}x{sz}
+                                            </button>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
                             {paintMode === "graphic" && model && (
                                 <GraphicsPicker
                                     model={model}
                                     layer={activeLayer}
                                     value={brushGraphic}
                                     onChange={setBrushGraphic}
+                                    onOpenCatalog={() => setGraphicsCatalogOpen(true)}
                                     graphicsDB={graphicsDB}
                                 />
                             )}
@@ -757,6 +812,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             activeLayer={activeLayer}
                             paintMode={paintMode}
                             brushGraphic={brushGraphic}
+                            brushSize={brushSize}
+                            paintToolMode={paintToolMode}
                             history={historyRef.current}
                             onHoverTile={setHoverTile}
                             onPickTile={setSelectedTile}
@@ -808,6 +865,16 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     if (selectedTile) {
                         handleAddNpc(selectedTile.x, selectedTile.y, npcIndex);
                     }
+                }}
+            />
+
+            <GraphicsCatalogModal
+                isOpen={graphicsCatalogOpen}
+                onClose={() => setGraphicsCatalogOpen(false)}
+                onSelectGraphic={(grhId) => {
+                    setBrushGraphic(grhId);
+                    setTool("paint");
+                    setPaintMode("graphic");
                 }}
             />
         </div>

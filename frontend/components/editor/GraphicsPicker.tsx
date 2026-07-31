@@ -10,6 +10,7 @@ type Props = {
     layer: LayerIndex;
     value: number | null;
     onChange: (grhId: number | null) => void;
+    onOpenCatalog?: () => void;
     graphicsDB: GraphicsDB | null;
 };
 
@@ -79,7 +80,7 @@ function GraphicThumbnail({ grhId, graphicsDB, size = THUMB_SIZE }: { grhId: num
  * este mapa (`model.usedGraphics()`) mas un id manual: un browser completo de
  * la base de graficos queda para M3.
  */
-export function GraphicsPicker({ model, layer, value, onChange, graphicsDB }: Props) {
+export function GraphicsPicker({ model, layer, value, onChange, onOpenCatalog, graphicsDB }: Props) {
     const [manualInput, setManualInput] = useState("");
     const used = useMemo(
         () => [...model.usedGraphics().byLayer[layer]].sort((a, b) => a - b),
@@ -95,6 +96,16 @@ export function GraphicsPicker({ model, layer, value, onChange, graphicsDB }: Pr
 
     return (
         <div className="space-y-2">
+            {onOpenCatalog && (
+                <button
+                    type="button"
+                    onClick={onOpenCatalog}
+                    className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-sky-700/80 bg-sky-950/80 px-2 py-1.5 text-xs font-semibold text-sky-200 transition-colors hover:bg-sky-900"
+                >
+                    🎨 Catálogo Visual de Gráficos
+                </button>
+            )}
+
             <div className="flex items-center gap-1">
                 <input
                     type="number"

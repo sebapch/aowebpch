@@ -27,6 +27,8 @@ type Props = {
     activeLayer: LayerIndex;
     paintMode: PaintMode;
     brushGraphic: number | null;
+    brushSize?: 1 | 2 | 3 | 5;
+    paintToolMode?: "brush" | "bucket";
     history: History;
     onHoverTile: (tile: { x: number; y: number } | null) => void;
     onPickTile: (tile: { x: number; y: number }) => void;
@@ -58,6 +60,8 @@ export function EditorCanvas({
     activeLayer,
     paintMode,
     brushGraphic,
+    brushSize,
+    paintToolMode,
     history,
     onHoverTile,
     onPickTile,
@@ -81,6 +85,8 @@ export function EditorCanvas({
     const activeLayerRef = useRef(activeLayer);
     const paintModeRef = useRef(paintMode);
     const brushGraphicRef = useRef(brushGraphic);
+    const brushSizeRef = useRef(brushSize ?? 1);
+    const paintToolModeRef = useRef(paintToolMode ?? "brush");
     const modelRef = useRef(model);
     const historyRef = useRef(history);
 
@@ -93,9 +99,11 @@ export function EditorCanvas({
         activeLayerRef.current = activeLayer;
         paintModeRef.current = paintMode;
         brushGraphicRef.current = brushGraphic;
+        brushSizeRef.current = brushSize ?? 1;
+        paintToolModeRef.current = paintToolMode ?? "brush";
         modelRef.current = model;
         historyRef.current = history;
-    }, [onHoverTile, onPickTile, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, model, history]);
+    }, [onHoverTile, onPickTile, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushSize, paintToolMode, model, history]);
 
     useEffect(() => {
         let cancelled = false;
@@ -228,41 +236,140 @@ export function EditorCanvas({
         return { x: event.clientX - rect.left, y: event.clientY - rect.top };
     }, []);
 
-    /** Pinta (o alterna bloqueo de) un tile, si todavia no fue tocado en este trazo. */
-    const applyPaintAtTile = useCallback((x: number, y: number) => {
+    /** Rellena todo un cuerpo contiguo (Flood Fill BFS). */
+    const applyBucketFill = useCallback((originX: number, originY: number) => {
         const stroke = paintState.current;
         const model = modelRef.current;
+        if (!stroke || !model) return;
 
-        if (!stroke) {
-            return;
-        }
-
-        const index = model.indexOf(x, y);
-
-        if (stroke.touched.has(index)) {
-            return;
-        }
+        const targetTile = model.get(originX, originY);
+        if (!targetTile) return;
 
         const mode = paintModeRef.current;
         const layer = activeLayerRef.current;
         const graphic = brushGraphicRef.current;
 
-        const edit = model.applyEdit(x, y, (tile) => {
-            if (mode === "blocked") {
-                tile.blocked = !tile.blocked;
-            } else {
-                tile.graphics[layer - 1] = graphic;
+        if (mode === "blocked") {
+            const targetBlocked = targetTile.blocked;
+            const newBlocked = !targetBlocked;
+
+            const queue: Array<{ x: number; y: number }> = [{ x: originX, y: originY }];
+            const visited = new Set<number>();
+
+            while (queue.length > 0) {
+                const { x, y } = queue.shift()!;
+                if (!model.inBounds(x, y)) continue;
+
+                const index = model.indexOf(x, y);
+                if (visited.has(index)) continue;
+                visited.add(index);
+
+                const currentTile = model.get(x, y);
+                if (!currentTile || currentTile.blocked !== targetBlocked) continue;
+
+                const edit = model.applyEdit(x, y, (tile) => {
+                    tile.blocked = newBlocked;
+                    return tile;
+                });
+
+                if (edit) {
+                    stroke.touched.set(index, { x, y, before: edit.before, after: edit.after });
+                    sceneRef.current?.markTileDirty(x, y);
+                }
+
+                queue.push({ x: x + 1, y });
+                queue.push({ x: x - 1, y });
+                queue.push({ x, y: y + 1 });
+                queue.push({ x, y: y - 1 });
             }
-            return tile;
-        });
+        } else {
+            const targetGrh = targetTile.graphics[layer - 1];
+            if (targetGrh === graphic) return;
 
-        if (!edit) {
-            return;
+            const queue: Array<{ x: number; y: number }> = [{ x: originX, y: originY }];
+            const visited = new Set<number>();
+
+            while (queue.length > 0) {
+                const { x, y } = queue.shift()!;
+                if (!model.inBounds(x, y)) continue;
+
+                const index = model.indexOf(x, y);
+                if (visited.has(index)) continue;
+                visited.add(index);
+
+                const currentTile = model.get(x, y);
+                if (!currentTile || currentTile.graphics[layer - 1] !== targetGrh) continue;
+
+                const edit = model.applyEdit(x, y, (tile) => {
+                    tile.graphics[layer - 1] = graphic;
+                    return tile;
+                });
+
+                if (edit) {
+                    stroke.touched.set(index, { x, y, before: edit.before, after: edit.after });
+                    sceneRef.current?.markTileDirty(x, y);
+                }
+
+                queue.push({ x: x + 1, y });
+                queue.push({ x: x - 1, y });
+                queue.push({ x, y: y + 1 });
+                queue.push({ x, y: y - 1 });
+            }
         }
-
-        stroke.touched.set(index, { x, y, before: edit.before, after: edit.after });
-        sceneRef.current?.markTileDirty(x, y);
     }, []);
+
+    /** Pinta (o alterna bloqueo de) los tiles segun el tamaño de pincel o modo bote. */
+    const applyPaintAtTile = useCallback(
+        (centerX: number, centerY: number) => {
+            const stroke = paintState.current;
+            const model = modelRef.current;
+
+            if (!stroke || !model) {
+                return;
+            }
+
+            if (paintToolModeRef.current === "bucket") {
+                applyBucketFill(centerX, centerY);
+                return;
+            }
+
+            const size = brushSizeRef.current ?? 1;
+            const half = Math.floor(size / 2);
+            const mode = paintModeRef.current;
+            const layer = activeLayerRef.current;
+            const graphic = brushGraphicRef.current;
+
+            const minOffset = -half;
+            const maxOffset = size % 2 === 0 ? half - 1 : half;
+
+            for (let dx = minOffset; dx <= maxOffset; dx++) {
+                for (let dy = minOffset; dy <= maxOffset; dy++) {
+                    const x = centerX + dx;
+                    const y = centerY + dy;
+
+                    if (!model.inBounds(x, y)) continue;
+                    const index = model.indexOf(x, y);
+
+                    if (stroke.touched.has(index)) continue;
+
+                    const edit = model.applyEdit(x, y, (tile) => {
+                        if (mode === "blocked") {
+                            tile.blocked = !tile.blocked;
+                        } else {
+                            tile.graphics[layer - 1] = graphic;
+                        }
+                        return tile;
+                    });
+
+                    if (edit) {
+                        stroke.touched.set(index, { x, y, before: edit.before, after: edit.after });
+                        sceneRef.current?.markTileDirty(x, y);
+                    }
+                }
+            }
+        },
+        [applyBucketFill],
+    );
 
     const commitPaintStroke = useCallback(() => {
         const stroke = paintState.current;
