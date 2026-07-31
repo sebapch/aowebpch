@@ -81,6 +81,7 @@ type ActiveMatch = {
     id: string;
     createdAt: number;
     teamSize: TeamSize;
+    targetScore?: number;
     instanceMapId: number;
     teams: Record<TeamSide, MatchTeam>;
     timerIds: number[];
@@ -873,11 +874,12 @@ const challengeManager = {
         this.syncParticipantAppearanceForOthers(user);
     },
 
-    startRound(match: ActiveMatch) {
+    startRound(match: ActiveMatch, customCountdown?: number) {
         match.resolvingRound = false;
         this.clearTimers(match);
 
-        const releaseAt = now() + (COUNTDOWN_START + 1) * COUNTDOWN_STEP_MS;
+        const countdownStart = typeof customCountdown === "number" ? customCountdown : COUNTDOWN_START;
+        const releaseAt = now() + (countdownStart + 1) * COUNTDOWN_STEP_MS;
 
         for (const side of [1, 2] as TeamSide[]) {
             match.teams[side].participants.forEach((participant, index) => {
@@ -894,16 +896,16 @@ const challengeManager = {
             });
         }
 
-        for (let value = COUNTDOWN_START; value >= 0; value--) {
+        for (let value = countdownStart; value >= 0; value--) {
             const timerId = setTimeout(
                 () => {
                     if (match.finished) {
                         return;
                     }
 
-                    this.sendMatchConsole(match, `[Reto] ${value}`);
+                    this.sendMatchConsole(match, `[Arena] ${value > 0 ? value : "¡A COMBATIR!"}`);
                 },
-                (COUNTDOWN_START - value) * COUNTDOWN_STEP_MS,
+                (countdownStart - value) * COUNTDOWN_STEP_MS,
             );
 
             match.timerIds.push(timerId as unknown as number);
@@ -919,9 +921,9 @@ const challengeManager = {
                     this.setParticipantLock(participant, false);
                 }
 
-                this.sendMatchConsole(match, "[Reto] YA");
+                this.sendMatchConsole(match, "[Arena] ¡PELEA!", "#00E676");
             },
-            (COUNTDOWN_START + 1) * COUNTDOWN_STEP_MS,
+            (countdownStart + 1) * COUNTDOWN_STEP_MS,
         );
 
         match.timerIds.push(releaseTimerId as unknown as number);
@@ -1004,8 +1006,9 @@ const challengeManager = {
     scheduleNextRound(match: ActiveMatch, winnerSide: TeamSide) {
         match.resolvingRound = true;
         match.teams[winnerSide].score += 1;
+        const targetScore = match.targetScore ?? 2;
 
-        if (match.teams[winnerSide].score >= 2) {
+        if (match.teams[winnerSide].score >= targetScore) {
             const finishTimerId = setTimeout(() => {
                 this.finishMatch(match, winnerSide);
             }, 0);
@@ -1095,6 +1098,46 @@ const challengeManager = {
             `[Retos] Comienza ${challenge.teamSize}vs${challenge.teamSize}. Primero en ganar 2 rondas.`,
         );
         this.startRound(match);
+
+        return {
+            ok: true,
+            matchId,
+        };
+    },
+
+    createMatchmaking2v2Match(teamOneUsers: RuntimeCharacter[], teamTwoUsers: RuntimeCharacter[]) {
+        const matchId = this.createId("matchmaking");
+        const match: ActiveMatch = {
+            id: matchId,
+            createdAt: now(),
+            teamSize: 2,
+            targetScore: 1,
+            instanceMapId: this.createMatchInstanceMap(),
+            teams: {
+                1: {
+                    side: 1,
+                    participants: teamOneUsers.map((member) => this.buildMatchParticipant(member)),
+                    score: 0,
+                },
+                2: {
+                    side: 2,
+                    participants: teamTwoUsers.map((member) => this.buildMatchParticipant(member)),
+                    score: 0,
+                },
+            },
+            timerIds: [],
+            resolvingRound: false,
+            finished: false,
+        };
+
+        this.activeMatches[matchId] = match;
+
+        this.sendMatchConsole(
+            match,
+            "[Arena Matchmaking 2v2] ¡Partida encontrada! Preparando arena...",
+            "#00E676",
+        );
+        this.startRound(match, 3);
 
         return {
             ok: true,

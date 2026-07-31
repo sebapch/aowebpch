@@ -38,6 +38,7 @@ const handleProtocol = require("./handleProtocol") as HandleProtocolApi;
 const login = require("./login");
 const runtimeTiming = require("./runtimeTiming");
 const balance = require("./balance");
+const { arenaMatchmakingManager } = require("./arenaMatchmakingManager");
 const mapInstanceManager = require("./mapInstanceManager");
 const _ = require("lodash");
 const npcsInMap = loadAllMapNpcPlacements() as Array<{
@@ -2391,6 +2392,28 @@ const command: CommandApi = {
                     handleProtocol.actGold(user.gold, ws as CommandClient);
                     await refreshOnlineCharacterClanStateByPersistedId(user._id);
                     handleProtocol.console("Clan creado correctamente.", "#E69500", 0, 0, ws as CommandClient);
+                    break;
+                }
+
+                case "/arena":
+                case "/anotarse": {
+                    try {
+                        arenaMatchmakingManager.enqueue(clientId);
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : "No se pudo anotar a la arena.";
+                        handleProtocol.console(message, "white", 0, 0, ws as CommandClient);
+                    }
+                    break;
+                }
+
+                case "/salirarena":
+                case "/cancelararena": {
+                    try {
+                        arenaMatchmakingManager.dequeue(clientId);
+                    } catch (err) {
+                        const message = err instanceof Error ? err.message : "No se pudo salir de la arena.";
+                        handleProtocol.console(message, "white", 0, 0, ws as CommandClient);
+                    }
                     break;
                 }
 

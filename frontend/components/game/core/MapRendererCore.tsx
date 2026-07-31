@@ -154,7 +154,7 @@ interface MapRendererProps {
         token: number;
     } | null;
     retosActionRequest?: {
-        action: "refresh" | "create" | "join" | "cancel";
+        action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2";
         payload?: Record<string, unknown>;
         token: number;
     } | null;

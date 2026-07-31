@@ -33,6 +33,7 @@ const harvesting = require("./harvesting");
 const crafting = require("./crafting");
 const smelting = require("./smelting");
 const challengeManager = require("./challengeManager");
+const { arenaMatchmakingManager } = require("./arenaMatchmakingManager");
 const LOGOUT_CANCELLED_MESSAGE = "[Servidor] La salida se canceló porque te moviste.";
 const MAX_PENDING_MOVE_QUEUE_LENGTH = 8;
 const REVIVE_CAST_MS = 10000;
@@ -4381,6 +4382,14 @@ async function retosAction(ws: RuntimeClient) {
             case "cancel": {
                 challengeManager.cancelChallengeByUserId(ws.id!, String(payload.challengeId ?? ""));
                 message = "[Retos] Reto cancelado.";
+                break;
+            }
+            case "enqueue2v2": {
+                arenaMatchmakingManager.enqueue(ws.id!);
+                break;
+            }
+            case "dequeue2v2": {
+                arenaMatchmakingManager.dequeue(ws.id!);
                 break;
             }
             case "refresh":

@@ -756,12 +756,13 @@ function HomeContent() {
         null,
     );
     const [retosOpen, setRetosOpen] = useState(false);
+    const [isInArenaQueue, setIsInArenaQueue] = useState(false);
     const [retosLoading, setRetosLoading] = useState(false);
     const [retosActionKey, setRetosActionKey] = useState<string | null>(null);
     const [retosError, setRetosError] = useState<string | null>(null);
     const [retosInfo, setRetosInfo] = useState<string | null>(null);
     const [retosActionRequest, setRetosActionRequest] = useState<{
-        action: "refresh" | "create" | "join" | "cancel";
+        action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2";
         payload?: Record<string, unknown>;
         token: number;
     } | null>(null);
@@ -1027,7 +1028,7 @@ function HomeContent() {
 
     const requestRetosState = useCallback(
         (
-            action: "refresh" | "create" | "join" | "cancel",
+            action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2",
             payload?: Record<string, unknown>,
         ) => {
             setRetosError(null);
@@ -1757,6 +1758,12 @@ function HomeContent() {
                     setLogoutPending(true);
                     setLogoutDeadline(null);
                     setLogoutSecondsRemaining(0);
+                }
+
+                if (entry.text.includes("[Arena 2v2] Te has unido")) {
+                    setIsInArenaQueue(true);
+                } else if (entry.text.includes("[Arena 2v2] Has salido") || entry.text.includes("¡PARTIDA ENCONTRADA!")) {
+                    setIsInArenaQueue(false);
                 }
 
                 if (RETOS_INFO_MESSAGES.has(entry.text)) {
@@ -3455,15 +3462,45 @@ function HomeContent() {
                                             </>
                                         )}
                                     </div>
-
                                     {authSession && !arenaMode ? (
-                                        <div className="text-center text-[11px] leading-5 tracking-[0.04em] text-stone-300/85">
-                                            En zona insegura cerrá el personaje
-                                            con{" "}
-                                            <span className="text-amber-300">
-                                                /salir
-                                            </span>{" "}
-                                            o quedará conectado por 10 segundos.
+                                        <div className="flex flex-col gap-2">
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    if (isInArenaQueue) {
+                                                        requestRetosState("dequeue2v2");
+                                                        setIsInArenaQueue(false);
+                                                    } else {
+                                                        requestRetosState("enqueue2v2");
+                                                        setIsInArenaQueue(true);
+                                                    }
+                                                }}
+                                                className={`w-full rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-wider transition ${
+                                                    isInArenaQueue
+                                                        ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-emerald-500/30"
+                                                        : "border-amber-400/40 bg-amber-500/10 text-amber-200 hover:border-amber-400/70 hover:bg-amber-500/20 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                                                }`}
+                                            >
+                                                {isInArenaQueue ? (
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
+                                                        ⏳ En Lista de Espera 2v2 (Salir)
+                                                    </span>
+                                                ) : (
+                                                    <span className="flex items-center justify-center gap-2">
+                                                        <span>⚔️</span> Lista de Espera 2v2
+                                                    </span>
+                                                )}
+                                            </button>
+
+                                            <div className="text-center text-[11px] leading-5 tracking-[0.04em] text-stone-300/85">
+                                                En zona insegura cerrá el personaje
+                                                con{" "}
+                                                <span className="text-amber-300">
+                                                    /salir
+                                                </span>{" "}
+                                                o quedará conectado por 10 segundos.
+                                            </div>
                                         </div>
                                     ) : null}
                                 </div>
@@ -3675,6 +3712,14 @@ function HomeContent() {
                     onCancelChallenge={(challengeId) => {
                         setRetosActionKey(`cancel-${challengeId}`);
                         requestRetosState("cancel", { challengeId });
+                    }}
+                    onEnqueueMatchmaking={() => {
+                        setRetosActionKey("enqueue2v2");
+                        requestRetosState("enqueue2v2");
+                    }}
+                    onDequeueMatchmaking={() => {
+                        setRetosActionKey("dequeue2v2");
+                        requestRetosState("dequeue2v2");
                     }}
                 />
             ) : null}

@@ -9,6 +9,10 @@ type Props = {
     y: number | null;
     onAddNpc?: (x: number, y: number, npcIndex: number) => void;
     onOpenCatalog?: () => void;
+    recentNpcs?: number[];
+    onStartMoveLayer?: (x: number, y: number, layer: LayerIndex, grhId: number) => void;
+    onStartMoveObject?: (x: number, y: number) => void;
+    onStartMoveNpc?: (x: number, y: number) => void;
     onRemoveObject?: (x: number, y: number) => void;
     onRemoveNpc?: (x: number, y: number) => void;
     onRemoveTrigger?: (x: number, y: number) => void;
@@ -32,6 +36,10 @@ export function TileInspector({
     y,
     onAddNpc,
     onOpenCatalog,
+    recentNpcs,
+    onStartMoveLayer,
+    onStartMoveObject,
+    onStartMoveNpc,
     onRemoveObject,
     onRemoveNpc,
     onRemoveTrigger,
@@ -79,14 +87,26 @@ export function TileInspector({
                                 </span>
                             </div>
                             {grhId !== null && (
-                                <button
-                                    type="button"
-                                    onClick={() => onClearLayer?.(x, y, layer)}
-                                    className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:border-red-800 hover:bg-red-950 hover:text-red-300"
-                                    title={`Borrar grafico Grh #${grhId} de Capa ${layer}`}
-                                >
-                                    Borrar
-                                </button>
+                                <div className="flex items-center gap-1">
+                                    {onStartMoveLayer && (
+                                        <button
+                                            type="button"
+                                            onClick={() => onStartMoveLayer(x, y, layer, grhId)}
+                                            className="rounded border border-amber-700/80 bg-amber-950/80 px-1.5 py-0.5 text-[10px] font-medium text-amber-200 transition-colors hover:bg-amber-900"
+                                            title={`Mover grafico Grh #${grhId} de Capa ${layer} a otro casillero`}
+                                        >
+                                            Mover
+                                        </button>
+                                    )}
+                                    <button
+                                        type="button"
+                                        onClick={() => onClearLayer?.(x, y, layer)}
+                                        className="rounded border border-slate-700 bg-slate-800 px-1.5 py-0.5 text-[10px] font-medium text-slate-400 transition-colors hover:border-red-800 hover:bg-red-950 hover:text-red-300"
+                                        title={`Borrar grafico Grh #${grhId} de Capa ${layer}`}
+                                    >
+                                        Borrar
+                                    </button>
+                                </div>
                             )}
                         </div>
                     );
@@ -100,17 +120,29 @@ export function TileInspector({
                     <div className="py-2">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] uppercase tracking-wide text-slate-500">Objeto</span>
-                            <button
-                                type="button"
-                                onClick={() => onRemoveObject?.(x, y)}
-                                className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
-                                title="Suprimir objeto de este tile"
-                            >
-                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Suprimir
-                            </button>
+                            <div className="flex items-center gap-1">
+                                {onStartMoveObject && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onStartMoveObject(x, y)}
+                                        className="flex items-center gap-1 rounded border border-amber-700/80 bg-amber-950/80 px-2 py-0.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-900"
+                                        title="Haz clic para reubicar este objeto en otro tile del mapa"
+                                    >
+                                        ↔ Mover
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => onRemoveObject?.(x, y)}
+                                    className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
+                                    title="Suprimir objeto de este tile"
+                                >
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Suprimir
+                                </button>
+                            </div>
                         </div>
                         <div className="mt-1 font-mono text-xs text-green-300">
                             #{tile.object.objIndex} · Cant: {tile.object.amount}
@@ -122,17 +154,29 @@ export function TileInspector({
                     <div className="py-2">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] uppercase tracking-wide text-slate-500">NPC</span>
-                            <button
-                                type="button"
-                                onClick={() => onRemoveNpc?.(x, y)}
-                                className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
-                                title="Suprimir NPC de este tile"
-                            >
-                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Suprimir
-                            </button>
+                            <div className="flex items-center gap-1">
+                                {onStartMoveNpc && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onStartMoveNpc(x, y)}
+                                        className="flex items-center gap-1 rounded border border-amber-700/80 bg-amber-950/80 px-2 py-0.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-900"
+                                        title="Haz clic para reubicar este NPC en otro tile del mapa"
+                                    >
+                                        ↔ Mover
+                                    </button>
+                                )}
+                                <button
+                                    type="button"
+                                    onClick={() => onRemoveNpc?.(x, y)}
+                                    className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
+                                    title="Suprimir NPC de este tile"
+                                >
+                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                    </svg>
+                                    Suprimir
+                                </button>
+                            </div>
                         </div>
                         <div className="mt-1 font-mono text-xs text-yellow-300">
                             {tile.spawn ? (
@@ -146,7 +190,7 @@ export function TileInspector({
                         </div>
                     </div>
                 ) : (
-                    <div className="py-2 space-y-1.5">
+                    <div className="py-2 space-y-2">
                         <div className="flex items-center justify-between">
                             <span className="text-[11px] uppercase tracking-wide text-slate-500">Agregar NPC</span>
                             {onOpenCatalog && (
@@ -186,6 +230,27 @@ export function TileInspector({
                                 Colocar
                             </button>
                         </form>
+
+                        {recentNpcs && recentNpcs.length > 0 && (
+                            <div>
+                                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400 block mb-1">
+                                    🕒 NPCs Recientes
+                                </span>
+                                <div className="flex flex-wrap gap-1">
+                                    {recentNpcs.map((id) => (
+                                        <button
+                                            key={id}
+                                            type="button"
+                                            onClick={() => onAddNpc?.(x, y, id)}
+                                            className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-yellow-300 hover:border-amber-500 hover:bg-amber-950 transition-colors"
+                                            title={`Colocar NPC #${id} en este tile`}
+                                        >
+                                            #{id}
+                                        </button>
+                                    ))}
+                                </div>
+                            </div>
+                        )}
                     </div>
                 )}
 

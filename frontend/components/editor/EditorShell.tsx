@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { fetchMapBundle, fetchMapList, saveMapBundle, toggleActiveMap, EditorApiError } from "../../lib/editor/api";
-import { LAYER_NAMES, type ExpandedTile, type MapSummary } from "../../lib/editor/types";
+import { LAYER_NAMES, type ExpandedTile, type MapSummary, type NpcSpawn, type ObjectInfo } from "../../lib/editor/types";
 import type { GraphicsDB } from "../../types/game";
 import { loadGraphicsDB } from "../../utils/gameLoader";
 import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
@@ -42,8 +42,13 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [npcPanelIndex, setNpcPanelIndex] = useState<number | null>(null);
     const [catalogOpen, setCatalogOpen] = useState(false);
     const [graphicsCatalogOpen, setGraphicsCatalogOpen] = useState(false);
-
-    const [activeLayer, setActiveLayer] = useState<LayerIndex>(1);
+    const [movePending, setMovePending] = useState<{
+        kind: "spawn" | "object" | "layer";
+        layer?: LayerIndex;
+        grhId?: number;
+        fromX: number;
+        fromY: number;
+    } | null>(null);    const [activeLayer, setActiveLayer] = useState<LayerIndex>(1);
     const [isolateLayer, setIsolateLayer] = useState(false);
     const [layerVisibility, setLayerVisibility] = useState<LayerVisibility>({
         1: true,
@@ -66,6 +71,9 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [brushSize, setBrushSize] = useState<1 | 2 | 3 | 5>(1);
     const [paintToolMode, setPaintToolMode] = useState<"brush" | "bucket">("brush");
     const [graphicsDB, setGraphicsDB] = useState<GraphicsDB | null>(null);
+
+    const [recentGraphics, setRecentGraphics] = useState<number[]>([]);
+    const [recentNpcs, setRecentNpcs] = useState<number[]>([]);
 
     const historyRef = useRef(new History());
     const [revision, setRevision] = useState(0);
@@ -124,6 +132,17 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             cancelled = true;
         };
     }, []);
+
+    useEffect(() => {
+        if (!movePending) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setMovePending(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [movePending]);
 
     const isCurrentMapActive = activeMapIds.includes(mapId);
 
@@ -212,6 +231,144 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         setRevision((current) => current + 1);
     }, []);
 
+    const pushRecentGraphic = useCallback((grhId: number) => {
+        setRecentGraphics((prev) => {
+            const filtered = prev.filter((id) => id !== grhId);
+            return [grhId, ...filtered].slice(0, 10);
+        });
+    }, []);
+
+    const pushRecentNpc = useCallback((npcIndex: number) => {
+        setRecentNpcs((prev) => {
+            const filtered = prev.filter((id) => id !== npcIndex);
+            return [npcIndex, ...filtered].slice(0, 10);
+        });
+    }, []);
+
+    const handlePickGraphic = useCallback(
+        (grhId: number) => {
+            setBrushGraphic(grhId);
+            setTool("paint");
+            setPaintMode("graphic");
+            pushRecentGraphic(grhId);
+        },
+        [pushRecentGraphic],
+    );
+
+    const handleSelectBrushGraphic = useCallback(
+        (grhId: number | null) => {
+            setBrushGraphic(grhId);
+            if (grhId !== null) {
+                pushRecentGraphic(grhId);
+            }
+        },
+        [pushRecentGraphic],
+    );
+
+    const handleStartMoveLayer = useCallback((x: number, y: number, layer: LayerIndex, grhId: number) => {
+        setMovePending({ kind: "layer", layer, grhId, fromX: x, fromY: y });
+    }, []);
+
+    const handleStartMoveObject = useCallback((x: number, y: number) => {
+        setMovePending({ kind: "object", fromX: x, fromY: y });
+    }, []);
+
+    const handleStartMoveNpc = useCallback((x: number, y: number) => {
+        setMovePending({ kind: "spawn", fromX: x, fromY: y });
+    }, []);
+
+    const handlePickTile = useCallback(
+        (targetTile: { x: number; y: number }) => {
+            setSelectedTile(targetTile);
+
+            if (movePending && model) {
+                const state = movePending;
+                setMovePending(null);
+
+                if (targetTile.x === state.fromX && targetTile.y === state.fromY) {
+                    return;
+                }
+
+                const sourceTile = model.get(state.fromX, state.fromY);
+                if (!sourceTile) return;
+
+                if (state.kind === "layer" && state.layer && state.grhId !== undefined) {
+                    const layerIdx = state.layer - 1;
+                    const grhToMove = state.grhId;
+
+                    const fromEdit = model.applyEdit(state.fromX, state.fromY, (t) => {
+                        t.graphics[layerIdx] = null;
+                        return t;
+                    });
+
+                    const toEdit = model.applyEdit(targetTile.x, targetTile.y, (t) => {
+                        t.graphics[layerIdx] = grhToMove;
+                        return t;
+                    });
+
+                    if (!fromEdit || !toEdit) return;
+
+                    canvasHandle?.markAllDirty();
+                    historyRef.current.push({
+                        label: `mover capa ${state.layer}`,
+                        undo: () => {
+                            model.restoreTile(fromEdit.index, fromEdit.before);
+                            model.restoreTile(toEdit.index, toEdit.before);
+                            canvasHandle?.markAllDirty();
+                            handleEdit();
+                        },
+                        redo: () => {
+                            model.restoreTile(fromEdit.index, fromEdit.after);
+                            model.restoreTile(toEdit.index, toEdit.after);
+                            canvasHandle?.markAllDirty();
+                            handleEdit();
+                        },
+                    });
+
+                    handleEdit();
+                    return;
+                }
+
+                const payload = state.kind === "spawn" ? sourceTile.spawn : sourceTile.object;
+                if (!payload) return;
+
+                const fromEdit = model.applyEdit(state.fromX, state.fromY, (t) => {
+                    if (state.kind === "spawn") t.spawn = undefined;
+                    else t.object = undefined;
+                    return t;
+                });
+
+                const toEdit = model.applyEdit(targetTile.x, targetTile.y, (t) => {
+                    if (state.kind === "spawn") t.spawn = { ...(payload as NpcSpawn) };
+                    else t.object = { ...(payload as ObjectInfo) };
+                    return t;
+                });
+
+                if (!fromEdit || !toEdit) return;
+
+                canvasHandle?.markAllDirty();
+                historyRef.current.push({
+                    label: state.kind === "spawn" ? "mover npc" : "mover objeto",
+                    undo: () => {
+                        model.restoreTile(fromEdit.index, fromEdit.before);
+                        model.restoreTile(toEdit.index, toEdit.before);
+                        canvasHandle?.markAllDirty();
+                        handleEdit();
+                    },
+                    redo: () => {
+                        model.restoreTile(fromEdit.index, fromEdit.after);
+                        model.restoreTile(toEdit.index, toEdit.after);
+                        canvasHandle?.markAllDirty();
+                        handleEdit();
+                    },
+                });
+
+                handleEdit();
+            }
+        },
+        [movePending, model, canvasHandle, handleEdit],
+    );
+
     const handleAddNpc = useCallback(
         (x: number, y: number, npcIndex: number) => {
             if (!model) return;
@@ -222,6 +379,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
             if (!edit) return;
 
+            pushRecentNpc(npcIndex);
             canvasHandle?.markAllDirty();
             historyRef.current.push({
                 label: "agregar npc",
@@ -239,7 +397,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
             handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [model, canvasHandle, handleEdit, pushRecentNpc],
     );
 
     const handleRemoveNpc = useCallback(
@@ -604,34 +762,54 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             <div className="flex min-h-0 flex-1">
                 <aside className="w-56 shrink-0 overflow-y-auto border-r border-slate-800 bg-slate-900 p-3">
                     <h2 className="mb-2 text-[11px] uppercase tracking-wide text-slate-500">Herramienta</h2>
-                    <div className="mb-4 flex gap-1 text-xs">
+                    <div className="mb-4 flex flex-col gap-1 text-xs">
+                        <div className="flex gap-1">
+                            <button
+                                type="button"
+                                className={`flex-1 rounded border px-2 py-1 ${
+                                    tool === "select"
+                                        ? "border-sky-400 bg-sky-950 text-sky-200 font-medium"
+                                        : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                }`}
+                                onClick={() => setTool("select")}
+                            >
+                                Seleccionar
+                            </button>
+                            <button
+                                type="button"
+                                className={`flex-1 rounded border px-2 py-1 ${
+                                    tool === "paint"
+                                        ? "border-sky-400 bg-sky-950 text-sky-200 font-medium"
+                                        : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                }`}
+                                onClick={() => setTool("paint")}
+                            >
+                                Pintar
+                            </button>
+                        </div>
                         <button
                             type="button"
-                            className={`flex-1 rounded border px-2 py-1 ${
-                                tool === "select"
-                                    ? "border-sky-400 bg-sky-950 text-sky-200"
+                            className={`w-full rounded border px-2 py-1 text-left flex items-center justify-center gap-1.5 ${
+                                tool === "eyedropper"
+                                    ? "border-amber-400 bg-amber-950 text-amber-200 font-medium"
                                     : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
                             }`}
-                            onClick={() => setTool("select")}
+                            onClick={() => setTool("eyedropper")}
+                            title="Haz clic en cualquier tile del mapa para tomar su gráfico (o mantén pulsado Alt + Clic)"
                         >
-                            Seleccionar / mover
-                        </button>
-                        <button
-                            type="button"
-                            className={`flex-1 rounded border px-2 py-1 ${
-                                tool === "paint"
-                                    ? "border-sky-400 bg-sky-950 text-sky-200"
-                                    : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
-                            }`}
-                            onClick={() => setTool("paint")}
-                        >
-                            Pintar
+                            🧪 Cuentagotas <span className="text-[10px] text-slate-400">(Alt + Clic)</span>
                         </button>
                     </div>
 
                     {tool === "select" && (
                         <p className="mb-4 text-[11px] leading-relaxed text-slate-600">
-                            Arrastra un NPC u objeto para moverlo a otro tile.
+                            Arrastra un NPC u objeto para moverlo a otro tile. Haz clic en un tile para ver su inspección.
+                        </p>
+                    )}
+
+                    {tool === "eyedropper" && (
+                        <p className="mb-4 text-[11px] leading-relaxed text-amber-400/90 bg-amber-950/40 p-2 rounded border border-amber-900/50">
+                            Haz clic en cualquier casillero del mapa para copiar su textura e ir a pintar directamente. También puedes mantener <strong>Alt + Clic</strong> en cualquier momento.
                         </p>
                     )}
 
@@ -717,8 +895,9 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                                     model={model}
                                     layer={activeLayer}
                                     value={brushGraphic}
-                                    onChange={setBrushGraphic}
+                                    onChange={handleSelectBrushGraphic}
                                     onOpenCatalog={() => setGraphicsCatalogOpen(true)}
+                                    recentGraphics={recentGraphics}
                                     graphicsDB={graphicsDB}
                                 />
                             )}
@@ -748,28 +927,36 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                                         layerVisibility[layer] ? "text-slate-200" : "text-slate-600 line-through"
                                     }`}
                                     onClick={() =>
-                                        setLayerVisibility((current) => ({
-                                            ...current,
-                                            [layer]: !current[layer],
-                                        }))
+                                        setLayerVisibility((current) => ({ ...current, [layer]: !current[layer] }))
                                     }
                                 >
-                                    {layer} · {LAYER_NAMES[layer]}
+                                    Capa {layer} ({LAYER_NAMES[layer]})
+                                </button>
+                                <button
+                                    type="button"
+                                    className="text-[10px] text-slate-500 hover:text-slate-300"
+                                    onClick={() =>
+                                        setLayerVisibility((current) => ({ ...current, [layer]: !current[layer] }))
+                                    }
+                                >
+                                    {layerVisibility[layer] ? "ver" : "ocultar"}
                                 </button>
                             </div>
                         ))}
                     </div>
 
-                    <label className="mt-2 flex items-center gap-2 text-xs text-slate-400">
-                        <input
-                            type="checkbox"
-                            checked={isolateLayer}
-                            onChange={(event) => setIsolateLayer(event.target.checked)}
-                        />
-                        Aislar capa activa
-                    </label>
+                    <div className="mt-4 border-t border-slate-800 pt-3">
+                        <label className="flex items-center gap-2 text-xs text-slate-400">
+                            <input
+                                type="checkbox"
+                                checked={isolateLayer}
+                                onChange={(event) => setIsolateLayer(event.target.checked)}
+                            />
+                            Aislar capa activa
+                        </label>
+                    </div>
 
-                    <h2 className="mb-2 mt-5 text-[11px] uppercase tracking-wide text-slate-500">Superposiciones</h2>
+                    <h2 className="mb-2 mt-4 text-[11px] uppercase tracking-wide text-slate-500">Capas auxiliares</h2>
                     <div className="space-y-1">
                         {(Object.keys(OVERLAY_LABELS) as Array<keyof OverlayFlags>).map((key) => (
                             <label key={key} className="flex items-center gap-2 text-xs text-slate-300">
@@ -786,12 +973,33 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     </div>
 
                     <p className="mt-5 text-[11px] leading-relaxed text-slate-600">
-                        Rueda: zoom · Boton derecho o central: desplazar · 1-4: capa activa · ` grilla · K bloqueos ·
+                        Rueda: zoom · Boton derecho o central: desplazar · Alt+Clic: cuentagotas · 1-4: capa activa · ` grilla · K bloqueos ·
                         Home: ajustar · Ctrl+Z / Ctrl+Shift+Z: deshacer/rehacer · Ctrl+S: guardar
                     </p>
                 </aside>
 
                 <main className="relative min-w-0 flex-1">
+                    {movePending && (
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-lg border border-amber-500/80 bg-slate-900/95 px-4 py-2 text-xs shadow-2xl backdrop-blur-xs">
+                            <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                                <span className="animate-pulse">↔</span> Reubicando {
+                                    movePending.kind === "spawn"
+                                        ? "NPC"
+                                        : movePending.kind === "object"
+                                          ? "Objeto"
+                                          : `Capa ${movePending.layer} (Grh #${movePending.grhId})`
+                                } (desde x:{movePending.fromX}, y:{movePending.fromY})
+                            </span>
+                            <span className="text-slate-300 font-medium">Haz clic en el nuevo casillero de destino</span>
+                            <button
+                                type="button"
+                                onClick={() => setMovePending(null)}
+                                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                            >
+                                Cancelar (Esc)
+                            </button>
+                        </div>
+                    )}
                     {(error || saveError) && (
                         <div className="absolute inset-x-0 top-0 z-10 bg-red-950/90 px-4 py-2 text-sm text-red-200">
                             {error ?? saveError}
@@ -816,7 +1024,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             paintToolMode={paintToolMode}
                             history={historyRef.current}
                             onHoverTile={setHoverTile}
-                            onPickTile={setSelectedTile}
+                            onPickTile={handlePickTile}
+                            onPickGraphic={handlePickGraphic}
                             onReady={setCanvasHandle}
                             onZoomChange={setZoom}
                             onEdit={handleEdit}
@@ -834,6 +1043,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         y={inspectedCoords?.y ?? null}
                         onAddNpc={handleAddNpc}
                         onOpenCatalog={() => setCatalogOpen(true)}
+                        recentNpcs={recentNpcs}
+                        onStartMoveLayer={handleStartMoveLayer}
+                        onStartMoveObject={handleStartMoveObject}
+                        onStartMoveNpc={handleStartMoveNpc}
                         onRemoveObject={handleRemoveObject}
                         onRemoveNpc={handleRemoveNpc}
                         onRemoveTrigger={handleRemoveTrigger}

@@ -2192,7 +2192,7 @@ export function createMarketActionPacket(
 }
 
 export function createRetosActionPacket(
-    action: "refresh" | "create" | "join" | "cancel",
+    action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2",
     payload: Record<string, unknown> = {},
 ): ArrayBuffer {
     const writer = new PacketWriter(SERVER_PACKET_ID.retosAction);

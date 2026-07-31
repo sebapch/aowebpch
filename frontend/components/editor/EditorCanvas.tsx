@@ -10,7 +10,7 @@ import type { History } from "./model/History";
 import { EditorScene, type LayerVisibility, type OverlayFlags } from "./render/EditorScene";
 import { EditorTextureCache } from "./render/editorTextures";
 
-export type EditorTool = "select" | "paint";
+export type EditorTool = "select" | "paint" | "eyedropper";
 export type PaintMode = "graphic" | "blocked";
 
 export type EditorCanvasHandle = {
@@ -32,6 +32,7 @@ type Props = {
     history: History;
     onHoverTile: (tile: { x: number; y: number } | null) => void;
     onPickTile: (tile: { x: number; y: number }) => void;
+    onPickGraphic?: (grhId: number) => void;
     onReady?: (handle: EditorCanvasHandle) => void;
     onZoomChange?: (zoom: number) => void;
     /** Se dispara despues de cualquier mutacion aplicada o deshecha/rehecha. */
@@ -65,6 +66,7 @@ export function EditorCanvas({
     history,
     onHoverTile,
     onPickTile,
+    onPickGraphic,
     onReady,
     onZoomChange,
     onEdit,
@@ -79,6 +81,7 @@ export function EditorCanvas({
     // recrear la aplicacion de Pixi en cada render.
     const onHoverRef = useRef(onHoverTile);
     const onPickRef = useRef(onPickTile);
+    const onPickGraphicRef = useRef(onPickGraphic);
     const onZoomRef = useRef(onZoomChange);
     const onEditRef = useRef(onEdit);
     const toolRef = useRef(tool);
@@ -93,6 +96,7 @@ export function EditorCanvas({
     useEffect(() => {
         onHoverRef.current = onHoverTile;
         onPickRef.current = onPickTile;
+        onPickGraphicRef.current = onPickGraphic;
         onZoomRef.current = onZoomChange;
         onEditRef.current = onEdit;
         toolRef.current = tool;
@@ -103,7 +107,7 @@ export function EditorCanvas({
         paintToolModeRef.current = paintToolMode ?? "brush";
         modelRef.current = model;
         historyRef.current = history;
-    }, [onHoverTile, onPickTile, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushSize, paintToolMode, model, history]);
+    }, [onHoverTile, onPickTile, onPickGraphic, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushSize, paintToolMode, model, history]);
 
     useEffect(() => {
         let cancelled = false;
@@ -509,6 +513,27 @@ export function EditorCanvas({
             const tile = scene.screenToTile(local.x, local.y);
 
             if (!tile) {
+                return;
+            }
+
+            const isEyedropper = toolRef.current === "eyedropper" || event.altKey;
+            if (isEyedropper) {
+                const modelTile = modelRef.current.get(tile.x, tile.y);
+                if (modelTile) {
+                    const layer = activeLayerRef.current;
+                    let pickedGrh = modelTile.graphics[layer - 1];
+                    if (pickedGrh === null) {
+                        for (let l = 4; l >= 1; l--) {
+                            if (modelTile.graphics[l - 1] !== null) {
+                                pickedGrh = modelTile.graphics[l - 1];
+                                break;
+                            }
+                        }
+                    }
+                    if (pickedGrh !== null) {
+                        onPickGraphicRef.current?.(pickedGrh);
+                    }
+                }
                 return;
             }
 

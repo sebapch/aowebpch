@@ -11,6 +11,7 @@ type Props = {
     value: number | null;
     onChange: (grhId: number | null) => void;
     onOpenCatalog?: () => void;
+    recentGraphics?: number[];
     graphicsDB: GraphicsDB | null;
 };
 
@@ -80,7 +81,7 @@ function GraphicThumbnail({ grhId, graphicsDB, size = THUMB_SIZE }: { grhId: num
  * este mapa (`model.usedGraphics()`) mas un id manual: un browser completo de
  * la base de graficos queda para M3.
  */
-export function GraphicsPicker({ model, layer, value, onChange, onOpenCatalog, graphicsDB }: Props) {
+export function GraphicsPicker({ model, layer, value, onChange, onOpenCatalog, recentGraphics, graphicsDB }: Props) {
     const [manualInput, setManualInput] = useState("");
     const used = useMemo(
         () => [...model.usedGraphics().byLayer[layer]].sort((a, b) => a - b),
@@ -146,6 +147,29 @@ export function GraphicsPicker({ model, layer, value, onChange, onOpenCatalog, g
                 <div className="flex items-center gap-2 text-xs text-slate-400">
                     <GraphicThumbnail grhId={value} graphicsDB={graphicsDB} size={22} />
                     Pincel: <span className="font-mono text-slate-200">{value}</span>
+                </div>
+            )}
+
+            {recentGraphics && recentGraphics.length > 0 && (
+                <div>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wide text-amber-400">🕒 Recientes</p>
+                    <div className="grid max-h-32 grid-cols-5 gap-1 overflow-y-auto">
+                        {recentGraphics.map((grhId: number) => (
+                            <button
+                                key={grhId}
+                                type="button"
+                                title={`Usar Grh #${grhId}`}
+                                className={`flex items-center justify-center rounded border p-0.5 ${
+                                    value === grhId
+                                        ? "border-amber-400 bg-amber-950"
+                                        : "border-slate-700 bg-slate-800 hover:bg-slate-700"
+                                }`}
+                                onClick={() => onChange(grhId)}
+                            >
+                                <GraphicThumbnail grhId={grhId} graphicsDB={graphicsDB} />
+                            </button>
+                        ))}
+                    </div>
                 </div>
             )}
 
