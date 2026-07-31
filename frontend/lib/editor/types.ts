@@ -32,8 +32,9 @@ export type MapMetadata = {
     terreno: string;
     zona: string;
     restringir: string | number;
+    /** Ausentes en la mayoria de los mapas; el runtime los lee con `?? 0`. */
     minLevel?: number;
-    maxLevel: number;
+    maxLevel?: number;
     backup: number;
     pk: number;
 };

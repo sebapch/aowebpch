@@ -13,6 +13,8 @@ playwright-report/
 !.env.example
 !.env.docker.example
 
+.mcp.json
+
 *.pem
 *.key
 *.p12

@@ -28,9 +28,14 @@ export type ObjectInfo = {
     amount: number;
 };
 
-/** Entrada de paleta tal cual se serializa: `graphics` primero, `blocked` despues. */
+/**
+ * Entrada de paleta tal cual se serializa: `graphics` primero, `blocked` despues.
+ * `graphics` es opcional porque un tile puede estar bloqueado sin dibujo: tanto
+ * el runtime (`loadMaps.ts`) como el export optimizado (`mapExport.ts`) leen
+ * `blocked` sin mirar `graphics`.
+ */
 export type TerrainTile = {
-    graphics: number | Array<number | null>;
+    graphics?: number | Array<number | null>;
     blocked?: true;
 };
 
@@ -43,11 +48,16 @@ export type MapMetadata = {
     terreno: string;
     zona: string;
     restringir: string | number;
+    /** Ausentes en la mayoria de los mapas; el runtime los lee con `?? 0`. */
     minLevel?: number;
-    maxLevel: number;
+    maxLevel?: number;
     backup: number;
     pk: number;
 };
+
+export const TERRENO_OPTIONS = ["BOSQUE", "NIEVE", "DESIERTO", "LOCAL", "CIUDAD"] as const;
+export const ZONA_OPTIONS = ["CIUDAD", "CAMPO", "DUNGEON", "LOCAL"] as const;
+export const RESTRINGIR_OPTIONS = ["No", "NEWBIE", "GM", "CAOS", "ARMADA", ""] as const;
 
 export type EditableTerrain = {
     id: number;
@@ -413,13 +423,17 @@ export function internMap(bundle: EditorMapBundle): {
 
             const graphics = fromLayerGraphics(tile.graphics);
 
-            if (graphics === undefined) {
-                // Sin graficos no hay entrada de paleta posible, asi que un tile
-                // solo-bloqueado no se puede representar. Es una limitacion del
-                // formato, no del editor.
+            if (graphics === undefined && !tile.blocked) {
+                // Tile totalmente vacio: paleta id 0, sin entrada.
                 signatureRow.push(null);
             } else {
-                const terrainTile: TerrainTile = { graphics };
+                // Un tile sin graficos pero bloqueado si tiene entrada de paleta
+                // (`{"blocked":true}`), que es como el runtime lee el bloqueo.
+                const terrainTile: TerrainTile = {};
+
+                if (graphics !== undefined) {
+                    terrainTile.graphics = graphics;
+                }
 
                 if (tile.blocked) {
                     terrainTile.blocked = true;
@@ -585,13 +599,43 @@ export function listMapSummaries(sourceDir: string = MAPS_SOURCE_DIR): MapSummar
     return summaries;
 }
 
+/** Espera bloqueante, para reintentar sin volver async toda la cadena de escritura. */
+function sleepSync(milliseconds: number): void {
+    Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, milliseconds);
+}
+
+/**
+ * Reemplaza un archivo reintentando ante bloqueos transitorios.
+ *
+ * En Windows `rename` falla con EPERM/EBUSY si otro proceso tiene abierto el
+ * destino, y con el stack de desarrollo levantado eso pasa seguido: los
+ * watchers de los dev servers abren el archivo apenas detectan el cambio.
+ */
+export function renameWithRetry(tempPath: string, targetPath: string, attempts = 5): void {
+    for (let attempt = 1; ; attempt++) {
+        try {
+            fs.renameSync(tempPath, targetPath);
+            return;
+        } catch (error) {
+            const code = (error as NodeJS.ErrnoException).code;
+            const transient = code === "EPERM" || code === "EBUSY" || code === "EACCES";
+
+            if (!transient || attempt >= attempts) {
+                throw error;
+            }
+
+            sleepSync(40 * attempt);
+        }
+    }
+}
+
 /** Escritura atomica: archivo temporal + rename. */
 export function writeJsonFileAtomic(filePath: string, value: unknown, pretty = false): void {
     fs.mkdirSync(path.dirname(filePath), { recursive: true });
     const output = pretty ? `${JSON.stringify(value, null, 4)}\n` : JSON.stringify(value);
     const tempPath = `${filePath}.tmp`;
     fs.writeFileSync(tempPath, output, "utf8");
-    fs.renameSync(tempPath, filePath);
+    renameWithRetry(tempPath, filePath);
 }
 
 export type { MapNpcPlacement };

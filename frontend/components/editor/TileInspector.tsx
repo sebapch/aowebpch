@@ -1,12 +1,23 @@
 "use client";
 
-import { LAYER_NAMES, TRIGGER_LABELS, type ExpandedTile } from "../../lib/editor/types";
+import { useState } from "react";
+import {
+    LAYER_NAMES,
+    TRIGGER_LABELS,
+    type ExpandedTile,
+    type MapSummary,
+    type ObjectInfo,
+    type TileExit,
+} from "../../lib/editor/types";
+import { ItemSearchField, useItemNames } from "./ItemSearchField";
 import type { LayerIndex } from "./model/EditorMapModel";
 
 type Props = {
     tile: ExpandedTile | null;
     x: number | null;
     y: number | null;
+    /** Para validar el destino de una salida contra el tamano del mapa real. */
+    maps?: MapSummary[];
     onAddNpc?: (x: number, y: number, npcIndex: number) => void;
     onOpenCatalog?: () => void;
     recentNpcs?: number[];
@@ -17,6 +28,11 @@ type Props = {
     onRemoveNpc?: (x: number, y: number) => void;
     onRemoveTrigger?: (x: number, y: number) => void;
     onRemoveExit?: (x: number, y: number) => void;
+    onSetExit?: (x: number, y: number, destinations: TileExit[]) => void;
+    onSetTrigger?: (x: number, y: number, trigger: number | null) => void;
+    onSetObject?: (x: number, y: number, object: ObjectInfo | null) => void;
+    onSetSpawnMovement?: (x: number, y: number, movement: number) => void;
+    onGoToExit?: (destination: TileExit) => void;
     onClearLayer?: (x: number, y: number, layer: LayerIndex) => void;
     onClearTile?: (x: number, y: number) => void;
 };
@@ -30,10 +46,30 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     );
 }
 
+const DELETE_ICON = (
+    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2"
+            d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+        />
+    </svg>
+);
+
+function exitDestinations(tile: ExpandedTile): TileExit[] {
+    if (!tile.exit) {
+        return [];
+    }
+
+    return "map" in tile.exit ? [tile.exit] : tile.exit.destinations;
+}
+
 export function TileInspector({
     tile,
     x,
     y,
+    maps,
     onAddNpc,
     onOpenCatalog,
     recentNpcs,
@@ -44,6 +80,11 @@ export function TileInspector({
     onRemoveNpc,
     onRemoveTrigger,
     onRemoveExit,
+    onSetExit,
+    onSetTrigger,
+    onSetObject,
+    onSetSpawnMovement,
+    onGoToExit,
     onClearLayer,
     onClearTile,
 }: Props) {
@@ -116,39 +157,14 @@ export function TileInspector({
                     {tile.blocked ? <span className="text-red-400">si</span> : <span className="text-slate-600">no</span>}
                 </Row>
 
-                {tile.object && (
-                    <div className="py-2">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] uppercase tracking-wide text-slate-500">Objeto</span>
-                            <div className="flex items-center gap-1">
-                                {onStartMoveObject && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onStartMoveObject(x, y)}
-                                        className="flex items-center gap-1 rounded border border-amber-700/80 bg-amber-950/80 px-2 py-0.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-900"
-                                        title="Haz clic para reubicar este objeto en otro tile del mapa"
-                                    >
-                                        ↔ Mover
-                                    </button>
-                                )}
-                                <button
-                                    type="button"
-                                    onClick={() => onRemoveObject?.(x, y)}
-                                    className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
-                                    title="Suprimir objeto de este tile"
-                                >
-                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
-                                    Suprimir
-                                </button>
-                            </div>
-                        </div>
-                        <div className="mt-1 font-mono text-xs text-green-300">
-                            #{tile.object.objIndex} · Cant: {tile.object.amount}
-                        </div>
-                    </div>
-                )}
+                <ObjectSection
+                    object={tile.object ?? null}
+                    x={x}
+                    y={y}
+                    onStartMoveObject={onStartMoveObject}
+                    onRemoveObject={onRemoveObject}
+                    onSetObject={onSetObject}
+                />
 
                 {tile.spawn || tile.npc !== undefined ? (
                     <div className="py-2">
@@ -171,23 +187,29 @@ export function TileInspector({
                                     className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
                                     title="Suprimir NPC de este tile"
                                 >
-                                    <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                    </svg>
+                                    {DELETE_ICON}
                                     Suprimir
                                 </button>
                             </div>
                         </div>
                         <div className="mt-1 font-mono text-xs text-yellow-300">
-                            {tile.spawn ? (
-                                <>
-                                    Spawn #{tile.spawn.npcIndex}
-                                    {tile.spawn.movement !== undefined ? ` · Mov ${tile.spawn.movement}` : ""}
-                                </>
-                            ) : (
-                                <>Inline #{tile.npc}</>
-                            )}
+                            {tile.spawn ? <>Spawn #{tile.spawn.npcIndex}</> : <>Inline #{tile.npc}</>}
                         </div>
+
+                        {tile.spawn && onSetSpawnMovement && (
+                            <label className="mt-2 flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                                <span title="Patron de movimiento con el que el servidor instancia este spawn">
+                                    Movimiento
+                                </span>
+                                <input
+                                    type="number"
+                                    min={0}
+                                    className="w-20 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-xs text-slate-200"
+                                    value={tile.spawn.movement ?? 0}
+                                    onChange={(event) => onSetSpawnMovement(x, y, Number(event.target.value))}
+                                />
+                            </label>
+                        )}
                     </div>
                 ) : (
                     <div className="py-2 space-y-2">
@@ -254,53 +276,52 @@ export function TileInspector({
                     </div>
                 )}
 
-                {tile.exit && (
-                    <div className="py-2">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] uppercase tracking-wide text-slate-500">Salida</span>
-                            <button
-                                type="button"
-                                onClick={() => onRemoveExit?.(x, y)}
-                                className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
-                                title="Suprimir traslado/salida"
-                            >
-                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
-                                Suprimir
-                            </button>
-                        </div>
-                        <div className="mt-1 font-mono text-xs text-cyan-300">
-                            {"map" in tile.exit ? (
-                                <>Mapa {tile.exit.map} ({tile.exit.x}, {tile.exit.y})</>
-                            ) : (
-                                <>{tile.exit.destinations.length} destinos</>
-                            )}
-                        </div>
-                    </div>
-                )}
+                <ExitSection
+                    destinations={exitDestinations(tile)}
+                    x={x}
+                    y={y}
+                    maps={maps}
+                    onRemoveExit={onRemoveExit}
+                    onSetExit={onSetExit}
+                    onGoToExit={onGoToExit}
+                />
 
-                {tile.trigger !== undefined && (
-                    <div className="py-2">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] uppercase tracking-wide text-slate-500">Trigger</span>
+                <div className="py-2">
+                    <div className="flex items-center justify-between">
+                        <span className="text-[11px] uppercase tracking-wide text-slate-500">Trigger</span>
+                        {tile.trigger !== undefined && (
                             <button
                                 type="button"
                                 onClick={() => onRemoveTrigger?.(x, y)}
                                 className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
                                 title="Suprimir trigger"
                             >
-                                <svg className="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                                </svg>
+                                {DELETE_ICON}
                                 Suprimir
                             </button>
-                        </div>
-                        <div className="mt-1 font-mono text-xs text-fuchsia-300">
-                            {TRIGGER_LABELS[tile.trigger] ?? tile.trigger}
-                        </div>
+                        )}
                     </div>
-                )}
+                    {onSetTrigger ? (
+                        <select
+                            className="mt-1 w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-fuchsia-300"
+                            value={tile.trigger ?? ""}
+                            onChange={(event) =>
+                                onSetTrigger(x, y, event.target.value === "" ? null : Number(event.target.value))
+                            }
+                        >
+                            <option value="">Sin trigger</option>
+                            {Object.entries(TRIGGER_LABELS).map(([value, label]) => (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            ))}
+                        </select>
+                    ) : (
+                        <div className="mt-1 font-mono text-xs text-fuchsia-300">
+                            {tile.trigger === undefined ? "—" : (TRIGGER_LABELS[tile.trigger] ?? tile.trigger)}
+                        </div>
+                    )}
+                </div>
             </div>
 
             {hasAnyContent && (
@@ -315,6 +336,228 @@ export function TileInspector({
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                         </svg>
                         Vaciar casillero completo (Limpiar Tile)
+                    </button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+function ObjectSection({
+    object,
+    x,
+    y,
+    onStartMoveObject,
+    onRemoveObject,
+    onSetObject,
+}: {
+    object: ObjectInfo | null;
+    x: number;
+    y: number;
+    onStartMoveObject?: (x: number, y: number) => void;
+    onRemoveObject?: (x: number, y: number) => void;
+    onSetObject?: (x: number, y: number, object: ObjectInfo | null) => void;
+}) {
+    const itemNames = useItemNames(object ? [object.objIndex] : []);
+
+    return (
+        <div className="py-2">
+            <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-wide text-slate-500">Objeto</span>
+                {object && (
+                    <div className="flex items-center gap-1">
+                        {onStartMoveObject && (
+                            <button
+                                type="button"
+                                onClick={() => onStartMoveObject(x, y)}
+                                className="flex items-center gap-1 rounded border border-amber-700/80 bg-amber-950/80 px-2 py-0.5 text-[11px] font-semibold text-amber-200 transition-colors hover:bg-amber-900"
+                                title="Haz clic para reubicar este objeto en otro tile del mapa"
+                            >
+                                ↔ Mover
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={() => onRemoveObject?.(x, y)}
+                            className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
+                            title="Suprimir objeto de este tile"
+                        >
+                            {DELETE_ICON}
+                            Suprimir
+                        </button>
+                    </div>
+                )}
+            </div>
+
+            {object ? (
+                <div className="mt-1 space-y-1">
+                    <div className="font-mono text-xs text-green-300">
+                        {itemNames[object.objIndex] ?? "..."} <span className="text-slate-500">#{object.objIndex}</span>
+                    </div>
+                    {onSetObject && (
+                        <label className="flex items-center justify-between gap-2 text-[11px] text-slate-400">
+                            Cantidad
+                            <input
+                                type="number"
+                                min={1}
+                                className="w-20 rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-xs text-slate-200"
+                                value={object.amount}
+                                onChange={(event) =>
+                                    onSetObject(x, y, { ...object, amount: Math.max(1, Number(event.target.value)) })
+                                }
+                            />
+                        </label>
+                    )}
+                </div>
+            ) : (
+                onSetObject && (
+                    <div className="mt-1">
+                        <ItemSearchField
+                            placeholder="Colocar objeto: buscar por nombre o id..."
+                            onSelect={(item) => onSetObject(x, y, { objIndex: item.id, amount: 1 })}
+                        />
+                    </div>
+                )
+            )}
+        </div>
+    );
+}
+
+function ExitSection({
+    destinations,
+    x,
+    y,
+    maps,
+    onRemoveExit,
+    onSetExit,
+    onGoToExit,
+}: {
+    destinations: TileExit[];
+    x: number;
+    y: number;
+    maps?: MapSummary[];
+    onRemoveExit?: (x: number, y: number) => void;
+    onSetExit?: (x: number, y: number, destinations: TileExit[]) => void;
+    onGoToExit?: (destination: TileExit) => void;
+}) {
+    const [draft, setDraft] = useState({ map: "", x: "", y: "" });
+
+    /** Un destino invalido se guarda igual pero se marca: el formato lo admite. */
+    const describeProblem = (destination: TileExit): string | null => {
+        const summary = maps?.find((candidate) => candidate.id === destination.map);
+
+        if (maps && maps.length > 0 && !summary) {
+            return `El mapa ${destination.map} no existe`;
+        }
+
+        if (summary && (destination.x < 1 || destination.y < 1 || destination.x > summary.width || destination.y > summary.height)) {
+            return `Fuera del mapa ${summary.id} (${summary.width}x${summary.height})`;
+        }
+
+        return null;
+    };
+
+    const addDraft = () => {
+        const map = Number.parseInt(draft.map, 10);
+        const destX = Number.parseInt(draft.x, 10);
+        const destY = Number.parseInt(draft.y, 10);
+
+        if (!Number.isInteger(map) || !Number.isInteger(destX) || !Number.isInteger(destY)) {
+            return;
+        }
+
+        onSetExit?.(x, y, [...destinations, { map, x: destX, y: destY }]);
+        setDraft({ map: "", x: "", y: "" });
+    };
+
+    return (
+        <div className="py-2">
+            <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-wide text-slate-500">Salida</span>
+                {destinations.length > 0 && (
+                    <button
+                        type="button"
+                        onClick={() => onRemoveExit?.(x, y)}
+                        className="flex items-center gap-1 rounded border border-red-800/80 bg-red-950/80 px-2 py-0.5 text-[11px] font-semibold text-red-300 transition-colors hover:bg-red-900"
+                        title="Suprimir traslado/salida"
+                    >
+                        {DELETE_ICON}
+                        Suprimir
+                    </button>
+                )}
+            </div>
+
+            <div className="mt-1 space-y-1">
+                {destinations.map((destination, index) => {
+                    const problem = describeProblem(destination);
+
+                    return (
+                        <div key={index} className="rounded border border-slate-800 bg-slate-800/50 px-2 py-1">
+                            <div className="flex items-center gap-2 text-xs">
+                                <span className="flex-1 font-mono text-cyan-300">
+                                    Mapa {destination.map} ({destination.x}, {destination.y})
+                                </span>
+                                {onGoToExit && (
+                                    <button
+                                        type="button"
+                                        className="text-[11px] text-sky-400 hover:text-sky-300"
+                                        onClick={() => onGoToExit(destination)}
+                                        title="Abrir el mapa de destino en esa posicion"
+                                    >
+                                        ir
+                                    </button>
+                                )}
+                                {onSetExit && destinations.length > 1 && (
+                                    <button
+                                        type="button"
+                                        className="text-[11px] text-slate-500 hover:text-red-300"
+                                        onClick={() =>
+                                            onSetExit(x, y, destinations.filter((_, entryIndex) => entryIndex !== index))
+                                        }
+                                    >
+                                        quitar
+                                    </button>
+                                )}
+                            </div>
+                            {problem && <p className="mt-0.5 text-[10px] text-amber-400">⚠ {problem}</p>}
+                        </div>
+                    );
+                })}
+                {destinations.length === 0 && <p className="text-[11px] text-slate-600">Sin salida.</p>}
+            </div>
+
+            {onSetExit && (
+                <div className="mt-2 flex gap-1">
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="mapa"
+                        className="w-full rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-[11px]"
+                        value={draft.map}
+                        onChange={(event) => setDraft((current) => ({ ...current, map: event.target.value }))}
+                    />
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="x"
+                        className="w-full rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-[11px]"
+                        value={draft.x}
+                        onChange={(event) => setDraft((current) => ({ ...current, x: event.target.value }))}
+                    />
+                    <input
+                        type="number"
+                        min={1}
+                        placeholder="y"
+                        className="w-full rounded border border-slate-700 bg-slate-800 px-1 py-0.5 font-mono text-[11px]"
+                        value={draft.y}
+                        onChange={(event) => setDraft((current) => ({ ...current, y: event.target.value }))}
+                    />
+                    <button
+                        type="button"
+                        onClick={addDraft}
+                        className="shrink-0 rounded border border-cyan-700/80 bg-cyan-950/80 px-2 py-0.5 text-[11px] font-semibold text-cyan-200 hover:bg-cyan-900"
+                    >
+                        {destinations.length > 0 ? "+ destino" : "Crear"}
                     </button>
                 </div>
             )}

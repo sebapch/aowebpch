@@ -1,21 +1,72 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { fetchMapBundle, fetchMapList, saveMapBundle, toggleActiveMap, EditorApiError } from "../../lib/editor/api";
-import { LAYER_NAMES, type ExpandedTile, type MapSummary, type NpcSpawn, type ObjectInfo } from "../../lib/editor/types";
+import {
+    createMap,
+    fetchEditorHealth,
+    fetchMapBundle,
+    fetchMapList,
+    saveMapBundle,
+    toggleActiveMap,
+    EditorApiError,
+    type CreateMapInput,
+} from "../../lib/editor/api";
+import {
+    LAYER_NAMES,
+    type ExpandedTile,
+    type MapMetadata,
+    type MapSummary,
+    type NpcSpawn,
+    type ObjectInfo,
+    type TileExit,
+    type TileExitConfig,
+} from "../../lib/editor/types";
+import { MAP_SIDES, SIDE_SHORT, describeConnections } from "../../lib/editor/mapEdges";
 import type { GraphicsDB } from "../../types/game";
 import { loadGraphicsDB } from "../../utils/gameLoader";
 import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
 import { GraphicsPicker } from "./GraphicsPicker";
 import { GraphicsCatalogModal } from "./GraphicsCatalogModal";
+import { MapConnectionsPanel } from "./MapConnectionsPanel";
+import { MapMetaPanel } from "./MapMetaPanel";
+import { NewMapModal } from "./NewMapModal";
 import { NpcPanel } from "./NpcPanel";
 import { NpcSelectorModal } from "./NpcSelectorModal";
 import { TileInspector } from "./TileInspector";
 import { History } from "./model/History";
-import { EditorMapModel, type LayerIndex } from "./model/EditorMapModel";
-import type { LayerVisibility, OverlayFlags } from "./render/EditorScene";
+import { cloneTile, emptyTile, EditorMapModel, type LayerIndex } from "./model/EditorMapModel";
+import type { LayerVisibility, OverlayFlags, TileRegion } from "./render/EditorScene";
 
 const LAYERS: LayerIndex[] = [1, 2, 3, 4];
+
+const RECENT_GRAPHICS_KEY = "editor:recentGraphics";
+const RECENT_NPCS_KEY = "editor:recentNpcs";
+
+/** Portapapeles de region: gráficos y bloqueo siempre, entidades solo si se pide. */
+type ClipboardRegion = { width: number; height: number; tiles: ExpandedTile[]; withEntities: boolean };
+
+type TileEdit = { index: number; before: ExpandedTile; after: ExpandedTile };
+
+function readRecents(key: string): number[] {
+    if (typeof window === "undefined") {
+        return [];
+    }
+
+    try {
+        const parsed = JSON.parse(window.localStorage.getItem(key) ?? "[]");
+        return Array.isArray(parsed) ? parsed.filter((id): id is number => Number.isInteger(id)).slice(0, 10) : [];
+    } catch {
+        return [];
+    }
+}
+
+function writeRecents(key: string, ids: number[]): void {
+    try {
+        window.localStorage.setItem(key, JSON.stringify(ids));
+    } catch {
+        // localStorage lleno o deshabilitado: los recientes son descartables.
+    }
+}
 
 const OVERLAY_LABELS: Record<keyof OverlayFlags, string> = {
     grid: "Grilla",
@@ -42,6 +93,17 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [npcPanelIndex, setNpcPanelIndex] = useState<number | null>(null);
     const [catalogOpen, setCatalogOpen] = useState(false);
     const [graphicsCatalogOpen, setGraphicsCatalogOpen] = useState(false);
+    const [metaPanelOpen, setMetaPanelOpen] = useState(false);
+    const [connectionsOpen, setConnectionsOpen] = useState(false);
+    const [newMapOpen, setNewMapOpen] = useState(false);
+    const [readOnly, setReadOnly] = useState(false);
+    const [selection, setSelection] = useState<TileRegion | null>(null);
+    const [clipboard, setClipboard] = useState<ClipboardRegion | null>(null);
+    const [copyEntities, setCopyEntities] = useState(false);
+    const [savedNotice, setSavedNotice] = useState<string | null>(null);
+    const [gotoInput, setGotoInput] = useState("");
+    /** Coordenada a centrar una vez que termine de cargar otro mapa. */
+    const [pendingGoto, setPendingGoto] = useState<{ x: number; y: number } | null>(null);
     const [movePending, setMovePending] = useState<{
         kind: "spawn" | "object" | "layer";
         layer?: LayerIndex;
@@ -75,7 +137,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [recentGraphics, setRecentGraphics] = useState<number[]>([]);
     const [recentNpcs, setRecentNpcs] = useState<number[]>([]);
 
-    const historyRef = useRef(new History());
+    // El historial vive en estado, no en un ref, porque el render lo lee para
+    // habilitar los botones y lo pasa al canvas.
+    const [history, setHistory] = useState(() => new History());
+    const [{ canUndo, canRedo }, setHistoryState] = useState({ canUndo: false, canRedo: false });
     const [revision, setRevision] = useState(0);
     const [dirty, setDirty] = useState(false);
     const [saving, setSaving] = useState(false);
@@ -117,6 +182,33 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         };
     }, []);
 
+    // Los recientes se rehidratan en el cliente para no romper el render del
+    // servidor, que no tiene localStorage.
+    useEffect(() => {
+        setRecentGraphics(readRecents(RECENT_GRAPHICS_KEY));
+        setRecentNpcs(readRecents(RECENT_NPCS_KEY));
+    }, []);
+
+    // Avisa que el editor no puede escribir antes de que alguien pinte media
+    // hora y se coma un 403 al guardar.
+    useEffect(() => {
+        let cancelled = false;
+
+        void fetchEditorHealth()
+            .then((health) => {
+                if (!cancelled) {
+                    setReadOnly(!health.writesAllowed);
+                }
+            })
+            .catch(() => {
+                // El guardado igual reporta el error si falla.
+            });
+
+        return () => {
+            cancelled = true;
+        };
+    }, []);
+
     // Compartida con EditorCanvas: el navegador la cachea, esto no dispara un
     // segundo fetch. Solo la necesita el GraphicsPicker para las miniaturas.
     useEffect(() => {
@@ -143,6 +235,44 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         window.addEventListener("keydown", handleKeyDown);
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [movePending]);
+
+    useEffect(() => {
+        const sync = () => setHistoryState({ canUndo: history.canUndo, canRedo: history.canRedo });
+
+        sync();
+        return history.subscribe(sync);
+    }, [history]);
+
+    // Sin esto, cerrar la pestana o recargar descarta todo lo pintado en silencio.
+    useEffect(() => {
+        if (!dirty) {
+            return;
+        }
+
+        const handleBeforeUnload = (event: BeforeUnloadEvent) => {
+            event.preventDefault();
+            event.returnValue = "";
+        };
+
+        window.addEventListener("beforeunload", handleBeforeUnload);
+        return () => window.removeEventListener("beforeunload", handleBeforeUnload);
+    }, [dirty]);
+
+    const requestMapChange = useCallback(
+        (nextMapId: number) => {
+            if (nextMapId === mapId) {
+                return;
+            }
+
+            if (dirty && !window.confirm("Hay cambios sin guardar en este mapa. ¿Descartarlos y cambiar de mapa?")) {
+                return;
+            }
+
+            setSelection(null);
+            setMapId(nextMapId);
+        },
+        [dirty, mapId],
+    );
 
     const isCurrentMapActive = activeMapIds.includes(mapId);
 
@@ -190,7 +320,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     // Cada mapa nuevo empieza con su propio historial y sin cambios sin guardar.
     // Esto no se dispara al guardar: el guardado no reemplaza `model`.
     useEffect(() => {
-        historyRef.current = new History();
+        setHistory(new History());
         setDirty(false);
         setSaveError(null);
         setRevision(0);
@@ -233,15 +363,17 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
     const pushRecentGraphic = useCallback((grhId: number) => {
         setRecentGraphics((prev) => {
-            const filtered = prev.filter((id) => id !== grhId);
-            return [grhId, ...filtered].slice(0, 10);
+            const next = [grhId, ...prev.filter((id) => id !== grhId)].slice(0, 10);
+            writeRecents(RECENT_GRAPHICS_KEY, next);
+            return next;
         });
     }, []);
 
     const pushRecentNpc = useCallback((npcIndex: number) => {
         setRecentNpcs((prev) => {
-            const filtered = prev.filter((id) => id !== npcIndex);
-            return [npcIndex, ...filtered].slice(0, 10);
+            const next = [npcIndex, ...prev.filter((id) => id !== npcIndex)].slice(0, 10);
+            writeRecents(RECENT_NPCS_KEY, next);
+            return next;
         });
     }, []);
 
@@ -263,6 +395,48 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             }
         },
         [pushRecentGraphic],
+    );
+
+    /** Registra un lote de ediciones ya aplicadas como un unico comando de historial. */
+    const commitEdits = useCallback(
+        (label: string, edits: TileEdit[]) => {
+            if (!model || edits.length === 0) {
+                return;
+            }
+
+            canvasHandle?.markAllDirty();
+            history.push({
+                label,
+                undo: () => {
+                    for (const edit of edits) {
+                        model.restoreTile(edit.index, edit.before);
+                    }
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+                redo: () => {
+                    for (const edit of edits) {
+                        model.restoreTile(edit.index, edit.after);
+                    }
+                    canvasHandle?.markAllDirty();
+                    handleEdit();
+                },
+            });
+
+            handleEdit();
+        },
+        [model, canvasHandle, handleEdit, history],
+    );
+
+    const commitTileEdit = useCallback(
+        (label: string, x: number, y: number, updater: (tile: ExpandedTile) => ExpandedTile) => {
+            const edit = model?.applyEdit(x, y, updater);
+
+            if (edit) {
+                commitEdits(label, [edit]);
+            }
+        },
+        [model, commitEdits],
     );
 
     const handleStartMoveLayer = useCallback((x: number, y: number, layer: LayerIndex, grhId: number) => {
@@ -306,26 +480,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         return t;
                     });
 
-                    if (!fromEdit || !toEdit) return;
+                    if (fromEdit && toEdit) {
+                        commitEdits(`mover capa ${state.layer}`, [fromEdit, toEdit]);
+                    }
 
-                    canvasHandle?.markAllDirty();
-                    historyRef.current.push({
-                        label: `mover capa ${state.layer}`,
-                        undo: () => {
-                            model.restoreTile(fromEdit.index, fromEdit.before);
-                            model.restoreTile(toEdit.index, toEdit.before);
-                            canvasHandle?.markAllDirty();
-                            handleEdit();
-                        },
-                        redo: () => {
-                            model.restoreTile(fromEdit.index, fromEdit.after);
-                            model.restoreTile(toEdit.index, toEdit.after);
-                            canvasHandle?.markAllDirty();
-                            handleEdit();
-                        },
-                    });
-
-                    handleEdit();
                     return;
                 }
 
@@ -344,248 +502,239 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     return t;
                 });
 
-                if (!fromEdit || !toEdit) return;
-
-                canvasHandle?.markAllDirty();
-                historyRef.current.push({
-                    label: state.kind === "spawn" ? "mover npc" : "mover objeto",
-                    undo: () => {
-                        model.restoreTile(fromEdit.index, fromEdit.before);
-                        model.restoreTile(toEdit.index, toEdit.before);
-                        canvasHandle?.markAllDirty();
-                        handleEdit();
-                    },
-                    redo: () => {
-                        model.restoreTile(fromEdit.index, fromEdit.after);
-                        model.restoreTile(toEdit.index, toEdit.after);
-                        canvasHandle?.markAllDirty();
-                        handleEdit();
-                    },
-                });
-
-                handleEdit();
+                if (fromEdit && toEdit) {
+                    commitEdits(state.kind === "spawn" ? "mover npc" : "mover objeto", [fromEdit, toEdit]);
+                }
             }
         },
-        [movePending, model, canvasHandle, handleEdit],
+        [movePending, model, commitEdits],
     );
 
     const handleAddNpc = useCallback(
         (x: number, y: number, npcIndex: number) => {
-            if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
-                tile.spawn = { npcIndex, movement: 0 };
+            pushRecentNpc(npcIndex);
+            commitTileEdit("agregar npc", x, y, (tile) => {
+                tile.spawn = { npcIndex, movement: tile.spawn?.movement ?? 0 };
                 return tile;
             });
-
-            if (!edit) return;
-
-            pushRecentNpc(npcIndex);
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: "agregar npc",
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
-            handleEdit();
         },
-        [model, canvasHandle, handleEdit, pushRecentNpc],
+        [commitTileEdit, pushRecentNpc],
     );
 
     const handleRemoveNpc = useCallback(
         (x: number, y: number) => {
-            if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
+            commitTileEdit("eliminar npc", x, y, (tile) => {
                 tile.spawn = undefined;
                 tile.npc = undefined;
                 return tile;
             });
-
-            if (!edit) return;
-
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: "eliminar npc",
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
-            handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [commitTileEdit],
     );
 
     const handleRemoveObject = useCallback(
         (x: number, y: number) => {
-            if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
+            commitTileEdit("eliminar objeto", x, y, (tile) => {
                 tile.object = undefined;
                 return tile;
             });
-
-            if (!edit) return;
-
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: "eliminar objeto",
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
-            handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [commitTileEdit],
     );
 
     const handleRemoveTrigger = useCallback(
         (x: number, y: number) => {
-            if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
+            commitTileEdit("eliminar trigger", x, y, (tile) => {
                 tile.trigger = undefined;
                 return tile;
             });
-
-            if (!edit) return;
-
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: "eliminar trigger",
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
-            handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [commitTileEdit],
     );
 
     const handleRemoveExit = useCallback(
         (x: number, y: number) => {
-            if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
+            commitTileEdit("eliminar salida", x, y, (tile) => {
                 tile.exit = undefined;
                 return tile;
             });
-
-            if (!edit) return;
-
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: "eliminar salida",
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
-            handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [commitTileEdit],
+    );
+
+    const handleSetExit = useCallback(
+        (x: number, y: number, destinations: TileExit[]) => {
+            if (destinations.length === 0) {
+                handleRemoveExit(x, y);
+                return;
+            }
+
+            const exit: TileExitConfig = destinations.length === 1 ? destinations[0] : { destinations };
+
+            commitTileEdit("editar salida", x, y, (tile) => {
+                tile.exit = exit;
+                return tile;
+            });
+        },
+        [commitTileEdit, handleRemoveExit],
+    );
+
+    const handleSetTrigger = useCallback(
+        (x: number, y: number, trigger: number | null) => {
+            commitTileEdit(trigger === null ? "eliminar trigger" : "editar trigger", x, y, (tile) => {
+                tile.trigger = trigger ?? undefined;
+                return tile;
+            });
+        },
+        [commitTileEdit],
+    );
+
+    const handleSetObject = useCallback(
+        (x: number, y: number, object: ObjectInfo | null) => {
+            commitTileEdit(object === null ? "eliminar objeto" : "editar objeto", x, y, (tile) => {
+                tile.object = object ?? undefined;
+                return tile;
+            });
+        },
+        [commitTileEdit],
+    );
+
+    const handleSetSpawnMovement = useCallback(
+        (x: number, y: number, movement: number) => {
+            commitTileEdit("editar movimiento del npc", x, y, (tile) => {
+                if (tile.spawn) {
+                    tile.spawn = { ...tile.spawn, movement };
+                }
+                return tile;
+            });
+        },
+        [commitTileEdit],
     );
 
     const handleClearLayer = useCallback(
         (x: number, y: number, layer: LayerIndex) => {
-            if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
+            commitTileEdit(`borrar capa ${layer}`, x, y, (tile) => {
                 tile.graphics[layer - 1] = null;
                 return tile;
             });
-
-            if (!edit) return;
-
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: `borrar capa ${layer}`,
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
-            handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [commitTileEdit],
     );
 
     const handleClearTile = useCallback(
         (x: number, y: number) => {
+            commitTileEdit("limpiar tile completo", x, y, () => emptyTile());
+        },
+        [commitTileEdit],
+    );
+
+    const handleSetMeta = useCallback(
+        (meta: MapMetadata) => {
             if (!model) return;
-            const edit = model.applyEdit(x, y, (tile) => {
-                tile.graphics = [null, null, null, null];
-                tile.blocked = false;
-                tile.object = undefined;
-                tile.spawn = undefined;
-                tile.npc = undefined;
-                tile.trigger = undefined;
-                tile.exit = undefined;
-                return tile;
-            });
-
-            if (!edit) return;
-
-            canvasHandle?.markAllDirty();
-            historyRef.current.push({
-                label: "limpiar tile completo",
-                undo: () => {
-                    model.restoreTile(edit.index, edit.before);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-                redo: () => {
-                    model.restoreTile(edit.index, edit.after);
-                    canvasHandle?.markAllDirty();
-                    handleEdit();
-                },
-            });
-
+            model.setMeta(meta);
             handleEdit();
         },
-        [model, canvasHandle, handleEdit],
+        [model, handleEdit],
     );
+
+    // --- Operaciones sobre la seleccion rectangular ---------------------------
+
+    /** Aplica `updater` a cada tile de la region como un unico comando de historial. */
+    const commitRegionEdit = useCallback(
+        (label: string, region: TileRegion, updater: (tile: ExpandedTile, x: number, y: number) => ExpandedTile) => {
+            if (!model) return;
+
+            const edits: TileEdit[] = [];
+
+            for (let y = region.y0; y <= region.y1; y++) {
+                for (let x = region.x0; x <= region.x1; x++) {
+                    const edit = model.applyEdit(x, y, (tile) => updater(tile, x, y));
+
+                    if (edit) {
+                        edits.push(edit);
+                    }
+                }
+            }
+
+            commitEdits(label, edits);
+        },
+        [model, commitEdits],
+    );
+
+    const handleCopyRegion = useCallback(() => {
+        if (!model || !selection) return;
+
+        const width = selection.x1 - selection.x0 + 1;
+        const height = selection.y1 - selection.y0 + 1;
+        const tiles: ExpandedTile[] = [];
+
+        for (let y = selection.y0; y <= selection.y1; y++) {
+            for (let x = selection.x0; x <= selection.x1; x++) {
+                tiles.push(cloneTile(model.get(x, y) ?? emptyTile()));
+            }
+        }
+
+        setClipboard({ width, height, tiles, withEntities: copyEntities });
+    }, [model, selection, copyEntities]);
+
+    /** Pega el portapapeles con su esquina superior izquierda en (x, y). */
+    const handlePasteAt = useCallback(
+        (x: number, y: number) => {
+            if (!model || !clipboard) return;
+
+            const region: TileRegion = {
+                x0: x,
+                y0: y,
+                x1: Math.min(model.width, x + clipboard.width - 1),
+                y1: Math.min(model.height, y + clipboard.height - 1),
+            };
+
+            commitRegionEdit("pegar region", region, (tile, tileX, tileY) => {
+                const source = clipboard.tiles[(tileY - y) * clipboard.width + (tileX - x)];
+
+                if (!source) {
+                    return tile;
+                }
+
+                // Sin entidades, pegar solo pisa graficos y bloqueo: lo que ya
+                // hubiera en el destino (npc, objeto, salida, trigger) se conserva.
+                const pasted = clipboard.withEntities ? cloneTile(source) : tile;
+
+                pasted.graphics = [...source.graphics];
+                pasted.blocked = source.blocked;
+
+                return pasted;
+            });
+
+            setSelection(region);
+        },
+        [model, clipboard, commitRegionEdit],
+    );
+
+    const handleClearRegion = useCallback(() => {
+        if (!selection) return;
+        commitRegionEdit("vaciar region", selection, () => emptyTile());
+    }, [selection, commitRegionEdit]);
+
+    const handleFillRegion = useCallback(() => {
+        if (!selection) return;
+
+        if (paintMode === "blocked") {
+            commitRegionEdit("bloquear region", selection, (tile) => {
+                tile.blocked = true;
+                return tile;
+            });
+            return;
+        }
+
+        const layerIdx = activeLayer - 1;
+        const grhId = brushGraphic;
+
+        commitRegionEdit(`rellenar region capa ${activeLayer}`, selection, (tile) => {
+            tile.graphics[layerIdx] = grhId;
+            return tile;
+        });
+    }, [selection, commitRegionEdit, paintMode, activeLayer, brushGraphic]);
 
     const handleSave = useCallback(async () => {
         if (!model || saving) {
@@ -596,8 +745,9 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         setSaveError(null);
 
         try {
-            await saveMapBundle(model.meta.id, model.toBundle());
+            const { reloaded } = await saveMapBundle(model.meta.id, model.toBundle());
             setDirty(false);
+            setSavedNotice(reloaded ? "Guardado y recargado en el servidor" : "Guardado");
         } catch (err) {
             setSaveError(err instanceof EditorApiError ? err.message : "No se pudo guardar el mapa.");
         } finally {
@@ -605,31 +755,120 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         }
     }, [model, saving]);
 
+    /**
+     * Saltar al destino de una salida. Si es otro mapa, el centrado espera a que
+     * el modelo nuevo este montado (el efecto de abajo, disparado por `pendingGoto`).
+     */
+    const handleGoToExit = useCallback(
+        (destination: TileExit) => {
+            if (destination.map === mapId) {
+                canvasHandle?.centerOn(destination.x, destination.y);
+                setSelectedTile({ x: destination.x, y: destination.y });
+                return;
+            }
+
+            if (dirty && !window.confirm("Hay cambios sin guardar en este mapa. ¿Descartarlos e ir al destino?")) {
+                return;
+            }
+
+            setPendingGoto({ x: destination.x, y: destination.y });
+            setSelection(null);
+            setMapId(destination.map);
+        },
+        [mapId, canvasHandle, dirty],
+    );
+
+    useEffect(() => {
+        if (!pendingGoto || !model || !canvasHandle) {
+            return;
+        }
+
+        canvasHandle.centerOn(pendingGoto.x, pendingGoto.y);
+        setSelectedTile(pendingGoto);
+        setPendingGoto(null);
+    }, [pendingGoto, model, canvasHandle]);
+
+    const handleCreateMap = useCallback(
+        async (input: CreateMapInput) => {
+            const bundle = await createMap(input);
+            const { maps: list, activeMapIds: activeIds } = await fetchMapList();
+
+            setMaps(list);
+            setActiveMapIds(activeIds);
+            setNewMapOpen(false);
+            setSelection(null);
+            setMapId(bundle.meta.id);
+        },
+        [],
+    );
+
     const handleKeyDown = useCallback(
         (event: KeyboardEvent) => {
-            if (event.target instanceof HTMLInputElement || event.target instanceof HTMLSelectElement) {
+            const target = event.target;
+
+            // Sin el textarea ni contentEditable, escribir en la descripcion de
+            // un NPC mutaba capas y overlays por detras del modal.
+            if (
+                target instanceof HTMLInputElement ||
+                target instanceof HTMLSelectElement ||
+                target instanceof HTMLTextAreaElement ||
+                (target instanceof HTMLElement && target.isContentEditable)
+            ) {
                 return;
             }
 
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
                 event.preventDefault();
                 if (event.shiftKey) {
-                    historyRef.current.redo();
+                    history.redo();
                 } else {
-                    historyRef.current.undo();
+                    history.undo();
                 }
                 return;
             }
 
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
                 event.preventDefault();
-                historyRef.current.redo();
+                history.redo();
                 return;
             }
 
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "s") {
                 event.preventDefault();
                 void handleSave();
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
+                event.preventDefault();
+                handleCopyRegion();
+                return;
+            }
+
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "v") {
+                event.preventDefault();
+
+                // Pega en la esquina de la seleccion, o en el tile elegido.
+                const anchor = selection
+                    ? { x: selection.x0, y: selection.y0 }
+                    : (selectedTile ?? null);
+
+                if (anchor) {
+                    handlePasteAt(anchor.x, anchor.y);
+                }
+                return;
+            }
+
+            if (event.key === "Delete" || event.key === "Backspace") {
+                if (selection) {
+                    event.preventDefault();
+                    handleClearRegion();
+                }
+                return;
+            }
+
+            if (event.key === "Escape" && selection) {
+                setSelection(null);
                 return;
             }
 
@@ -649,7 +888,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 canvasHandle?.fitToScreen();
             }
         },
-        [canvasHandle, handleSave],
+        [canvasHandle, handleSave, handleCopyRegion, handlePasteAt, handleClearRegion, selection, selectedTile, history],
     );
 
     useEffect(() => {
@@ -659,6 +898,14 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
     const currentSummary = maps.find((summary) => summary.id === mapId);
 
+    // Recorre solo las bandas de los bordes; `revision` la recalcula al editar.
+    const connections = useMemo(
+        () => (model ? describeConnections(model) : {}),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [model, revision],
+    );
+
+
     return (
         <div className="flex h-screen flex-col bg-slate-950 text-slate-200">
             <header className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900 px-4 py-2">
@@ -667,7 +914,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 <select
                     className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm"
                     value={mapId}
-                    onChange={(event) => setMapId(Number(event.target.value))}
+                    onChange={(event) => requestMapChange(Number(event.target.value))}
                 >
                     {maps.length === 0 && <option value={mapId}>Mapa {mapId}</option>}
                     {maps.map((summary) => {
@@ -702,6 +949,50 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                           : "⚪ Servidor: Inactivo"}
                 </button>
 
+                <button
+                    type="button"
+                    disabled={!model}
+                    onClick={() => setMetaPanelOpen(true)}
+                    className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="Editar nombre, terreno, zona y niveles del mapa"
+                >
+                    Propiedades
+                </button>
+
+                <button
+                    type="button"
+                    disabled={!model}
+                    onClick={() => setConnectionsOpen(true)}
+                    className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                    title="A que mapa se sale por cada borde"
+                >
+                    Conexiones
+                    <span className="ml-1.5 font-mono text-[10px] text-slate-500">
+                        {MAP_SIDES.map((side) => `${SIDE_SHORT[side]}:${connections[side]?.mapId ?? "—"}`).join(" ")}
+                    </span>
+                </button>
+
+                <button
+                    type="button"
+                    onClick={() => {
+                        if (!dirty || window.confirm("Hay cambios sin guardar. ¿Descartarlos y crear un mapa nuevo?")) {
+                            setNewMapOpen(true);
+                        }
+                    }}
+                    className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                >
+                    + Nuevo mapa
+                </button>
+
+                {readOnly && (
+                    <span
+                        className="rounded border border-amber-700 bg-amber-950/70 px-2 py-1 text-[11px] font-semibold text-amber-300"
+                        title="El servidor rechaza escrituras: los cambios no se van a poder guardar."
+                    >
+                        Solo lectura
+                    </span>
+                )}
+
                 {currentSummary && (
                     <span className="text-xs text-slate-500">
                         {currentSummary.terreno} · {currentSummary.zona} ·{" "}
@@ -726,10 +1017,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     <button
                         type="button"
                         className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                        disabled={!historyRef.current.canUndo}
-                        onClick={() => {
-                            historyRef.current.undo();
-                        }}
+                        disabled={!canUndo}
+                        onClick={() => history.undo()}
                         title="Deshacer (Ctrl+Z)"
                     >
                         Deshacer
@@ -737,10 +1026,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     <button
                         type="button"
                         className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
-                        disabled={!historyRef.current.canRedo}
-                        onClick={() => {
-                            historyRef.current.redo();
-                        }}
+                        disabled={!canRedo}
+                        onClick={() => history.redo()}
                         title="Rehacer (Ctrl+Shift+Z)"
                     >
                         Rehacer
@@ -748,6 +1035,31 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 </div>
 
                 <div className="ml-auto flex items-center gap-2 text-xs text-slate-400">
+                    <form
+                        className="flex items-center gap-1"
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            const [rawX, rawY] = gotoInput.split(/[\s,;]+/);
+                            const targetX = Number.parseInt(rawX ?? "", 10);
+                            const targetY = Number.parseInt(rawY ?? "", 10);
+
+                            if (model?.inBounds(targetX, targetY)) {
+                                canvasHandle?.centerOn(targetX, targetY);
+                                setSelectedTile({ x: targetX, y: targetY });
+                            }
+                        }}
+                    >
+                        <input
+                            className="w-20 rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-[11px]"
+                            placeholder="x, y"
+                            value={gotoInput}
+                            onChange={(event) => setGotoInput(event.target.value)}
+                            title="Ir a una coordenada del mapa"
+                        />
+                        <button type="submit" className="rounded border border-slate-700 px-2 py-1 hover:bg-slate-800">
+                            Ir
+                        </button>
+                    </form>
                     <span>zoom {Math.round(zoom * 100)}%</span>
                     <button
                         type="button"
@@ -789,6 +1101,18 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         </div>
                         <button
                             type="button"
+                            className={`w-full rounded border px-2 py-1 flex items-center justify-center gap-1.5 ${
+                                tool === "region"
+                                    ? "border-sky-400 bg-sky-950 text-sky-200 font-medium"
+                                    : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                            }`}
+                            onClick={() => setTool("region")}
+                            title="Arrastra para seleccionar un rectángulo de tiles"
+                        >
+                            ⬚ Región
+                        </button>
+                        <button
+                            type="button"
                             className={`w-full rounded border px-2 py-1 text-left flex items-center justify-center gap-1.5 ${
                                 tool === "eyedropper"
                                     ? "border-amber-400 bg-amber-950 text-amber-200 font-medium"
@@ -811,6 +1135,75 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         <p className="mb-4 text-[11px] leading-relaxed text-amber-400/90 bg-amber-950/40 p-2 rounded border border-amber-900/50">
                             Haz clic en cualquier casillero del mapa para copiar su textura e ir a pintar directamente. También puedes mantener <strong>Alt + Clic</strong> en cualquier momento.
                         </p>
+                    )}
+
+                    {tool === "region" && (
+                        <div className="mb-4 space-y-2 rounded border border-sky-900/50 bg-sky-950/30 p-2">
+                            <p className="text-[11px] leading-relaxed text-sky-300/90">
+                                {selection
+                                    ? `${selection.x1 - selection.x0 + 1} x ${selection.y1 - selection.y0 + 1} tiles desde (${selection.x0}, ${selection.y0})`
+                                    : "Arrastra sobre el mapa para seleccionar un rectángulo."}
+                            </p>
+
+                            <label className="flex items-center gap-2 text-[11px] text-slate-400">
+                                <input
+                                    type="checkbox"
+                                    checked={copyEntities}
+                                    onChange={(event) => setCopyEntities(event.target.checked)}
+                                />
+                                Copiar también entidades
+                            </label>
+
+                            <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                <button
+                                    type="button"
+                                    disabled={!selection}
+                                    onClick={handleCopyRegion}
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title="Ctrl+C"
+                                >
+                                    Copiar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!clipboard || !selection}
+                                    onClick={() => selection && handlePasteAt(selection.x0, selection.y0)}
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title="Ctrl+V"
+                                >
+                                    Pegar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!selection}
+                                    onClick={handleFillRegion}
+                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title={
+                                        paintMode === "blocked"
+                                            ? "Bloquear todos los tiles de la selección"
+                                            : `Pintar la selección con el pincel activo en la capa ${activeLayer}`
+                                    }
+                                >
+                                    Rellenar
+                                </button>
+                                <button
+                                    type="button"
+                                    disabled={!selection}
+                                    onClick={handleClearRegion}
+                                    className="rounded border border-red-800/80 bg-red-950/60 px-2 py-1 text-red-300 hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-40"
+                                    title="Supr"
+                                >
+                                    Vaciar
+                                </button>
+                            </div>
+
+                            {clipboard && (
+                                <p className="text-[10px] text-slate-500">
+                                    Portapapeles: {clipboard.width}x{clipboard.height}
+                                    {clipboard.withEntities ? " (con entidades)" : ""}
+                                </p>
+                            )}
+                        </div>
                     )}
 
                     {tool === "paint" && (
@@ -974,7 +1367,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
                     <p className="mt-5 text-[11px] leading-relaxed text-slate-600">
                         Rueda: zoom · Boton derecho o central: desplazar · Alt+Clic: cuentagotas · 1-4: capa activa · ` grilla · K bloqueos ·
-                        Home: ajustar · Ctrl+Z / Ctrl+Shift+Z: deshacer/rehacer · Ctrl+S: guardar
+                        Home: ajustar · Ctrl+Z / Ctrl+Shift+Z: deshacer/rehacer · Ctrl+S: guardar · Ctrl+C / Ctrl+V: copiar y pegar region ·
+                        Supr: vaciar region · Esc: quitar seleccion
                     </p>
                 </aside>
 
@@ -1022,10 +1416,12 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             brushGraphic={brushGraphic}
                             brushSize={brushSize}
                             paintToolMode={paintToolMode}
-                            history={historyRef.current}
+                            selection={selection}
+                            history={history}
                             onHoverTile={setHoverTile}
                             onPickTile={handlePickTile}
                             onPickGraphic={handlePickGraphic}
+                            onSelectRegion={setSelection}
                             onReady={setCanvasHandle}
                             onZoomChange={setZoom}
                             onEdit={handleEdit}
@@ -1051,6 +1447,12 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         onRemoveNpc={handleRemoveNpc}
                         onRemoveTrigger={handleRemoveTrigger}
                         onRemoveExit={handleRemoveExit}
+                        maps={maps}
+                        onSetExit={handleSetExit}
+                        onSetTrigger={handleSetTrigger}
+                        onSetObject={handleSetObject}
+                        onSetSpawnMovement={handleSetSpawnMovement}
+                        onGoToExit={handleGoToExit}
                         onClearLayer={handleClearLayer}
                         onClearTile={handleClearTile}
                     />
@@ -1064,7 +1466,12 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         mapa {model.meta.id} · {model.width}x{model.height}
                     </span>
                 )}
-                <span className="ml-auto">{dirty ? "cambios sin guardar" : "guardado"}</span>
+                {clipboard && (
+                    <span>
+                        portapapeles {clipboard.width}x{clipboard.height}
+                    </span>
+                )}
+                <span className="ml-auto">{dirty ? "cambios sin guardar" : (savedNotice ?? "guardado")}</span>
             </footer>
 
             {npcPanelIndex !== null && (
@@ -1090,6 +1497,31 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     setPaintMode("graphic");
                 }}
             />
+
+            {metaPanelOpen && model && (
+                <MapMetaPanel meta={model.meta} onChange={handleSetMeta} onClose={() => setMetaPanelOpen(false)} />
+            )}
+
+            {connectionsOpen && model && (
+                <MapConnectionsPanel
+                    model={model}
+                    maps={maps}
+                    dirty={dirty}
+                    onLinked={(bundle) => {
+                        // El endpoint ya escribio a disco: reemplazamos el modelo
+                        // por lo que quedo guardado y arrancamos historial limpio.
+                        setModel(EditorMapModel.fromBundle(bundle));
+                        setSelection(null);
+                    }}
+                    onGoToMap={(targetMapId) => {
+                        setConnectionsOpen(false);
+                        requestMapChange(targetMapId);
+                    }}
+                    onClose={() => setConnectionsOpen(false)}
+                />
+            )}
+
+            <NewMapModal isOpen={newMapOpen} onClose={() => setNewMapOpen(false)} onCreate={handleCreateMap} />
         </div>
     );
 }

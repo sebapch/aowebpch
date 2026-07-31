@@ -80,8 +80,11 @@ export function fetchMapBundle(mapId: number): Promise<EditorMapBundle> {
     return request<EditorMapBundle>(`/api/editor/maps/${mapId}`);
 }
 
-export function saveMapBundle(mapId: number, bundle: EditorMapBundle): Promise<EditorMapBundle> {
-    return request<EditorMapBundle>(`/api/editor/maps/${mapId}`, {
+/** `reloaded` indica si el servidor recargo el mapa en memoria (solo si estaba activo). */
+export type SaveMapResult = { bundle: EditorMapBundle; reloaded: boolean };
+
+export function saveMapBundle(mapId: number, bundle: EditorMapBundle): Promise<SaveMapResult> {
+    return request<SaveMapResult>(`/api/editor/maps/${mapId}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(bundle),
@@ -95,6 +98,54 @@ export async function saveMapNpcs(mapId: number, placements: MapNpcPlacement[]):
         body: JSON.stringify(placements),
     });
     return spawns;
+}
+
+export type EdgeLinkResult = {
+    side: string;
+    neighborMapId: number | null;
+    previousNeighborMapId: number | null;
+    writtenMapIds: number[];
+    tilesWritten: number;
+    tilesCleared: number;
+    reloadedMapIds: number[];
+    /** El mapa editado, ya con las salidas del borde aplicadas. */
+    bundle: EditorMapBundle;
+};
+
+/**
+ * Conecta un borde con el mapa vecino, o lo desconecta con `neighborMapId: null`.
+ * Escribe los dos mapas: una transicion de borde solo funciona si existe de los
+ * dos lados.
+ */
+export function linkMapEdge(
+    mapId: number,
+    side: string,
+    neighborMapId: number | null,
+): Promise<EdgeLinkResult> {
+    return request<EdgeLinkResult>(`/api/editor/maps/${mapId}/edges`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ side, neighborMapId }),
+    });
+}
+
+export type CreateMapInput = {
+    name: string;
+    width: number;
+    height: number;
+    terreno: string;
+    zona: string;
+    musicNum?: number;
+    pk?: number;
+};
+
+export async function createMap(input: CreateMapInput): Promise<EditorMapBundle> {
+    const { bundle } = await request<{ bundle: EditorMapBundle }>("/api/editor/maps", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(input),
+    });
+    return bundle;
 }
 
 export function fetchNpcTemplate(npcIndex: number): Promise<GameNpcRecord> {

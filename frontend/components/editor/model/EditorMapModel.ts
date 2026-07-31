@@ -54,6 +54,10 @@ export class EditorMapModel {
         return new EditorMapModel({ ...bundle.meta }, bundle.width, bundle.height, tiles);
     }
 
+    setMeta(meta: MapMetadata): void {
+        this.meta = meta;
+    }
+
     inBounds(x: number, y: number): boolean {
         return x >= 1 && y >= 1 && x <= this.width && y <= this.height;
     }

@@ -7,14 +7,15 @@ import { TILE_SIZE } from "../../lib/viewport";
 import type { ExpandedTile, NpcSpawn, ObjectInfo } from "../../lib/editor/types";
 import type { EditorMapModel, LayerIndex } from "./model/EditorMapModel";
 import type { History } from "./model/History";
-import { EditorScene, type LayerVisibility, type OverlayFlags } from "./render/EditorScene";
+import { EditorScene, type LayerVisibility, type OverlayFlags, type TileRegion } from "./render/EditorScene";
 import { EditorTextureCache } from "./render/editorTextures";
 
-export type EditorTool = "select" | "paint" | "eyedropper";
+export type EditorTool = "select" | "paint" | "eyedropper" | "region";
 export type PaintMode = "graphic" | "blocked";
 
 export type EditorCanvasHandle = {
     fitToScreen: () => void;
+    centerOn: (x: number, y: number) => void;
     markAllDirty: () => void;
 };
 
@@ -29,15 +30,26 @@ type Props = {
     brushGraphic: number | null;
     brushSize?: 1 | 2 | 3 | 5;
     paintToolMode?: "brush" | "bucket";
+    selection: TileRegion | null;
     history: History;
     onHoverTile: (tile: { x: number; y: number } | null) => void;
     onPickTile: (tile: { x: number; y: number }) => void;
     onPickGraphic?: (grhId: number) => void;
+    onSelectRegion?: (region: TileRegion | null) => void;
     onReady?: (handle: EditorCanvasHandle) => void;
     onZoomChange?: (zoom: number) => void;
     /** Se dispara despues de cualquier mutacion aplicada o deshecha/rehecha. */
     onEdit: () => void;
 };
+
+function regionBetween(a: { x: number; y: number }, b: { x: number; y: number }): TileRegion {
+    return {
+        x0: Math.min(a.x, b.x),
+        y0: Math.min(a.y, b.y),
+        x1: Math.max(a.x, b.x),
+        y1: Math.max(a.y, b.y),
+    };
+}
 
 type PaintStrokeEntry = { x: number; y: number; before: ExpandedTile; after: ExpandedTile };
 
@@ -63,10 +75,12 @@ export function EditorCanvas({
     brushGraphic,
     brushSize,
     paintToolMode,
+    selection,
     history,
     onHoverTile,
     onPickTile,
     onPickGraphic,
+    onSelectRegion,
     onReady,
     onZoomChange,
     onEdit,
@@ -74,6 +88,7 @@ export function EditorCanvas({
     const hostRef = useRef<HTMLDivElement | null>(null);
     const appRef = useRef<Application | null>(null);
     const sceneRef = useRef<EditorScene | null>(null);
+    const texturesRef = useRef<EditorTextureCache | null>(null);
     const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
     const [errorMessage, setErrorMessage] = useState("");
 
@@ -82,6 +97,7 @@ export function EditorCanvas({
     const onHoverRef = useRef(onHoverTile);
     const onPickRef = useRef(onPickTile);
     const onPickGraphicRef = useRef(onPickGraphic);
+    const onSelectRegionRef = useRef(onSelectRegion);
     const onZoomRef = useRef(onZoomChange);
     const onEditRef = useRef(onEdit);
     const toolRef = useRef(tool);
@@ -97,6 +113,7 @@ export function EditorCanvas({
         onHoverRef.current = onHoverTile;
         onPickRef.current = onPickTile;
         onPickGraphicRef.current = onPickGraphic;
+        onSelectRegionRef.current = onSelectRegion;
         onZoomRef.current = onZoomChange;
         onEditRef.current = onEdit;
         toolRef.current = tool;
@@ -107,7 +124,11 @@ export function EditorCanvas({
         paintToolModeRef.current = paintToolMode ?? "brush";
         modelRef.current = model;
         historyRef.current = history;
-    }, [onHoverTile, onPickTile, onPickGraphic, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushSize, paintToolMode, model, history]);
+    }, [onHoverTile, onPickTile, onPickGraphic, onSelectRegion, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushSize, paintToolMode, model, history]);
+
+    useEffect(() => {
+        sceneRef.current?.setSelection(selection);
+    }, [selection]);
 
     useEffect(() => {
         let cancelled = false;
@@ -159,6 +180,7 @@ export function EditorCanvas({
 
                 appRef.current = app;
                 sceneRef.current = scene;
+                texturesRef.current = textures;
 
                 app.ticker.add(() => scene.update());
 
@@ -174,6 +196,7 @@ export function EditorCanvas({
                         scene.fitToScreen();
                         onZoomRef.current?.(scene.getZoom());
                     },
+                    centerOn: (x, y) => scene.centerOn(x, y),
                     markAllDirty: () => scene.markAllDirty(),
                 });
             } catch (error) {
@@ -196,6 +219,11 @@ export function EditorCanvas({
                 appRef.current.destroy(true, { children: true });
                 appRef.current = null;
             }
+
+            // Las texturas recortadas por grh no cuelgan del stage, asi que
+            // destruir la Application no las libera.
+            texturesRef.current?.destroy();
+            texturesRef.current = null;
         };
         // La escena se crea una sola vez; los cambios de modelo se propagan
         // con el efecto de abajo.
@@ -227,6 +255,7 @@ export function EditorCanvas({
     });
     const paintState = useRef<{ active: boolean; touched: Map<number, PaintStrokeEntry> } | null>(null);
     const dragState = useRef<EntityDragState | null>(null);
+    const regionState = useRef<{ anchor: { x: number; y: number } } | null>(null);
 
     const toLocal = useCallback((event: React.PointerEvent | React.MouseEvent) => {
         const host = hostRef.current;
@@ -537,6 +566,13 @@ export function EditorCanvas({
                 return;
             }
 
+            if (toolRef.current === "region") {
+                (event.target as Element).setPointerCapture?.(event.pointerId);
+                regionState.current = { anchor: tile };
+                onSelectRegionRef.current?.(regionBetween(tile, tile));
+                return;
+            }
+
             if (toolRef.current === "paint") {
                 (event.target as Element).setPointerCapture?.(event.pointerId);
                 paintState.current = { active: true, touched: new Map() };
@@ -576,6 +612,16 @@ export function EditorCanvas({
                 scene.panByScreenDelta(event.clientX - panState.current.lastX, event.clientY - panState.current.lastY);
                 panState.current.lastX = event.clientX;
                 panState.current.lastY = event.clientY;
+                return;
+            }
+
+            if (regionState.current) {
+                const local = toLocal(event);
+                const tile = scene.screenToTile(local.x, local.y);
+                if (tile) {
+                    onSelectRegionRef.current?.(regionBetween(regionState.current.anchor, tile));
+                    onHoverRef.current(tile);
+                }
                 return;
             }
 
@@ -619,6 +665,11 @@ export function EditorCanvas({
         (event: React.PointerEvent) => {
             if (panState.current.active) {
                 panState.current.active = false;
+                return;
+            }
+
+            if (regionState.current) {
+                regionState.current = null;
                 return;
             }
 

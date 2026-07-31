@@ -13,7 +13,8 @@ import {
     getActiveMapIds,
     setActiveMapIds,
 } from "./mapSource";
-import { saveMapBundle, saveMapNpcs } from "./mapWrites";
+import { type CreateMapInput, createMap, linkMapEdge, saveMapBundle, saveMapNpcs } from "./mapWrites";
+import { MAP_SIDES, type MapSide } from "./mapEdges";
 import fs from "node:fs";
 import vars = require("./vars");
 
@@ -89,6 +90,27 @@ function requireNpcPlacements(body: unknown): MapNpcPlacement[] {
     return body as MapNpcPlacement[];
 }
 
+/**
+ * Guardar solo escribe a disco: el mundo en memoria sigue con la copia vieja.
+ * Si el mapa esta activo lo recargamos por el mismo camino que usa el toggle,
+ * que resetea su estado runtime (items tirados, instancias de NPC).
+ */
+async function reloadIfActive(mapId: number): Promise<boolean> {
+    const loadMapsInstance = (vars as any).loadMapsInstance;
+
+    if (!loadMapsInstance || !getActiveMapIds().includes(mapId)) {
+        return false;
+    }
+
+    try {
+        await loadMapsInstance.loadSingleMap(mapId);
+        return true;
+    } catch (error) {
+        console.error(`[EDITOR] No se pudo recargar el mapa ${mapId}:`, error);
+        return false;
+    }
+}
+
 const routes: EditorRoute[] = [
     {
         method: "GET",
@@ -110,6 +132,17 @@ const routes: EditorRoute[] = [
         method: "GET",
         pattern: /^\/editor\/maps$/,
         handler: () => ({ maps: listMapSummaries(), activeMapIds: getActiveMapIds() }),
+    },
+    {
+        method: "POST",
+        pattern: /^\/editor\/maps$/,
+        handler: (_params, body) => {
+            try {
+                return { bundle: createMap((body ?? {}) as CreateMapInput) };
+            } catch (error) {
+                throw new EditorHttpError(400, error instanceof Error ? error.message : "No se pudo crear el mapa.");
+            }
+        },
     },
     {
         method: "GET",
@@ -164,35 +197,80 @@ const routes: EditorRoute[] = [
     {
         method: "PUT",
         pattern: /^\/editor\/maps\/(\d+)$/,
-        handler: (params, body) => {
+        handler: async (params, body) => {
             const mapId = parseMapId(params[0]);
 
             if (!mapExists(mapId)) {
                 throw new EditorHttpError(404, `El mapa ${mapId} no existe.`);
             }
 
+            let bundle: EditorMapBundle;
+
             try {
-                return saveMapBundle(mapId, requireMapBundle(body));
+                bundle = saveMapBundle(mapId, requireMapBundle(body));
             } catch (error) {
                 throw new EditorHttpError(400, error instanceof Error ? error.message : "No se pudo guardar el mapa.");
             }
+
+            return { bundle, reloaded: await reloadIfActive(mapId) };
+        },
+    },
+    {
+        method: "POST",
+        pattern: /^\/editor\/maps\/(\d+)\/edges$/,
+        handler: async (params, body) => {
+            const mapId = parseMapId(params[0]);
+            const payload = (body ?? {}) as { side?: string; neighborMapId?: number | null };
+            const side = payload.side as MapSide;
+
+            if (!MAP_SIDES.includes(side)) {
+                throw new EditorHttpError(400, `Borde invalido: ${payload.side}. Validos: ${MAP_SIDES.join(", ")}.`);
+            }
+
+            const neighborMapId =
+                payload.neighborMapId === null || payload.neighborMapId === undefined
+                    ? null
+                    : parseMapId(String(payload.neighborMapId));
+
+            let result;
+
+            try {
+                result = linkMapEdge(mapId, side, neighborMapId);
+            } catch (error) {
+                throw new EditorHttpError(400, error instanceof Error ? error.message : "No se pudo conectar el borde.");
+            }
+
+            // Cada mapa reescrito puede estar vivo en memoria; recargamos todos.
+            const reloadedMapIds: number[] = [];
+
+            for (const writtenMapId of result.writtenMapIds) {
+                if (await reloadIfActive(writtenMapId)) {
+                    reloadedMapIds.push(writtenMapId);
+                }
+            }
+
+            return { ...result, bundle: readMapBundle(mapId), reloadedMapIds };
         },
     },
     {
         method: "PUT",
         pattern: /^\/editor\/maps\/(\d+)\/npcs$/,
-        handler: (params, body) => {
+        handler: async (params, body) => {
             const mapId = parseMapId(params[0]);
 
             if (!mapExists(mapId)) {
                 throw new EditorHttpError(404, `El mapa ${mapId} no existe.`);
             }
 
+            let spawns: MapNpcPlacement[];
+
             try {
-                return { spawns: saveMapNpcs(mapId, requireNpcPlacements(body)) };
+                spawns = saveMapNpcs(mapId, requireNpcPlacements(body));
             } catch (error) {
                 throw new EditorHttpError(400, error instanceof Error ? error.message : "No se pudieron guardar los spawns.");
             }
+
+            return { spawns, reloaded: await reloadIfActive(mapId) };
         },
     },
 ];

@@ -34,6 +34,9 @@ export type OverlayFlags = {
 
 export type LayerVisibility = Record<LayerIndex, boolean>;
 
+/** Rectangulo de tiles inclusivo en ambos extremos, en coordenadas 1-based. */
+export type TileRegion = { x0: number; y0: number; x1: number; y1: number };
+
 /** DBs cliente del juego, las mismas que descarga el juego para dibujar personajes. */
 export type NpcRenderAssets = {
     npcsDB?: NPCsDB;
@@ -86,6 +89,7 @@ export class EditorScene {
     private cameraX = 0;
     private cameraY = 0;
     private hover: HoverInfo = null;
+    private selection: TileRegion | null = null;
 
     private layerVisibility: LayerVisibility = { 1: true, 2: true, 3: true, 4: true };
     private layerAlpha: Record<LayerIndex, number> = { 1: 1, 2: 1, 3: 1, 4: 1 };
@@ -183,6 +187,11 @@ export class EditorScene {
         this.setCamera(this.cameraX + (before.x - after.x), this.cameraY + (before.y - after.y));
     }
 
+    /** Centra la camara en un tile, sin cambiar el zoom. */
+    centerOn(x: number, y: number): void {
+        this.setCamera((x - 0.5) * TILE_SIZE, (y - 0.5) * TILE_SIZE);
+    }
+
     fitToScreen(): void {
         const zoomX = this.app.screen.width / (this.model.width * TILE_SIZE);
         const zoomY = this.app.screen.height / (this.model.height * TILE_SIZE);
@@ -244,6 +253,11 @@ export class EditorScene {
     setOverlays(overlays: OverlayFlags): void {
         this.overlays = overlays;
         this.overlaysDirty = true;
+    }
+
+    setSelection(selection: TileRegion | null): void {
+        this.selection = selection;
+        this.drawHover();
     }
 
     markTileDirty(x: number, y: number): void {
@@ -621,8 +635,21 @@ export class EditorScene {
 
     // -- overlays -----------------------------------------------------------
 
+    /**
+     * Hover y seleccion comparten este `Graphics` a proposito: se redibujan en
+     * cada movimiento del mouse, y meterlos en los overlays obligaria a
+     * reconstruir todas las etiquetas en cada frame de un arrastre.
+     */
     private drawHover(): void {
         this.hoverGraphics.clear();
+
+        if (this.selection) {
+            const { x0, y0, x1, y1 } = this.selection;
+            this.hoverGraphics
+                .rect((x0 - 1) * TILE_SIZE, (y0 - 1) * TILE_SIZE, (x1 - x0 + 1) * TILE_SIZE, (y1 - y0 + 1) * TILE_SIZE)
+                .fill({ color: 0x38bdf8, alpha: 0.12 })
+                .stroke({ width: 2 / this.zoom, color: 0x38bdf8, alpha: 0.95 });
+        }
 
         if (!this.hover) {
             return;
