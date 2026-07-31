@@ -1,64 +1,32 @@
 import fs from "node:fs";
 import path from "node:path";
+import {
+    type EditableSpecials,
+    type EditableTerrain,
+    type JsonValue,
+    type MapMetadata,
+    type TerrainTile,
+    MAPS_SOURCE_DIR,
+    buildCoordinateKey,
+    normalizeTileExitDestinations,
+    stableStringify,
+    toFiniteNumber,
+} from "../mapSource";
 
-type JsonValue = string | number | boolean | null | JsonObject | JsonArray;
-type JsonObject = { [key: string]: JsonValue };
-type JsonArray = JsonValue[];
+/**
+ * Migracion one-shot del formato legacy de Argentum Online
+ * (`server/mapas/mapa_N.json` + `dats/`) al formato fuente actual.
+ *
+ * El directorio de entrada ya no existe en el repo; se conserva como
+ * documentacion del origen de los datos. La logica compartida con el editor
+ * vive en `src/mapSource.ts`.
+ */
 
 type RawTile = Record<string, unknown>;
 
-type TileExit = {
-    map: number;
-    x: number;
-    y: number;
-};
-
-type TileExitConfig = TileExit | { destinations: TileExit[] };
-
-type ObjectInfo = {
-    objIndex: number;
-    amount: number;
-};
-
-type TerrainTile = {
-    blocked?: true;
-    graphics: number | Array<number | null>;
-};
-
-type MapMetadata = {
-    id: number;
-    name: string;
-    musicNum: number;
-    magiaSinEfecto: number;
-    noEncriptarMp: number;
-    terreno: string;
-    zona: string;
-    restringir: string | number;
-    minLevel: number;
-    maxLevel: number;
-    backup: number;
-    pk: number;
-};
-
-type EditableTerrain = {
-    id: number;
-    width: number;
-    height: number;
-    palette: Record<string, TerrainTile>;
-    rows: number[][];
-};
-
-type EditableSpecials = {
-    id: number;
-    exits: Record<string, TileExitConfig>;
-    objects: Record<string, ObjectInfo>;
-    npcs: Record<string, number>;
-    triggers: Record<string, number>;
-};
-
 const DEFAULT_MAPS_DIR = path.resolve(__dirname, "../../mapas");
 const DEFAULT_DATS_DIR = path.resolve(DEFAULT_MAPS_DIR, "dats");
-const DEFAULT_OUTPUT_DIR = path.resolve(__dirname, "../../mapas_source");
+const DEFAULT_OUTPUT_DIR = MAPS_SOURCE_DIR;
 const MAP_FILE_PATTERN = /^mapa_(\d+)\.json$/i;
 
 function parseCliArgs(argv: string[]) {
@@ -139,39 +107,6 @@ function getAvailableMapIds(inputDir: string, datsDir: string): number[] {
     return mapIds.sort((left, right) => left - right);
 }
 
-function toFiniteNumber(value: unknown): number | undefined {
-    if (typeof value === "number" && Number.isFinite(value)) {
-        return value;
-    }
-
-    if (typeof value === "string" && value.trim()) {
-        const parsed = Number(value);
-        return Number.isFinite(parsed) ? parsed : undefined;
-    }
-
-    return undefined;
-}
-
-function normalizeTileExitDestinations(tileExit: Record<string, unknown> | undefined): TileExit[] {
-    const rawDestinations = Array.isArray(tileExit?.destinations) ? tileExit.destinations : tileExit ? [tileExit] : [];
-    const destinations: TileExit[] = [];
-
-    for (const destination of rawDestinations) {
-        const destinationRecord = destination as Record<string, unknown>;
-        const map = toFiniteNumber(destinationRecord?.map);
-        const x = toFiniteNumber(destinationRecord?.x);
-        const y = toFiniteNumber(destinationRecord?.y);
-
-        if (map === undefined || x === undefined || y === undefined) {
-            continue;
-        }
-
-        destinations.push({ map, x, y });
-    }
-
-    return destinations;
-}
-
 function normalizeGraphics(value: unknown): number | Array<number | null> | undefined {
     if (!value || typeof value !== "object" || Array.isArray(value)) {
         return undefined;
@@ -208,30 +143,6 @@ function normalizeGraphics(value: unknown): number | Array<number | null> | unde
     }
 
     return result;
-}
-
-function sortJsonValue(value: JsonValue): JsonValue {
-    if (Array.isArray(value)) {
-        return value.map((entry) => sortJsonValue(entry));
-    }
-
-    if (!value || typeof value !== "object") {
-        return value;
-    }
-
-    const sortedEntries = Object.entries(value)
-        .sort(([leftKey], [rightKey]) => leftKey.localeCompare(rightKey))
-        .map(([key, entryValue]) => [key, sortJsonValue(entryValue)] as const);
-
-    return Object.fromEntries(sortedEntries);
-}
-
-function stableStringify(value: JsonValue): string {
-    return JSON.stringify(sortJsonValue(value));
-}
-
-function buildCoordinateKey(x: number, y: number): string {
-    return `${x},${y}`;
 }
 
 function buildMetadata(mapId: number, rawMetadata: unknown): MapMetadata {
@@ -451,4 +362,6 @@ function main(): void {
     console.log(`Listo. Mapas exportados: ${resolvedMapIds.length}`);
 }
 
-main();
+if (require.main === module) {
+    main();
+}
