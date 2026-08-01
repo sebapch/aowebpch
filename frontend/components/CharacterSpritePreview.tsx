@@ -327,7 +327,7 @@ export default function CharacterSpritePreview({
             });
 
             if (disposed) {
-                app.destroy(undefined, { children: true });
+                app.destroy({ removeView: true });
                 return;
             }
 
@@ -347,7 +347,7 @@ export default function CharacterSpritePreview({
             setIsAppReady(false);
 
             if (appRef.current) {
-                appRef.current.destroy(undefined, { children: true });
+                appRef.current.destroy({ removeView: true });
                 appRef.current = null;
             }
 

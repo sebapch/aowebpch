@@ -351,7 +351,7 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                         });
                         return app;
                     } catch (error) {
-                        app.destroy({ removeView: true }, { children: true });
+                        app.destroy({ removeView: true });
 
                         const isWebGLContextFailure =
                             error instanceof Error &&
@@ -377,7 +377,7 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                 app.canvas.style.opacity = "0";
 
                 if (isDisposed) {
-                    app.destroy({ removeView: true }, { children: true });
+                    app.destroy({ removeView: true });
                     return;
                 }
 

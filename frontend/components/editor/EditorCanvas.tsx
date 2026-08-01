@@ -158,7 +158,7 @@ export function EditorCanvas({
                 });
 
                 if (cancelled) {
-                    app.destroy(true, { children: true });
+                    app.destroy({ removeView: true });
                     return;
                 }
 
@@ -173,7 +173,7 @@ export function EditorCanvas({
                 ]);
 
                 if (cancelled) {
-                    app.destroy(true, { children: true });
+                    app.destroy({ removeView: true });
                     return;
                 }
 
@@ -224,7 +224,7 @@ export function EditorCanvas({
             sceneRef.current = null;
 
             if (appRef.current) {
-                appRef.current.destroy(true, { children: true });
+                appRef.current.destroy({ removeView: true });
                 appRef.current = null;
             }
 

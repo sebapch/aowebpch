@@ -45,10 +45,32 @@ export async function fetchApi(
     }
 }
 
+/**
+ * Si el backend esta caido o un proxy intermedio devuelve una pagina de error
+ * (HTML de 502/504 en vez del JSON esperado), `response.json()` explota con
+ * "Unexpected token '<' ... is not valid JSON". Esto lo atrapa y lo convierte
+ * en un error legible en vez de tirar una excepcion sin manejar.
+ */
+async function readJsonOrFallbackError(
+    response: Response,
+): Promise<{ error: string } | Record<string, unknown>> {
+    const rawBody = await response.text();
+
+    try {
+        return rawBody ? JSON.parse(rawBody) : {};
+    } catch {
+        return {
+            error: response.ok
+                ? "El servidor devolvio una respuesta invalida."
+                : `El servidor no esta disponible (${response.status}). Intenta de nuevo en unos segundos.`,
+        };
+    }
+}
+
 export async function proxyJsonResponse(
     response: Response,
 ): Promise<NextResponse> {
-    const result = normalizeErrorPayload(await response.json());
+    const result = normalizeErrorPayload(await readJsonOrFallbackError(response));
     return NextResponse.json(result, { status: response.status });
 }
 
@@ -151,7 +173,7 @@ export async function forwardAuthRequest(
     });
 
     const result = normalizeErrorPayload(
-        (await response.json()) as ApiAuthResponse | AuthErrorResponse,
+        (await readJsonOrFallbackError(response)) as ApiAuthResponse | AuthErrorResponse,
     );
 
     if (!response.ok) {

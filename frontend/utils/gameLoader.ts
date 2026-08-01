@@ -104,10 +104,10 @@ async function fetchJsonWithFallback<T>(
     }
 
     const requestPromise = (async () => {
-        void options;
-        const candidatePaths = [localPath, fallbackPath].filter(
-            (value, index, array) => array.indexOf(value) === index,
-        );
+        const preferLocal = options?.preferLocal ?? true;
+        const candidatePaths = (
+            preferLocal ? [localPath, fallbackPath] : [fallbackPath, localPath]
+        ).filter((value, index, array) => array.indexOf(value) === index);
         let lastError: string | null = null;
 
         for (const assetPath of candidatePaths) {

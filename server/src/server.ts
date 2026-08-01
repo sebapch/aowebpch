@@ -373,6 +373,10 @@ function countActiveWorkerUsers() {
 }
 
 async function saveOnlineStatsSnapshot() {
+    if (!vars.serverReady) {
+        return;
+    }
+
     try {
         const pveUsers = Math.max(0, Number(vars.usuariosOnline) || 0);
         const pvpUsers = Math.max(0, Number(vars.usuariosOnlinePvP) || 0);
@@ -478,48 +482,83 @@ function trackClientActivity(ws: RuntimeClient, packageID: number) {
     ws.lastActivityAt = now;
 }
 
-(async () => {
-    const startInitialize = Date.now();
-
-    await runtimeTiming.loadRuntimeTimingConfig();
-
-    if (config.resetConnectedCharactersOnStartup) {
-        const resetCharactersResponse = (await funct.fetchUrl("/internal/characters/reset-connected", {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: vars.tokenAuth,
-            },
-        })) as { updated: number };
-
-        console.log(
-            `[Servidor] Personajes marcados como desconectados al iniciar: ${resetCharactersResponse.updated}.`,
-        );
+async function waitForApiReady(maxAttempts = 30, intervalMs = 1000): Promise<void> {
+    console.log(`[Servidor] Verificando conexión con API (${config.apiBaseUrl})...`);
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+        try {
+            await funct.fetchUrl("/health");
+            console.log("[Servidor] Conexión con API establecida correctamente.");
+            return;
+        } catch (err) {
+            if (attempt === 1) {
+                console.log(`[Servidor] Esperando a que la API esté lista en ${config.apiBaseUrl}...`);
+            }
+            if (attempt === maxAttempts) {
+                console.warn(
+                    `[Servidor] No se pudo conectar a la API tras ${maxAttempts} intentos. Continuando inicio...`,
+                );
+                funct.dumpError(err);
+                return;
+            }
+            await new Promise((resolve) => setTimeout(resolve, intervalMs));
+        }
     }
+}
 
-    const LoadMaps = new loadMaps();
-    const LoadObjs = new loadObjs();
-    const LoadBalance = new loadBalance();
-    const LoadSpells = new loadSpells();
-    const LoadCraftingRecipes = new loadCraftingRecipes();
-    const LoadSmeltingRecipes = new loadSmeltingRecipes();
+(async () => {
+    try {
+        const startInitialize = Date.now();
 
-    await Promise.all([
-        LoadMaps.initialize(),
-        LoadObjs.initialize(),
-        LoadBalance.initialize(),
-        LoadSpells.initialize(),
-        LoadCraftingRecipes.initialize(),
-        LoadSmeltingRecipes.initialize(),
-    ]);
+        await waitForApiReady();
 
-    vars.serverReady = true;
-    const endInitialize = Date.now() - startInitialize;
-    const textInitializeServer = `[Servidor] Iniciado en ${endInitialize}ms.`;
+        await runtimeTiming.loadRuntimeTimingConfig();
 
-    funct.sendTelegramMessage(textInitializeServer);
+        if (config.resetConnectedCharactersOnStartup) {
+            try {
+                const resetCharactersResponse = (await funct.fetchUrl("/internal/characters/reset-connected", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        Authorization: vars.tokenAuth,
+                    },
+                })) as { updated: number };
 
-    console.log(textInitializeServer);
+                console.log(
+                    `[Servidor] Personajes marcados como desconectados al iniciar: ${resetCharactersResponse.updated}.`,
+                );
+            } catch (err) {
+                console.error("[Servidor] No se pudo resetear el estado de personajes conectados:");
+                funct.dumpError(err);
+            }
+        }
+
+        const LoadMaps = new loadMaps();
+        const LoadObjs = new loadObjs();
+        const LoadBalance = new loadBalance();
+        const LoadSpells = new loadSpells();
+        const LoadCraftingRecipes = new loadCraftingRecipes();
+        const LoadSmeltingRecipes = new loadSmeltingRecipes();
+
+        await Promise.all([
+            LoadMaps.initialize(),
+            LoadObjs.initialize(),
+            LoadBalance.initialize(),
+            LoadSpells.initialize(),
+            LoadCraftingRecipes.initialize(),
+            LoadSmeltingRecipes.initialize(),
+        ]);
+
+        vars.serverReady = true;
+        const endInitialize = Date.now() - startInitialize;
+        const textInitializeServer = `[Servidor] Iniciado en ${endInitialize}ms.`;
+
+        funct.sendTelegramMessage(textInitializeServer);
+
+        console.log(textInitializeServer);
+    } catch (err) {
+        console.error("[Servidor] Error crítico durante la inicialización del servidor:");
+        funct.dumpError(err);
+    }
 })();
 
 wsServer?.on("connection", function (ws: RuntimeClient, request: RuntimeConnectionRequest) {

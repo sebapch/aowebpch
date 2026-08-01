@@ -78,9 +78,16 @@ export default function AuthCard({ mode }: AuthCardProps) {
                 body: await encryptAuthPayload(payload),
             });
 
-            const result = (await response.json()) as
-                | AuthSession
-                | AuthErrorResponse;
+            const rawBody = await response.text();
+            let result: AuthSession | AuthErrorResponse;
+
+            try {
+                result = rawBody ? JSON.parse(rawBody) : {};
+            } catch {
+                throw new Error(
+                    "El servidor no esta disponible en este momento. Intenta de nuevo en unos segundos.",
+                );
+            }
 
             if (!response.ok) {
                 throw new Error(

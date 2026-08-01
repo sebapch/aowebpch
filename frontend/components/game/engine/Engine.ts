@@ -3004,7 +3004,7 @@ export class Engine {
             }
             this.clearScheduledMovementCheck();
             app.stop();
-            app.destroy({ removeView: true }, { children: true });
+            app.destroy({ removeView: true });
         }
 
         this.pendingTileObjectVisualSyncs.clear();

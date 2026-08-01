@@ -764,6 +764,7 @@ function HomeContent() {
     );
     const [retosOpen, setRetosOpen] = useState(false);
     const [isInArenaQueue, setIsInArenaQueue] = useState(false);
+    const [arenaQueueTeamSize, setArenaQueueTeamSize] = useState<number | null>(null);
     const [retosLoading, setRetosLoading] = useState(false);
     const [retosActionKey, setRetosActionKey] = useState<string | null>(null);
     const [retosError, setRetosError] = useState<string | null>(null);
@@ -1803,10 +1804,16 @@ function HomeContent() {
                     setLogoutSecondsRemaining(0);
                 }
 
-                if (entry.text.includes("[Arena 2v2] Te has unido")) {
+                const matchJoin = entry.text.match(/\[Arena (\d)v\d\] Te has unido/);
+                if (matchJoin) {
                     setIsInArenaQueue(true);
-                } else if (entry.text.includes("[Arena 2v2] Has salido") || entry.text.includes("¡PARTIDA ENCONTRADA!")) {
+                    setArenaQueueTeamSize(Number(matchJoin[1]));
+                } else if (
+                    entry.text.includes("Has salido de la cola") ||
+                    entry.text.includes("¡PARTIDA ENCONTRADA!")
+                ) {
                     setIsInArenaQueue(false);
+                    setArenaQueueTeamSize(null);
                 }
 
                 if (RETOS_INFO_MESSAGES.has(entry.text)) {
@@ -3510,28 +3517,21 @@ function HomeContent() {
                                     }
                                 />
 
-                                <div className="pointer-events-auto flex w-full flex-col gap-2 rounded-2xl border border-stone-700/80 bg-stone-950/84 px-4 py-3 text-xs text-stone-100 shadow-2xl backdrop-blur-md">
+                                 <div className="pointer-events-auto flex w-full flex-col gap-2 rounded-2xl border border-stone-700/80 bg-stone-950/84 px-4 py-3 text-xs text-stone-100 shadow-2xl backdrop-blur-md">
                                     <div className="flex items-center justify-center gap-3 uppercase tracking-[0.22em]">
                                         {authSession ? (
                                             <>
-                                                <Link
-                                                    href="/arenas"
-                                                    prefetch={false}
-                                                    onClick={(event) => {
-                                                        if (!arenaMode) {
-                                                            return;
-                                                        }
-
-                                                        event.preventDefault();
-                                                        void leaveArenaRoom();
-                                                    }}
-                                                    className="text-amber-300 transition hover:text-amber-200"
-                                                >
-                                                    {arenaMode &&
-                                                    arenaLeavePending
-                                                        ? "Saliendo..."
-                                                        : "Arenas"}
-                                                </Link>
+                                                {arenaMode && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => void leaveArenaRoom()}
+                                                        className="text-amber-300 transition hover:text-amber-200"
+                                                    >
+                                                        {arenaLeavePending
+                                                            ? "Saliendo..."
+                                                            : "Salir de Arena"}
+                                                    </button>
+                                                )}
                                                 <Link
                                                     href={switchCharacterHref}
                                                     prefetch={false}
@@ -3564,34 +3564,46 @@ function HomeContent() {
                                     </div>
                                     {authSession && !arenaMode ? (
                                         <div className="flex flex-col gap-2">
-                                            <button
-                                                type="button"
-                                                onClick={() => {
-                                                    if (isInArenaQueue) {
-                                                        requestRetosState("dequeue2v2");
-                                                        setIsInArenaQueue(false);
-                                                    } else {
-                                                        requestRetosState("enqueue2v2");
-                                                        setIsInArenaQueue(true);
-                                                    }
-                                                }}
-                                                className={`w-full rounded-xl border px-3 py-2 text-xs font-semibold uppercase tracking-wider transition ${
-                                                    isInArenaQueue
-                                                        ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-emerald-500/30"
-                                                        : "border-amber-400/40 bg-amber-500/10 text-amber-200 hover:border-amber-400/70 hover:bg-amber-500/20 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
-                                                }`}
-                                            >
-                                                {isInArenaQueue ? (
-                                                    <span className="flex items-center justify-center gap-2">
-                                                        <span className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
-                                                        ⏳ En Lista de Espera 2v2 (Salir)
-                                                    </span>
-                                                ) : (
-                                                    <span className="flex items-center justify-center gap-2">
-                                                        <span>⚔️</span> Lista de Espera 2v2
-                                                    </span>
-                                                )}
-                                            </button>
+                                            <div className="grid grid-cols-3 gap-1.5">
+                                                {([2, 3, 4] as const).map((teamSize) => {
+                                                    const isCurrentQueue =
+                                                        isInArenaQueue && arenaQueueTeamSize === teamSize;
+
+                                                    return (
+                                                        <button
+                                                            key={teamSize}
+                                                            type="button"
+                                                            onClick={() => {
+                                                                if (isCurrentQueue) {
+                                                                    requestRetosState("dequeue2v2");
+                                                                    setIsInArenaQueue(false);
+                                                                    setArenaQueueTeamSize(null);
+                                                                } else {
+                                                                    requestRetosState("enqueue2v2", { teamSize });
+                                                                    setIsInArenaQueue(true);
+                                                                    setArenaQueueTeamSize(teamSize);
+                                                                }
+                                                            }}
+                                                            className={`w-full rounded-xl border px-1 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${
+                                                                isCurrentQueue
+                                                                    ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-300 shadow-[0_0_15px_rgba(52,211,153,0.3)] hover:bg-emerald-500/30"
+                                                                    : "border-amber-400/40 bg-amber-500/10 text-amber-200 hover:border-amber-400/70 hover:bg-amber-500/20 shadow-[0_4px_12px_rgba(0,0,0,0.3)]"
+                                                            }`}
+                                                        >
+                                                            {isCurrentQueue ? (
+                                                                <span className="flex items-center justify-center gap-1">
+                                                                    <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
+                                                                    ⏳ {teamSize}v{teamSize}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="flex items-center justify-center gap-1">
+                                                                    <span>⚔️</span> {teamSize}v{teamSize}
+                                                                </span>
+                                                            )}
+                                                        </button>
+                                                    );
+                                                })}
+                                            </div>
 
                                             <div className="text-center text-[11px] leading-5 tracking-[0.04em] text-stone-300/85">
                                                 En zona insegura cerrá el personaje
