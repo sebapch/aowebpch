@@ -225,6 +225,46 @@ export function normalizeNpcData(data: GameNpcRecordData): GameNpcRecordData {
     return normalized;
 }
 
+// Los datos que consume el cliente (frontend/public/init/*.json) son una proyeccion
+// recortada de estos mismos ids: traen name/grhIndex/objType y poco mas. Si alguien
+// los usa como semilla, normalizeObjectData rellena todo lo demas con ceros y el juego
+// arranca sin animaciones de equipo, sin puertas y sin comerciantes. Cada senal de
+// abajo es un campo que solo existe en los datos del servidor: si el dataset completo
+// no tiene ni una, no son datos de servidor.
+type DatasetSignal<TRow> = { label: string; isPresent: (row: TRow) => boolean };
+
+function assertDatasetSignals<TRow>(
+    rows: TRow[],
+    signals: Array<DatasetSignal<TRow>>,
+    { filePath, kind }: { filePath: string; kind: string },
+): void {
+    if (rows.length === 0) {
+        throw new Error(`El dataset de ${kind} en ${filePath} esta vacio.`);
+    }
+
+    const missing = signals
+        .filter((signal) => !rows.some((row) => signal.isPresent(row)))
+        .map((signal) => signal.label);
+
+    if (missing.length === 0) {
+        return;
+    }
+
+    throw new Error(
+        `El dataset de ${kind} en ${filePath} parece incompleto: ningun registro tiene ${missing.join(", ")}. ` +
+            "Suele pasar al sembrar con los json del cliente (frontend/public/init) en lugar de los datos del servidor. " +
+            "Regeneralos desde la base (database/aoweb.sql) antes de importar.",
+    );
+}
+
+function toNumber(value: unknown): number {
+    return typeof value === "number" ? value : 0;
+}
+
+function hasEntries(value: unknown): boolean {
+    return Array.isArray(value) && value.length > 0;
+}
+
 export function loadSeedObjectsJson(): Array<{
     id: number;
     data: GameObjectRecordData;
@@ -237,12 +277,25 @@ export function loadObjectsJsonFromFile(
     filePath: string,
 ): Array<{ id: number; data: GameObjectRecordData }> {
     const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as ObjectsById;
-    return Object.entries(raw)
+    const rows = Object.entries(raw)
         .map(([id, data]) => ({
             id: Number(id),
             data: normalizeObjectData(data),
         }))
         .filter((entry) => Number.isInteger(entry.id) && entry.id > 0);
+
+    assertDatasetSignals(
+        rows,
+        [
+            { label: "anim (animacion del equipo)", isPresent: (row) => toNumber(row.data.anim) > 0 },
+            { label: "indexAbierta (puertas)", isPresent: (row) => toNumber(row.data.indexAbierta) > 0 },
+            { label: "tipoPocion (consumibles)", isPresent: (row) => toNumber(row.data.tipoPocion) > 0 },
+            { label: "clasesNoPermitidas", isPresent: (row) => hasEntries(row.data.clasesNoPermitidas) },
+        ],
+        { filePath, kind: "objetos" },
+    );
+
+    return rows;
 }
 
 export function loadSeedNpcsJson(): Array<{
@@ -257,9 +310,22 @@ export function loadNpcsJsonFromFile(
     filePath: string,
 ): Array<{ id: number; data: GameNpcRecordData }> {
     const raw = JSON.parse(fs.readFileSync(filePath, "utf8")) as NpcsById;
-    return Object.entries(raw)
+    const rows = Object.entries(raw)
         .map(([id, data]) => ({ id: Number(id), data: normalizeNpcData(data) }))
         .filter((entry) => Number.isInteger(entry.id) && entry.id > 0);
+
+    assertDatasetSignals(
+        rows,
+        [
+            { label: "npcType", isPresent: (row) => toNumber(row.data.npcType) > 0 },
+            { label: "objs (inventario de comerciantes)", isPresent: (row) => hasEntries(row.data.objs) },
+            { label: "drop", isPresent: (row) => hasEntries(row.data.drop) },
+            { label: "maxHp (stats de combate)", isPresent: (row) => toNumber(row.data.maxHp) > 0 },
+        ],
+        { filePath, kind: "NPCs" },
+    );
+
+    return rows;
 }
 
 export function normalizeCraftingRecipeData(
