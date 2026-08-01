@@ -1,6 +1,21 @@
 import fs from "fs";
 import path from "path";
 import pool from "./db";
+import { repairGuttedGameData } from "./lib/gameDataRepair";
+
+// Arrancar con datos incompletos es malo, pero no arrancar es peor: si la reparacion
+// falla el server sigue levantando como hasta ahora y el error queda en el log.
+async function repairGameData(): Promise<void> {
+    try {
+        const result = await repairGuttedGameData();
+
+        if (!result.repaired) {
+            console.log("Game data check passed");
+        }
+    } catch (error) {
+        console.error("Failed to repair game data", error);
+    }
+}
 
 async function migrate(): Promise<void> {
     const schemaPath = path.resolve(__dirname, "..", "schema.sql");
@@ -18,6 +33,8 @@ async function migrate(): Promise<void> {
       WHERE status = 'active'
   `);
     console.log("Database schema applied successfully");
+
+    await repairGameData();
 }
 
 void migrate()
