@@ -1,73 +1,137 @@
-let spells: number[] = [];
-let armors: number[] = [];
+const HELMET_ITEMS = [131, 132, 370, 383, 405, 661, 662, 851, 1001, 1002, 1003, 1004, 1010, 1051, 1052];
 
-try {
-    const itemsData = require("../../../.gemini/antigravity/brain/c46b8fdf-3fc1-48e1-af5b-37b2a996c0c8/scratch/npc_items.json");
-    spells = itemsData.spells || [];
-    armors = itemsData.armors || [];
-} catch {
-    spells = [];
-    armors = [];
+const WEAPON_ITEMS = [
+    2, 3, 9, 15, 19, 123, 124, 125, 126, 127, 129, 138, 159, 164, 165, 187, 198, 237, 365, 366, 367, 389, 398, 399,
+    400, 401, 402, 403, 460, 478, 479, 543, 559, 561, 562, 563, 564, 565, 619, 658, 659, 660, 663, 664, 665, 753, 859,
+    861, 862, 990, 1000, 1005, 1009,
+];
+
+const TALL_ARMOR_ITEMS = [
+    30, 31, 32, 35, 170, 195, 356, 359, 360, 369, 372, 382, 390, 391, 463, 464, 465, 481, 482, 484, 485, 487, 488, 489,
+    493, 495, 496, 497, 499, 503, 504, 505, 506, 510, 511, 512, 513, 514, 520, 521, 523, 529, 616, 629, 631, 635, 638,
+    675, 677, 680, 683, 684, 691, 693, 701, 876, 879, 881, 882, 883, 884, 885, 886, 887, 888, 889, 890, 891, 892, 893,
+    894, 895, 897, 898, 899, 900, 901, 902, 903, 904, 905, 906, 909, 925, 926, 931, 933, 935, 938, 941, 942, 943, 944,
+    945, 946, 947, 948, 949, 950, 951, 953, 954, 955, 956, 957, 973, 977, 979, 980, 981, 982, 983, 984, 985, 991, 992,
+    993, 994, 995, 996, 998, 999, 1046, 1063, 1064,
+];
+
+const TALL_TUNIC_ITEMS = [
+    135, 196, 238, 239, 357, 381, 496, 509, 516, 517, 518, 519, 526, 528, 614, 628, 630, 634, 637, 640, 646, 650, 679,
+    687, 689, 878, 880, 881, 896, 936, 986, 1044,
+];
+
+const EG_ARMOR_ITEMS = [
+    243, 379, 392, 393, 483, 492, 500, 617, 632, 639, 648, 667, 668, 672, 676, 678, 681, 685, 694, 695, 707, 854, 908,
+    910, 911, 912, 916, 917, 918, 919, 922, 923, 924, 927, 928, 929, 930, 934, 937, 940, 958, 965, 966, 968, 970, 971,
+    974, 975, 976, 1039, 1040, 1041, 1042, 1047,
+];
+
+const EG_TUNIC_ITEMS = [
+    524, 525, 549, 558, 615, 633, 636, 656, 670, 671, 682, 686, 688, 690, 867, 877, 921, 930, 932, 939, 962, 969, 972,
+    1045,
+];
+
+function createMerchantData(
+    id: number,
+    name: string,
+    idHead: number,
+    idBody: number,
+    desc: string,
+    itemIds: number[],
+) {
+    return {
+        id,
+        name,
+        npcType: 10,
+        idHead,
+        idBody,
+        movement: 1,
+        desc,
+        objs: itemIds.map((idItem) => ({ cant: 1000, item: idItem, price: 1 })),
+        drop: [],
+        gold: 0,
+        hp: 0,
+        maxHp: 0,
+        minHit: 0,
+        maxHit: 0,
+        def: 0,
+        poderAtaque: 0,
+        poderEvasion: 0,
+        magicResistance: 0,
+        magicDef: 0,
+        defM: 0,
+        snd1: 0,
+        snd2: 0,
+        soundClose: 0,
+        aguaValida: 0,
+        tierraInvalida: 0,
+    };
 }
 
 export function ensureCustomNpcs(datNpc: Record<number, any>): void {
-    if (!datNpc[9901]) {
-        datNpc[9901] = {
-            id: 9901,
-            name: "Vendedor de Hechizos",
-            npcType: 10,
-            idHead: 110,
-            idBody: 46,
-            movement: 1,
-            desc: "¡Pasa y aprende todas las artes mágicas por solo 1 moneda de oro!",
-            objs: spells.map((id: number) => ({ cant: 1000, item: id, price: 1 })),
-            drop: [],
-            gold: 0,
-            hp: 0,
-            maxHp: 0,
-            minHit: 0,
-            maxHit: 0,
-            def: 0,
-            poderAtaque: 0,
-            poderEvasion: 0,
-            magicResistance: 0,
-            magicDef: 0,
-            defM: 0,
-            snd1: 0,
-            snd2: 0,
-            soundClose: 0,
-            aguaValida: 0,
-            tierraInvalida: 0,
-        };
+    if (!datNpc[9903]) {
+        datNpc[9903] = createMerchantData(
+            9903,
+            "Comerciante de Cascos y Gorros",
+            508,
+            203,
+            "¡Tengo los mejores cascos, gorros y sombreros del reino!",
+            HELMET_ITEMS,
+        );
     }
 
-    if (!datNpc[9902]) {
-        datNpc[9902] = {
-            id: 9902,
-            name: "Vendedor de Armaduras",
-            npcType: 10,
-            idHead: 505,
-            idBody: 199,
-            movement: 1,
-            desc: "¡Tengo todas las vestimentas y armaduras del reino a solo 1 moneda de oro!",
-            objs: armors.map((id: number) => ({ cant: 1000, item: id, price: 1 })),
-            drop: [],
-            gold: 0,
-            hp: 0,
-            maxHp: 0,
-            minHit: 0,
-            maxHit: 0,
-            def: 0,
-            poderAtaque: 0,
-            poderEvasion: 0,
-            magicResistance: 0,
-            magicDef: 0,
-            defM: 0,
-            snd1: 0,
-            snd2: 0,
-            soundClose: 0,
-            aguaValida: 0,
-            tierraInvalida: 0,
-        };
+    if (!datNpc[9904]) {
+        datNpc[9904] = createMerchantData(
+            9904,
+            "Comerciante de Armas",
+            509,
+            204,
+            "¡Espadas, hachas, dagas y arcos para la batalla!",
+            WEAPON_ITEMS,
+        );
+    }
+
+    if (!datNpc[9905]) {
+        datNpc[9905] = createMerchantData(
+            9905,
+            "Comerciante de Armaduras",
+            510,
+            199,
+            "¡Armaduras de placas y cuero de la más alta calidad!",
+            TALL_ARMOR_ITEMS,
+        );
+    }
+
+    if (!datNpc[9906]) {
+        datNpc[9906] = createMerchantData(
+            9906,
+            "Comerciante de Túnicas",
+            511,
+            201,
+            "¡Las mejores túnicas místicas para magos, clérigos y bardos!",
+            TALL_TUNIC_ITEMS,
+        );
+    }
+
+    if (!datNpc[9907]) {
+        datNpc[9907] = createMerchantData(
+            9907,
+            "Comerciante de Armaduras Pequeñas (E/G)",
+            80,
+            49,
+            "¡Armaduras forjadas a medida para enanos y gnomos!",
+            EG_ARMOR_ITEMS,
+        );
+    }
+
+    if (!datNpc[9908]) {
+        datNpc[9908] = createMerchantData(
+            9908,
+            "Comerciante de Túnicas Pequeñas (E/G)",
+            81,
+            240,
+            "¡Túnicas especiales adaptadas para razas pequeñas!",
+            EG_TUNIC_ITEMS,
+        );
     }
 }

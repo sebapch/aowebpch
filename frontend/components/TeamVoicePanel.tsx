@@ -10,13 +10,13 @@ type TeamVoicePanelProps = {
     onTogglePeerMute: () => void;
 };
 
-const STATUS_LABELS: Record<TeamVoiceState["status"], string> = {
+const STATUS_TITLES: Record<TeamVoiceState["status"], string> = {
     idle: "Sin equipo",
-    available: "Sin conectar",
+    available: "Sin conectar al chat de voz",
     "requesting-mic": "Pidiendo micrófono...",
     connecting: "Conectando...",
     connected: "Conectado",
-    error: "Error",
+    error: "Error de voz",
 };
 
 function getStatusColor(state: TeamVoiceState): string {
@@ -47,78 +47,139 @@ export default function TeamVoicePanel({
     }
 
     const isBusy = state.status === "requesting-mic";
+    const title = state.error ?? STATUS_TITLES[state.status];
 
     return (
-        <div className="pointer-events-auto absolute right-3 top-24 z-30 w-56 rounded-2xl border border-cyan-200/30 bg-stone-950/84 px-3 py-2.5 text-stone-100 shadow-xl backdrop-blur-md">
-            <div className="flex items-center justify-between gap-2">
-                <span className="text-[10px] uppercase tracking-[0.24em] text-cyan-200/70">
-                    Voz de equipo
-                </span>
-                <span
-                    className={`h-2 w-2 rounded-full ${getStatusColor(state)}`}
-                    aria-hidden
-                />
-            </div>
+        <div
+            className="pointer-events-auto absolute right-3 top-14 z-30 flex items-center gap-1.5 rounded-full border border-cyan-200/25 bg-stone-950/80 py-1 pl-2 pr-1.5 text-stone-100 shadow-lg backdrop-blur-md"
+            title={title}
+        >
+            <span
+                className={`h-1.5 w-1.5 shrink-0 rounded-full ${getStatusColor(state)}`}
+                aria-hidden
+            />
 
-            <div className="mt-1.5 flex items-center gap-2">
+            {state.joined ? (
                 <span
-                    className={`h-2.5 w-2.5 shrink-0 rounded-full transition-colors ${
+                    className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
                         state.peerSpeaking && !state.peerMuted
-                            ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.9)]"
+                            ? "bg-emerald-400 shadow-[0_0_6px_rgba(52,211,153,0.9)]"
                             : "bg-stone-600"
                     }`}
                     aria-hidden
                 />
-                <span className="truncate text-sm font-semibold text-stone-100">
-                    {state.peerName ?? "Companero"}
-                </span>
-            </div>
+            ) : null}
 
-            <div className="mt-0.5 text-[11px] text-stone-300/85">
-                {state.error ?? STATUS_LABELS[state.status]}
-            </div>
+            <span className="max-w-[90px] truncate text-[11px] font-medium text-stone-200">
+                {state.peerName ?? "Voz de equipo"}
+            </span>
 
             {state.joined ? (
                 <>
-                    <div
-                        className={`mt-2 rounded-lg border px-2 py-1.5 text-center text-[11px] font-semibold transition-colors ${
-                            state.transmitting
-                                ? "border-emerald-300/60 bg-emerald-400/15 text-emerald-200"
-                                : "border-stone-600/60 bg-stone-900/60 text-stone-300"
+                    <span
+                        className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
+                            state.transmitting ? "bg-emerald-400" : "bg-stone-700"
                         }`}
-                    >
-                        {state.transmitting
-                            ? "Micrófono abierto"
-                            : `Mantené ${pushToTalkLabel} para hablar`}
-                    </div>
+                        title={
+                            state.transmitting
+                                ? "Micrófono abierto"
+                                : `Mantené ${pushToTalkLabel} para hablar`
+                        }
+                        aria-hidden
+                    />
 
-                    <div className="mt-2 flex gap-2">
-                        <button
-                            type="button"
-                            onClick={onTogglePeerMute}
-                            className="flex-1 rounded-lg border border-stone-600/60 bg-stone-900/60 px-2 py-1 text-[11px] font-medium text-stone-200 transition-colors hover:bg-stone-800/80"
-                        >
-                            {state.peerMuted ? "Escuchar" : "Silenciar"}
-                        </button>
-                        <button
-                            type="button"
-                            onClick={onLeave}
-                            className="flex-1 rounded-lg border border-red-400/40 bg-red-500/10 px-2 py-1 text-[11px] font-medium text-red-200 transition-colors hover:bg-red-500/20"
-                        >
-                            Salir
-                        </button>
-                    </div>
+                    <button
+                        type="button"
+                        onClick={onTogglePeerMute}
+                        title={state.peerMuted ? "Escuchar" : "Silenciar"}
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-stone-300 transition-colors hover:bg-stone-800/80 hover:text-stone-100"
+                    >
+                        {state.peerMuted ? (
+                            <MutedIcon />
+                        ) : (
+                            <SpeakerIcon />
+                        )}
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={onLeave}
+                        title="Salir del chat de voz"
+                        className="flex h-5 w-5 items-center justify-center rounded-full text-red-300 transition-colors hover:bg-red-500/15 hover:text-red-200"
+                    >
+                        <LeaveIcon />
+                    </button>
                 </>
             ) : (
                 <button
                     type="button"
                     onClick={onJoin}
                     disabled={isBusy}
-                    className="mt-2 w-full rounded-lg border border-cyan-300/40 bg-cyan-400/10 px-2 py-1.5 text-[11px] font-semibold text-cyan-100 transition-colors hover:bg-cyan-400/20 disabled:cursor-not-allowed disabled:opacity-60"
+                    title={isBusy ? "Pidiendo micrófono..." : "Unirse al chat de voz"}
+                    className="flex h-5 w-5 items-center justify-center rounded-full text-cyan-200 transition-colors hover:bg-cyan-400/15 hover:text-cyan-100 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    {isBusy ? "Pidiendo micrófono..." : "Unirse al chat de voz"}
+                    <MicIcon />
                 </button>
             )}
         </div>
+    );
+}
+
+function MicIcon() {
+    return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+                d="M12 15a3 3 0 0 0 3-3V6a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3Z"
+                stroke="currentColor"
+                strokeWidth="2"
+            />
+            <path
+                d="M19 11a7 7 0 0 1-14 0M12 18v3"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+            />
+        </svg>
+    );
+}
+
+function SpeakerIcon() {
+    return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+                d="M4 9v6h4l5 4V5L8 9H4Z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+            />
+            <path
+                d="M17 9a4 4 0 0 1 0 6"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+            />
+        </svg>
+    );
+}
+
+function MutedIcon() {
+    return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path
+                d="M4 9v6h4l5 4V5L8 9H4Z"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+            />
+            <path d="M16 9l5 6M21 9l-5 6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
+    );
+}
+
+function LeaveIcon() {
+    return (
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <path d="M6 6l12 12M18 6L6 18" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+        </svg>
     );
 }

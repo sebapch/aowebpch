@@ -99,6 +99,10 @@ class LoadNpcs {
         tmpNPC.map = mapNum;
 
         const datNpc = vars.datNpc[npcIndex];
+        if (!datNpc) {
+            console.warn(`[GAME DATA] Plantilla NPC no encontrada para npcIndex ${npcIndex} en mapa ${mapNum}`);
+            return;
+        }
 
         tmpNPC.pos.x = parseInt(x);
         tmpNPC.pos.y = parseInt(y);

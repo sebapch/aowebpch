@@ -173,7 +173,7 @@ function getStarterLoadout(
         { idItem: 39, amount: 500 }, // Poción Verde (Agilidad)
     ];
 
-    const spells = Array.from({ length: 47 }, (_, i) => i + 1);
+    const spells = [9, 10, 15, 18, 20, 23, 25];
 
     switch (classKey) {
         case "mago":

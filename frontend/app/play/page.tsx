@@ -890,7 +890,7 @@ function HomeContent() {
     const [showFullscreenPrompt, setShowFullscreenPrompt] = useState(false);
     const [topHudSectionSize, setTopHudSectionSize] = useState<MeasuredHudSize>(
         {
-            width: CANVAS_BASE_WIDTH + 156 + HUD_GAP,
+            width: CANVAS_BASE_WIDTH + HUD_GAP + RIGHT_PANEL_WIDTH,
             height: DESKTOP_CONSOLE_HEIGHT,
         },
     );
@@ -2586,6 +2586,44 @@ function HomeContent() {
         [],
     );
 
+    const desktopChatTabsMenu = (
+        <div className="flex items-center gap-1.5 overflow-x-auto py-0.5 scrollbar-none">
+            {CHAT_TABS.map((tab) => {
+                const isActive = tab.id === activeChatTab;
+                const unreadCount =
+                    tab.id === "party" ||
+                    tab.id === "clan" ||
+                    tab.id === "whisper"
+                        ? unreadChatCounts[tab.id]
+                        : 0;
+
+                return (
+                    <button
+                        key={tab.id}
+                        type="button"
+                        onClick={(event) => {
+                            setActiveChatTab(tab.id);
+                            setIsChatMenuOpen(false);
+                            event.currentTarget.blur();
+                        }}
+                        className={`relative flex shrink-0 items-center justify-center rounded-full px-3 py-1 text-center text-[10px] font-medium uppercase tracking-[0.18em] transition focus:outline-none focus-visible:outline-none ${
+                            isActive
+                                ? "border border-cyan-200/30 bg-cyan-300/20 font-semibold text-cyan-100 shadow-[0_0_10px_rgba(34,211,238,0.15)]"
+                                : "border border-stone-800/40 bg-stone-900/60 text-stone-400 hover:bg-stone-800/80 hover:text-stone-200"
+                        }`}
+                    >
+                        {tab.label}
+                        {unreadCount > 0 ? (
+                            <span className="ml-1.5 flex min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-semibold leading-3 text-white">
+                                {unreadCount > 9 ? "9+" : unreadCount}
+                            </span>
+                        ) : null}
+                    </button>
+                );
+            })}
+        </div>
+    );
+
     const chatTabsMenu = (
         <div className="flex h-full flex-col gap-1 rounded-2xl border border-cyan-200/20 bg-stone-950/72 p-2 shadow-2xl backdrop-blur-[2px]">
             {CHAT_TABS.map((tab) => {
@@ -2688,53 +2726,45 @@ function HomeContent() {
                     {isDesktopConsoleLayout ? (
                         <ScaledHudFrame
                             scale={hudScale}
-                            baseWidth={CANVAS_BASE_WIDTH + 156 + HUD_GAP}
+                            baseWidth={
+                                CANVAS_BASE_WIDTH + HUD_GAP + RIGHT_PANEL_WIDTH
+                            }
                             onMeasure={handleTopHudSectionMeasure}
                         >
-                            <div
-                                className="pointer-events-auto flex items-start"
-                                style={{ gap: `${HUD_GAP}px` }}
-                            >
-                                <div
-                                    className="flex flex-1 flex-col overflow-hidden rounded-2xl border border-cyan-200/20 bg-stone-950/72 shadow-2xl backdrop-blur-[2px]"
-                                    style={{
-                                        width: `${CANVAS_BASE_WIDTH}px`,
-                                    }}
-                                >
-                                    <div
-                                        ref={consoleScrollRef}
-                                        className="h-[126px] overflow-y-auto px-4 py-3 text-xs leading-5 text-stone-200/90"
-                                    >
-                                        {visibleConsoleEntries.length ? (
-                                            visibleConsoleEntries.map(
-                                                (entry) => (
-                                                    <div
-                                                        key={entry.id}
-                                                        className="break-words"
-                                                        style={{
-                                                            color:
-                                                                entry.color ||
-                                                                "rgba(231, 229, 228, 0.92)",
-                                                        }}
-                                                    >
-                                                        {renderConsoleEntryText(
-                                                            entry.text,
-                                                        )}
-                                                    </div>
-                                                ),
-                                            )
-                                        ) : (
-                                            <div className="text-stone-300/55">
-                                                No hay mensajes en{" "}
-                                                {activeChatTabLabel.toLowerCase()}{" "}
-                                                todavía.
-                                            </div>
-                                        )}
-                                    </div>
+                            <div className="pointer-events-auto flex w-full flex-col overflow-hidden rounded-2xl border border-cyan-200/20 bg-stone-950/72 shadow-2xl backdrop-blur-[2px]">
+                                <div className="flex items-center justify-between border-b border-cyan-200/10 bg-stone-900/40 px-3.5 py-1.5">
+                                    {desktopChatTabsMenu}
+                                    {fullscreenToggleControl}
                                 </div>
-
-                                <div className="pointer-events-auto h-[126px] w-[156px] shrink-0">
-                                    {chatTabsMenu}
+                                <div
+                                    ref={consoleScrollRef}
+                                    className="h-[126px] overflow-y-auto px-4 py-2.5 text-xs leading-5 text-stone-200/90"
+                                >
+                                    {visibleConsoleEntries.length ? (
+                                        visibleConsoleEntries.map(
+                                            (entry) => (
+                                                <div
+                                                    key={entry.id}
+                                                    className="break-words"
+                                                    style={{
+                                                        color:
+                                                            entry.color ||
+                                                            "rgba(231, 229, 228, 0.92)",
+                                                    }}
+                                                >
+                                                    {renderConsoleEntryText(
+                                                        entry.text,
+                                                    )}
+                                                </div>
+                                            ),
+                                        )
+                                    ) : (
+                                        <div className="text-stone-300/55">
+                                            No hay mensajes en{" "}
+                                            {activeChatTabLabel.toLowerCase()}{" "}
+                                            todavía.
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         </ScaledHudFrame>
@@ -3215,11 +3245,7 @@ function HomeContent() {
                                 className="flex w-[320px] flex-col"
                                 style={{ gap: "12px" }}
                             >
-                                {isDesktopConsoleLayout ? (
-                                    <div className="pointer-events-none absolute right-0 top-0 z-30 -translate-y-[calc(100%+12px)]">
-                                        {fullscreenToggleControl}
-                                    </div>
-                                ) : null}
+
                                 <InventoryFloatingPanel
                                     hud={hud}
                                     mapName={status.worldName}
