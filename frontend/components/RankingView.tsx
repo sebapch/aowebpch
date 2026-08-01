@@ -11,7 +11,6 @@ import type {
     RankingPageData,
     RatingRankingEntry,
     RatingRankingPageData,
-    RatingTeamSize,
 } from "@/lib/ranking";
 
 type RankingViewProps = {
@@ -21,13 +20,11 @@ type RankingViewProps = {
 
 type RankingSortKey = "level" | "kills";
 type RankingClassFilter = "all" | number;
-type RankingViewMode = "general" | RatingTeamSize;
+type RankingViewMode = "general" | "rating";
 
 const viewModeOptions: Array<{ key: RankingViewMode; label: string }> = [
     { key: "general", label: "General" },
-    { key: 2, label: "2v2" },
-    { key: 3, label: "3v3" },
-    { key: 4, label: "4v4" },
+    { key: "rating", label: "ELO" },
 ];
 
 const MAX_LEVEL = 50;
@@ -285,13 +282,12 @@ export default function RankingView({
         }
 
         const controller = new AbortController();
-        const query = new URLSearchParams({ teamSize: String(viewMode) });
 
         setIsRatingLoading(true);
         setRatingEntries([]);
         setRatingHeads({});
 
-        fetch(`/api/ranking/rating?${query.toString()}`, {
+        fetch(`/api/ranking/rating`, {
             signal: controller.signal,
             cache: "no-store",
         })
@@ -395,9 +391,8 @@ export default function RankingView({
                     </div>
                 </section>
 
-                {viewMode !== "general" ? (
+                {viewMode === "rating" ? (
                     <RatingRankingTable
-                        teamSize={viewMode}
                         entries={ratingEntries}
                         headSpritesById={ratingHeads}
                         isLoading={isRatingLoading}
@@ -632,12 +627,10 @@ export default function RankingView({
 }
 
 function RatingRankingTable({
-    teamSize,
     entries,
     headSpritesById,
     isLoading,
 }: {
-    teamSize: RatingTeamSize;
     entries: RatingRankingEntry[];
     headSpritesById: Record<string, RankingHeadSprite | null>;
     isLoading: boolean;
@@ -646,10 +639,10 @@ function RatingRankingTable({
         <section className="game-card p-5 shadow-lg md:p-6">
             <div className="flex flex-col gap-1 border-b border-[#3d2719] pb-4">
                 <h2 className="text-lg font-bold uppercase tracking-wider text-white">
-                    Rating {teamSize}v{teamSize}
+                    Rating ELO
                 </h2>
                 <p className="text-xs text-slate-400">
-                    Todos los jugadores arrancan en 1200. Ganar suma lo mismo que pierde el rival.
+                    Un unico rating compartido entre 1v1, 2v2, 3v3 y 4v4. Todos los jugadores arrancan en 1200; ganar suma lo mismo que pierde el rival.
                 </p>
             </div>
 
@@ -670,7 +663,7 @@ function RatingRankingTable({
                     <div>
                         {entries.length === 0 && !isLoading ? (
                             <div className="px-6 py-8 text-xs text-slate-400">
-                                Todavia no hay partidas de {teamSize}v{teamSize} registradas.
+                                Todavia no hay partidas de arena registradas.
                             </div>
                         ) : (
                             entries.map((entry, index) => (

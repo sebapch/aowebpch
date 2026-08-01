@@ -588,7 +588,6 @@ export type ChallengeHistoryEntry = {
 
 export type CharacterRatingRecord = {
     character_id: string;
-    team_size: number;
     rating: number;
     games_played: number;
     wins: number;
@@ -631,6 +630,5 @@ export type RatingRankingEntryResponse = {
 };
 
 export type RatingRankingListResponse = {
-    teamSize: number;
     entries: RatingRankingEntryResponse[];
 };

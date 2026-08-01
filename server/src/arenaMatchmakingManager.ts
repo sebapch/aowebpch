@@ -8,11 +8,16 @@ import * as safeZone from "./safeZone";
 const vars = require("./vars");
 const funct = require("./functions");
 
+export type MatchmakingTeamSize = 2 | 3 | 4;
+
+const MATCHMAKING_TEAM_SIZES: MatchmakingTeamSize[] = [2, 3, 4];
+
 type QueueEntry = {
     id: string;
     leaderId: string;
     characterIds: string[];
     isParty: boolean;
+    teamSize: MatchmakingTeamSize;
     joinedAt: number;
 };
 
@@ -59,6 +64,10 @@ function sendConsoleMessage(user: RuntimeCharacter, message: string, color = "#E
     handleProtocol.console(message, color, 1, 0, client);
 }
 
+function isMatchmakingTeamSize(value: unknown): value is MatchmakingTeamSize {
+    return MATCHMAKING_TEAM_SIZES.includes(value as MatchmakingTeamSize);
+}
+
 export const arenaMatchmakingManager = {
     queue: [] as QueueEntry[],
 
@@ -102,7 +111,11 @@ export const arenaMatchmakingManager = {
         return this.queue.find((entry) => entry.characterIds.includes(strId));
     },
 
-    enqueue(idUser: string | number) {
+    enqueue(idUser: string | number, teamSize: unknown) {
+        if (!isMatchmakingTeamSize(teamSize)) {
+            throw new Error("Modo de matchmaking inválido. Elegí 2v2, 3v3 o 4v4.");
+        }
+
         const user = getCharacterById(idUser);
 
         if (!user) {
@@ -123,15 +136,15 @@ export const arenaMatchmakingManager = {
 
             const party = vars.parties?.[String(user.partyId)] as { memberIds?: Array<string | number> } | undefined;
 
-            if (!party || !Array.isArray(party.memberIds) || party.memberIds.length !== 2) {
-                throw new Error("La cola 2vs2 en party requiere una party de exactamente 2 jugadores.");
+            if (!party || !Array.isArray(party.memberIds) || party.memberIds.length !== teamSize) {
+                throw new Error(`La cola ${teamSize}vs${teamSize} en party requiere una party de exactamente ${teamSize} jugadores.`);
             }
 
             const members = party.memberIds
                 .map((mId) => getCharacterById(mId))
                 .filter((m): m is RuntimeCharacter => Boolean(m));
 
-            if (members.length !== 2) {
+            if (members.length !== teamSize) {
                 throw new Error("Todos los integrantes de la party deben estar conectados.");
             }
 
@@ -151,26 +164,28 @@ export const arenaMatchmakingManager = {
             leaderId: String(user.id),
             characterIds: teamMembers.map((m) => String(m.id)),
             isParty,
+            teamSize,
             joinedAt: now(),
         };
 
         this.queue.push(entry);
 
-        const currentTotal = this.getTotalPlayersInQueue();
+        const currentTotal = this.getTotalPlayersInQueue(teamSize);
 
         for (const member of teamMembers) {
             sendConsoleMessage(
                 member,
-                `[Arena 2v2] Te has unido a la cola de Matchmaking. (${currentTotal}/4 jugadores anotados)`,
+                `[Arena ${teamSize}v${teamSize}] Te has unido a la cola de Matchmaking. (${currentTotal}/${teamSize * 2} jugadores anotados)`,
                 "#00E676",
             );
         }
 
-        this.processQueue();
+        this.processQueue(teamSize);
 
         return {
             ok: true,
             inQueue: true,
+            teamSize,
             totalInQueue: currentTotal,
         };
     },
@@ -189,19 +204,21 @@ export const arenaMatchmakingManager = {
             const member = getCharacterById(charId);
 
             if (member) {
-                sendConsoleMessage(member, "[Arena 2v2] Has salido de la cola de matchmaking.", "#FF5252");
+                sendConsoleMessage(member, `[Arena ${entry.teamSize}v${entry.teamSize}] Has salido de la cola de matchmaking.`, "#FF5252");
             }
         }
 
         return {
             ok: true,
             inQueue: false,
-            totalInQueue: this.getTotalPlayersInQueue(),
+            totalInQueue: this.getTotalPlayersInQueue(entry.teamSize),
         };
     },
 
-    getTotalPlayersInQueue(): number {
-        return this.queue.reduce((acc, entry) => acc + entry.characterIds.length, 0);
+    getTotalPlayersInQueue(teamSize?: MatchmakingTeamSize): number {
+        return this.queue
+            .filter((entry) => teamSize === undefined || entry.teamSize === teamSize)
+            .reduce((acc, entry) => acc + entry.characterIds.length, 0);
     },
 
     pruneQueue() {
@@ -225,37 +242,39 @@ export const arenaMatchmakingManager = {
                 });
 
             if (entry.isParty) {
-                return validMembers.length === 2;
+                return validMembers.length === entry.teamSize;
             }
 
             return validMembers.length === 1;
         });
     },
 
-    processQueue() {
+    processQueue(teamSize: MatchmakingTeamSize) {
         this.pruneQueue();
 
-        const totalPlayers = this.getTotalPlayersInQueue();
+        const requiredPlayers = teamSize * 2;
+        const totalPlayers = this.getTotalPlayersInQueue(teamSize);
 
-        if (totalPlayers < 4) {
+        if (totalPlayers < requiredPlayers) {
             return;
         }
 
+        const eligibleEntries = this.queue.filter((entry) => entry.teamSize === teamSize);
         const selectedEntries: QueueEntry[] = [];
         let accumulatedPlayers = 0;
 
-        for (const entry of this.queue) {
-            if (accumulatedPlayers + entry.characterIds.length <= 4) {
+        for (const entry of eligibleEntries) {
+            if (accumulatedPlayers + entry.characterIds.length <= requiredPlayers) {
                 selectedEntries.push(entry);
                 accumulatedPlayers += entry.characterIds.length;
 
-                if (accumulatedPlayers === 4) {
+                if (accumulatedPlayers === requiredPlayers) {
                     break;
                 }
             }
         }
 
-        if (accumulatedPlayers !== 4) {
+        if (accumulatedPlayers !== requiredPlayers) {
             return;
         }
 
@@ -267,62 +286,85 @@ export const arenaMatchmakingManager = {
             }
         }
 
-        const allMatchedUsers: RuntimeCharacter[] = [];
-
-        for (const entry of selectedEntries) {
-            for (const charId of entry.characterIds) {
-                const user = getCharacterById(charId);
-
-                if (user) {
-                    allMatchedUsers.push(user);
+        const blocks = selectedEntries
+            .map((entry) => {
+                const members = entry.characterIds
+                    .map((id) => getCharacterById(id))
+                    .filter((u): u is RuntimeCharacter => Boolean(u));
+                const avgLevel =
+                    members.reduce((sum, m) => sum + Number(m.level ?? 1), 0) / (members.length || 1);
+                return { members, avgLevel };
+            })
+            .filter((block) => block.members.length > 0)
+            .sort((a, b) => {
+                if (b.members.length !== a.members.length) {
+                    return b.members.length - a.members.length;
                 }
-            }
-        }
+                return b.avgLevel - a.avgLevel;
+            });
 
-        if (allMatchedUsers.length !== 4) {
-            this.processQueue();
+        const allMatchedUsers = blocks.flatMap((block) => block.members);
+
+        if (allMatchedUsers.length !== requiredPlayers) {
+            this.processQueue(teamSize);
             return;
         }
 
-        let teamOne: RuntimeCharacter[] = [];
-        let teamTwo: RuntimeCharacter[] = [];
+        const teamOne: RuntimeCharacter[] = [];
+        const teamTwo: RuntimeCharacter[] = [];
+        let teamOneLevelSum = 0;
+        let teamTwoLevelSum = 0;
+        let assignmentFailed = false;
 
-        if (selectedEntries.length === 2 && selectedEntries[0].isParty && selectedEntries[1].isParty) {
-            teamOne = selectedEntries[0].characterIds
-                .map((id) => getCharacterById(id))
-                .filter((u): u is RuntimeCharacter => Boolean(u));
-            teamTwo = selectedEntries[1].characterIds
-                .map((id) => getCharacterById(id))
-                .filter((u): u is RuntimeCharacter => Boolean(u));
-        } else if (selectedEntries.length === 3 && selectedEntries.some((e) => e.isParty)) {
-            const partyEntry = selectedEntries.find((e) => e.isParty)!;
-            const soloEntries = selectedEntries.filter((e) => !e.isParty);
+        for (const block of blocks) {
+            const blockSize = block.members.length;
+            const teamOneFits = teamOne.length + blockSize <= teamSize;
+            const teamTwoFits = teamTwo.length + blockSize <= teamSize;
 
-            teamOne = partyEntry.characterIds
-                .map((id) => getCharacterById(id))
-                .filter((u): u is RuntimeCharacter => Boolean(u));
-            teamTwo = soloEntries
-                .flatMap((e) => e.characterIds)
-                .map((id) => getCharacterById(id))
-                .filter((u): u is RuntimeCharacter => Boolean(u));
-        } else {
-            allMatchedUsers.sort((a, b) => Number(b.level ?? 1) - Number(a.level ?? 1));
+            if (!teamOneFits && !teamTwoFits) {
+                assignmentFailed = true;
+                break;
+            }
 
-            teamOne = [allMatchedUsers[0], allMatchedUsers[3]];
-            teamTwo = [allMatchedUsers[1], allMatchedUsers[2]];
+            let assignToTeamOne: boolean;
+
+            if (teamOneFits && teamTwoFits) {
+                assignToTeamOne =
+                    teamOne.length !== teamTwo.length
+                        ? teamOne.length < teamTwo.length
+                        : teamOneLevelSum <= teamTwoLevelSum;
+            } else {
+                assignToTeamOne = teamOneFits;
+            }
+
+            if (assignToTeamOne) {
+                teamOne.push(...block.members);
+                teamOneLevelSum += block.avgLevel * blockSize;
+            } else {
+                teamTwo.push(...block.members);
+                teamTwoLevelSum += block.avgLevel * blockSize;
+            }
+        }
+
+        if (assignmentFailed || teamOne.length !== teamSize || teamTwo.length !== teamSize) {
+            // No se pudo formar una partida balanceada sin partir una party
+            // (ej: tres parties de 2 en una cola de 3v3). Devolvemos las
+            // entries a la cola y esperamos a que cambie la composición.
+            this.queue.unshift(...selectedEntries);
+            return;
         }
 
         for (const user of allMatchedUsers) {
-            sendConsoleMessage(user, "¡PARTIDA ENCONTRADA! Entrando a la Arena 2v2...", "#00E676");
+            sendConsoleMessage(user, `¡PARTIDA ENCONTRADA! Entrando a la Arena ${teamSize}v${teamSize}...`, "#00E676");
         }
 
         try {
-            getChallengeManager().createChallengeVetoSession(2, teamOne, teamTwo);
+            getChallengeManager().createChallengeVetoSession(teamSize, teamOne, teamTwo);
         } catch (error) {
             funct.dumpError(error);
 
             for (const user of allMatchedUsers) {
-                sendConsoleMessage(user, "[Arena 2v2] Error al iniciar la partida. Regresando a la cola.", "#FF5252");
+                sendConsoleMessage(user, `[Arena ${teamSize}v${teamSize}] Error al iniciar la partida. Regresando a la cola.`, "#FF5252");
             }
         }
     },

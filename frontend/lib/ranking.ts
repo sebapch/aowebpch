@@ -31,8 +31,6 @@ export type RankingHeadSprite = {
     sourceY: number;
 };
 
-export type RatingTeamSize = 2 | 3 | 4;
-
 export type RatingRankingEntry = {
     characterId: string;
     name: string;
@@ -51,7 +49,6 @@ export type RatingRankingEntry = {
 };
 
 export type RatingRankingResponse = {
-    teamSize: RatingTeamSize;
     entries: RatingRankingEntry[];
 };
 

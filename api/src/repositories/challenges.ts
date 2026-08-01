@@ -14,14 +14,14 @@ const challengeParticipantSchema = z.object({
 
 const createChallengeHistorySchema = z.object({
     matchId: z.string().trim().min(1).max(120),
-    teamSize: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+    teamSize: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     instanceMapId: z.coerce.number().int().min(1),
     baseMapId: z.coerce.number().int().min(1).optional().nullable(),
     winnerSide: z.union([z.literal(1), z.literal(2)]),
     finishReason: z.string().trim().min(1).max(120).optional().nullable(),
     teamOneScore: z.coerce.number().int().min(0).max(99),
     teamTwoScore: z.coerce.number().int().min(0).max(99),
-    participants: z.array(challengeParticipantSchema).min(4).max(8),
+    participants: z.array(challengeParticipantSchema).min(2).max(8),
     startedAt: z.union([z.string().datetime(), z.date()]),
     finishedAt: z.union([z.string().datetime(), z.date()]),
 });

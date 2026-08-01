@@ -4445,7 +4445,7 @@ async function retosAction(ws: RuntimeClient) {
                 break;
             }
             case "enqueue2v2": {
-                arenaMatchmakingManager.enqueue(ws.id!);
+                arenaMatchmakingManager.enqueue(ws.id!, Number(payload.teamSize ?? 2));
                 break;
             }
             case "dequeue2v2": {

@@ -3813,12 +3813,12 @@ function HomeContent() {
                         setRetosActionKey(`cancel-${challengeId}`);
                         requestRetosState("cancel", { challengeId });
                     }}
-                    onEnqueueMatchmaking={() => {
-                        setRetosActionKey("enqueue2v2");
-                        requestRetosState("enqueue2v2");
+                    onEnqueueMatchmaking={(teamSize) => {
+                        setRetosActionKey(`enqueue-${teamSize}`);
+                        requestRetosState("enqueue2v2", { teamSize });
                     }}
                     onDequeueMatchmaking={() => {
-                        setRetosActionKey("dequeue2v2");
+                        setRetosActionKey("dequeue");
                         requestRetosState("dequeue2v2");
                     }}
                 />

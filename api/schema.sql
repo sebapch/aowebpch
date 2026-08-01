@@ -456,21 +456,63 @@ ALTER TABLE challenge_history
 
 ALTER TABLE challenge_history
     ADD CONSTRAINT challenge_history_team_size_check
-    CHECK (team_size IN (2, 3, 4));
+    CHECK (team_size IN (1, 2, 3, 4));
+
+-- El rating antes se partia por team_size (un personaje tenia hasta 3 ratings
+-- independientes: 2v2/3v3/4v4). Ahora es un unico rating compartido por
+-- personaje sin importar el tipo de pelea. Si la tabla vieja con team_size
+-- todavia existe, se consolida en una sola fila por personaje antes de
+-- recrearla con la nueva forma.
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'character_ratings' AND column_name = 'team_size'
+    ) THEN
+        CREATE TABLE character_ratings_shared AS
+        SELECT
+            character_id,
+            ROUND(
+                SUM(rating::numeric * GREATEST(games_played, 1))
+                / SUM(GREATEST(games_played, 1))
+            )::integer AS rating,
+            SUM(games_played)::integer AS games_played,
+            SUM(wins)::integer AS wins,
+            SUM(losses)::integer AS losses,
+            MAX(updated_at) AS updated_at
+        FROM character_ratings
+        GROUP BY character_id;
+
+        DROP TABLE character_ratings;
+
+        ALTER TABLE character_ratings_shared RENAME TO character_ratings;
+        ALTER TABLE character_ratings ADD PRIMARY KEY (character_id);
+        ALTER TABLE character_ratings
+            ADD CONSTRAINT character_ratings_character_id_fkey
+            FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE;
+        ALTER TABLE character_ratings ALTER COLUMN rating SET DEFAULT 1200;
+        ALTER TABLE character_ratings ALTER COLUMN rating SET NOT NULL;
+        ALTER TABLE character_ratings ALTER COLUMN games_played SET DEFAULT 0;
+        ALTER TABLE character_ratings ALTER COLUMN games_played SET NOT NULL;
+        ALTER TABLE character_ratings ALTER COLUMN wins SET DEFAULT 0;
+        ALTER TABLE character_ratings ALTER COLUMN wins SET NOT NULL;
+        ALTER TABLE character_ratings ALTER COLUMN losses SET DEFAULT 0;
+        ALTER TABLE character_ratings ALTER COLUMN losses SET NOT NULL;
+        ALTER TABLE character_ratings ALTER COLUMN updated_at SET DEFAULT NOW();
+        ALTER TABLE character_ratings ALTER COLUMN updated_at SET NOT NULL;
+    END IF;
+END $$;
 
 CREATE TABLE IF NOT EXISTS character_ratings (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    character_id UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-    team_size INTEGER NOT NULL CHECK (team_size IN (2, 3, 4)),
+    character_id UUID PRIMARY KEY REFERENCES characters(id) ON DELETE CASCADE,
     rating INTEGER NOT NULL DEFAULT 1200,
     games_played INTEGER NOT NULL DEFAULT 0,
     wins INTEGER NOT NULL DEFAULT 0,
     losses INTEGER NOT NULL DEFAULT 0,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    UNIQUE (character_id, team_size)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
-CREATE INDEX IF NOT EXISTS idx_character_ratings_leaderboard ON character_ratings(team_size, rating DESC);
+CREATE INDEX IF NOT EXISTS idx_character_ratings_leaderboard ON character_ratings(rating DESC);
 
 CREATE TABLE IF NOT EXISTS rating_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),

@@ -16,7 +16,7 @@ type RetosModalProps = {
     onCreateChallenge: (teamSize: 1 | 2 | 3 | 4) => void;
     onJoinChallenge: (challengeId: string) => void;
     onCancelChallenge: (challengeId: string) => void;
-    onEnqueueMatchmaking?: () => void;
+    onEnqueueMatchmaking?: (teamSize: 2 | 3 | 4) => void;
     onDequeueMatchmaking?: () => void;
 };
 
@@ -82,26 +82,31 @@ export default function RetosModal({
                     <section className="space-y-3">
                         <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/5 p-2.5 space-y-2">
                             <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
-                                <span>🎯</span> Matchmaking 2v2 (Modo CS)
+                                <span>🎯</span> Matchmaking (Modo CS)
                             </div>
-                            <div className="grid grid-cols-1 gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={() => onEnqueueMatchmaking?.()}
-                                    disabled={actionKey !== null}
-                                    className="rounded-md border border-emerald-500/30 bg-emerald-500/15 px-3 py-2 text-center text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/25 disabled:opacity-60"
-                                >
-                                    {actionKey === "enqueue2v2" ? "Entrando..." : "Entrar a Cola 2v2"}
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => onDequeueMatchmaking?.()}
-                                    disabled={actionKey !== null}
-                                    className="rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-center text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-60"
-                                >
-                                    {actionKey === "dequeue2v2" ? "Saliendo..." : "Salir de Cola"}
-                                </button>
+                            <div className="grid grid-cols-3 gap-1.5">
+                                {([2, 3, 4] as const).map((teamSize) => (
+                                    <button
+                                        key={teamSize}
+                                        type="button"
+                                        onClick={() => onEnqueueMatchmaking?.(teamSize)}
+                                        disabled={actionKey !== null}
+                                        className="rounded-md border border-emerald-500/30 bg-emerald-500/15 px-2 py-2 text-center text-xs font-medium text-emerald-200 transition hover:bg-emerald-500/25 disabled:opacity-60"
+                                    >
+                                        {actionKey === `enqueue-${teamSize}`
+                                            ? "..."
+                                            : `Entrar ${teamSize}v${teamSize}`}
+                                    </button>
+                                ))}
                             </div>
+                            <button
+                                type="button"
+                                onClick={() => onDequeueMatchmaking?.()}
+                                disabled={actionKey !== null}
+                                className="w-full rounded-md border border-rose-500/30 bg-rose-500/10 px-3 py-1.5 text-center text-xs font-medium text-rose-300 transition hover:bg-rose-500/20 disabled:opacity-60"
+                            >
+                                {actionKey === "dequeue" ? "Saliendo..." : "Salir de Cola"}
+                            </button>
                         </div>
 
                         <div className="space-y-1.5">

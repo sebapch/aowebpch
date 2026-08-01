@@ -3,23 +3,15 @@ import { getApiBaseUrlCandidates } from "@/lib/api-base-url";
 import { getRankingHeadSprites } from "@/lib/ranking-heads";
 import type { RatingRankingPageData, RatingRankingResponse } from "@/lib/ranking";
 
-export async function GET(request: Request) {
-    const { searchParams } = new URL(request.url);
-    const rawTeamSize = Number.parseInt(searchParams.get("teamSize") ?? "", 10);
-    const teamSize = ([2, 3, 4].includes(rawTeamSize) ? rawTeamSize : 2) as 2 | 3 | 4;
-    const query = new URLSearchParams({ teamSize: String(teamSize) });
-
+export async function GET() {
     try {
         let ranking: RatingRankingResponse | null = null;
 
         for (const apiBaseUrl of getApiBaseUrlCandidates()) {
             try {
-                const response = await fetch(
-                    `${apiBaseUrl}/ranking/rating?${query.toString()}`,
-                    {
-                        next: { revalidate: 60 },
-                    },
-                );
+                const response = await fetch(`${apiBaseUrl}/ranking/rating`, {
+                    next: { revalidate: 60 },
+                });
 
                 if (!response.ok) {
                     throw new Error("No se pudo cargar el ranking de rating");
@@ -43,7 +35,6 @@ export async function GET(request: Request) {
             ranking.entries.map((entry) => entry.headId),
         );
         const payload: RatingRankingPageData = {
-            teamSize: ranking.teamSize,
             entries: ranking.entries,
             headSpritesById,
         };
@@ -56,7 +47,6 @@ export async function GET(request: Request) {
     } catch (error) {
         console.error("No se pudo cargar el ranking de rating:", error);
         return NextResponse.json({
-            teamSize,
             entries: [],
             headSpritesById: {},
         } satisfies RatingRankingPageData);

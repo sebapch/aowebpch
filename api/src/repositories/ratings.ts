@@ -22,7 +22,7 @@ type MatchParticipantInput = {
 
 const applyMatchRatingsSchema = z.object({
     challengeHistoryId: z.string().uuid(),
-    teamSize: z.union([z.literal(2), z.literal(3), z.literal(4)]),
+    teamSize: z.union([z.literal(1), z.literal(2), z.literal(3), z.literal(4)]),
     winnerSide: z.union([z.literal(1), z.literal(2)]),
     participants: z
         .array(
@@ -31,7 +31,7 @@ const applyMatchRatingsSchema = z.object({
                 teamSide: z.union([z.literal(1), z.literal(2)]),
             }),
         )
-        .min(4)
+        .min(2)
         .max(8),
 });
 
@@ -58,11 +58,11 @@ export async function applyMatchRatings(
 
     await client.query(
         `
-            INSERT INTO character_ratings (character_id, team_size)
-            SELECT unnest($1::uuid[]), $2
-            ON CONFLICT (character_id, team_size) DO NOTHING
+            INSERT INTO character_ratings (character_id)
+            SELECT unnest($1::uuid[])
+            ON CONFLICT (character_id) DO NOTHING
         `,
-        [characterIds, teamSize],
+        [characterIds],
     );
 
     const currentRatings = await client.query<{
@@ -72,10 +72,10 @@ export async function applyMatchRatings(
         `
             SELECT character_id, rating
             FROM character_ratings
-            WHERE team_size = $1 AND character_id = ANY($2::uuid[])
+            WHERE character_id = ANY($1::uuid[])
             FOR UPDATE
         `,
-        [teamSize, characterIds],
+        [characterIds],
     );
 
     const ratingByCharacterId = new Map(
@@ -127,9 +127,9 @@ export async function applyMatchRatings(
                     wins = wins + $2,
                     losses = losses + $3,
                     updated_at = NOW()
-                WHERE character_id = $4 AND team_size = $5
+                WHERE character_id = $4
             `,
-            [after, won ? 1 : 0, won ? 0 : 1, participant.characterId, teamSize],
+            [after, won ? 1 : 0, won ? 0 : 1, participant.characterId],
         );
 
         await client.query(
@@ -173,15 +173,7 @@ function toRatingRankingEntryResponse(
     };
 }
 
-const listRatingRankingSchema = z.object({
-    teamSize: z.union([z.literal(2), z.literal(3), z.literal(4)]),
-});
-
-export async function listRatingRanking(options: {
-    teamSize: number;
-}): Promise<RatingRankingListResponse> {
-    const parsed = listRatingRankingSchema.parse(options);
-
+export async function listRatingRanking(): Promise<RatingRankingListResponse> {
     const result = await pool.query<RatingRankingEntryRecord>(
         `
             SELECT
@@ -205,18 +197,15 @@ export async function listRatingRanking(options: {
             FROM character_ratings cr
             JOIN characters c ON c.id = cr.character_id
             LEFT JOIN clans cl ON cl.id = c.clan_id
-            WHERE cr.team_size = $1
-              AND c.deleted_at IS NULL
+            WHERE c.deleted_at IS NULL
               AND (c.banned IS NULL OR c.banned < NOW())
               AND COALESCE(c.privileges, 0) = 0
             ORDER BY cr.rating DESC, cr.games_played DESC, c.name ASC
             LIMIT 50
         `,
-        [parsed.teamSize],
     );
 
     return {
-        teamSize: parsed.teamSize,
         entries: result.rows.map(toRatingRankingEntryResponse),
     };
 }

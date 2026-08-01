@@ -377,19 +377,9 @@ app.get("/ranking", async (request, response) => {
     }
 });
 
-app.get("/ranking/rating", async (request, response) => {
+app.get("/ranking/rating", async (_request, response) => {
     try {
-        const rawTeamSize =
-            typeof request.query.teamSize === "string"
-                ? Number.parseInt(request.query.teamSize, 10)
-                : Number.NaN;
-
-        if (![2, 3, 4].includes(rawTeamSize)) {
-            response.status(400).json({ error: "teamSize must be 2, 3, or 4" });
-            return;
-        }
-
-        const result = await listRatingRanking({ teamSize: rawTeamSize });
+        const result = await listRatingRanking();
         response.json(result);
     } catch (error) {
         response.status(500).json({
