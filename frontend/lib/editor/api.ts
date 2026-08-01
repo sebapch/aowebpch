@@ -1,8 +1,10 @@
 import type {
     DataNpc,
+    DataObj,
     EditorHealth,
     EditorMapBundle,
     GameNpcRecord,
+    GameObjectRecord,
     ItemTemplateSummary,
     MapNpcPlacement,
     MapSummary,
@@ -175,4 +177,51 @@ export async function searchItemTemplates(search: string): Promise<ItemTemplateS
         `/api/editor/item-templates?${params.toString()}`,
     );
     return objects;
+}
+
+export type ItemListFilters = {
+    search?: string;
+    objType?: number;
+    page?: number;
+    limit?: number;
+};
+
+export type ItemListResult = {
+    objects: ItemTemplateSummary[];
+    pagination: { page: number; pageSize: number; total: number; totalPages: number };
+};
+
+export async function fetchItemList(filters: ItemListFilters): Promise<ItemListResult> {
+    const params = new URLSearchParams();
+
+    if (filters.search) {
+        params.set("search", filters.search);
+    }
+
+    if (typeof filters.objType === "number") {
+        params.set("objType", String(filters.objType));
+    }
+
+    if (filters.page) {
+        params.set("page", String(filters.page));
+    }
+
+    if (filters.limit) {
+        params.set("limit", String(filters.limit));
+    }
+
+    return request<ItemListResult>(`/api/editor/items?${params.toString()}`);
+}
+
+export function fetchItemTemplate(id: number): Promise<GameObjectRecord> {
+    return request<GameObjectRecord>(`/api/editor/items/${id}`);
+}
+
+export async function saveItemTemplate(id: number, data: DataObj): Promise<GameObjectRecord> {
+    const result = await request<{ unchanged: boolean; object: GameObjectRecord }>(`/api/editor/items/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+    });
+    return result.object;
 }

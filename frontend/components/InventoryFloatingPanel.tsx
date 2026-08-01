@@ -22,6 +22,7 @@ import {
     Trash2,
     MoreHorizontal,
 } from "lucide-react";
+import { EloRankBadgeCard } from "./game/EloRankBadgeCard";
 import type {
     CharacterStatsSnapshot,
     InventoryItem,
@@ -2552,6 +2553,13 @@ export default function InventoryFloatingPanel({
                                             ) : null}
                                         </div>
                                     ) : null}
+
+                                    <EloRankBadgeCard
+                                        rating={hud?.rating}
+                                        wins={hud?.arenaWins}
+                                        losses={hud?.arenaLosses}
+                                        className="mt-auto"
+                                    />
                                 </div>
                             ) : (
                                 <div className="mt-2 flex min-h-0 flex-1 flex-col gap-2">

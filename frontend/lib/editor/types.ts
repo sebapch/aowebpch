@@ -124,8 +124,56 @@ export type ItemTemplateSummary = {
     id: number;
     name: string;
     objType: number;
+    grhIndex: number;
     version: number;
     updatedAt: string;
+};
+
+/** Espejo de `OBJECT_DEFAULTS` (`server/src/objectData.ts`): campos conocidos + resto pass-through. */
+export type DataObj = {
+    name: string;
+    objType: number;
+    valor: number;
+    grhIndex: number;
+    tipoPocion?: number;
+    minModificador?: number;
+    maxModificador?: number;
+    anim?: number;
+    agarrable?: number;
+    minHit?: number;
+    maxHit?: number;
+    minDef?: number;
+    maxDef?: number;
+    minDefMag?: number;
+    maxDefMag?: number;
+    resistenciaMagica?: number;
+    magicDamageBonus?: number;
+    magicPenetration?: number;
+    staffDamageBonus?: number;
+    newbie?: number;
+    proyectil?: number;
+    noSeCae?: number;
+    clasesNoPermitidas?: number[];
+    indexAbierta?: number;
+    indexCerrada?: number;
+    llave?: number;
+    cerrada?: number;
+    spellIndex?: number;
+    razaEnana?: number;
+    abriga?: number;
+    apu?: number;
+    porcentaje?: number;
+    [key: string]: unknown;
+};
+
+export type GameObjectRecord = {
+    id: number;
+    name: string;
+    objType: number;
+    version: number;
+    updatedAt: string;
+    checksum: string;
+    data: DataObj;
 };
 
 export type MapSummary = {

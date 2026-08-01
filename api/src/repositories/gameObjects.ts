@@ -97,6 +97,7 @@ function toGameObjectSummary(row: GameObjectRow) {
     id: row.id,
     name: row.name,
     objType: row.obj_type,
+    grhIndex: Number(row.data?.grhIndex ?? 0),
     version: Number(row.version),
     updatedAt: row.updated_at.toISOString(),
   };

@@ -35,6 +35,7 @@ import { MapConnectionsPanel } from "./MapConnectionsPanel";
 import { MapMetaPanel } from "./MapMetaPanel";
 import { MapSearchModal } from "./MapSearchModal";
 import { NewMapModal } from "./NewMapModal";
+import { ItemsPanel } from "./ItemsPanel";
 import { NpcPanel } from "./NpcPanel";
 import { NpcSelectorModal } from "./NpcSelectorModal";
 import { TileInspector } from "./TileInspector";
@@ -103,6 +104,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [graphicsCatalogOpen, setGraphicsCatalogOpen] = useState(false);
     const [metaPanelOpen, setMetaPanelOpen] = useState(false);
     const [arenaPanelOpen, setArenaPanelOpen] = useState(false);
+    const [itemsPanelOpen, setItemsPanelOpen] = useState(false);
     const [armedArenaTeam, setArmedArenaTeam] = useState<1 | 2 | null>(null);
     const [connectionsOpen, setConnectionsOpen] = useState(false);
     const [newMapOpen, setNewMapOpen] = useState(false);
@@ -1159,6 +1161,15 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
                 <button
                     type="button"
+                    onClick={() => setItemsPanelOpen(true)}
+                    className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800"
+                    title="Ver y editar el catalogo de items"
+                >
+                    Items
+                </button>
+
+                <button
+                    type="button"
                     disabled={!model}
                     onClick={() => setArenaPanelOpen(true)}
                     className={`rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
@@ -1825,6 +1836,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             {npcPanelIndex !== null && (
                 <NpcPanel npcIndex={npcPanelIndex} onClose={() => setNpcPanelIndex(null)} />
             )}
+
+            {itemsPanelOpen && <ItemsPanel onClose={() => setItemsPanelOpen(false)} />}
 
             <NpcSelectorModal
                 isOpen={catalogOpen}

@@ -533,6 +533,9 @@ export interface PlayerHudState {
     buffAgilidadUpdatedAt?: number;
     buffFuerzaUpdatedAt?: number;
     gold?: number;
+    rating?: number;
+    arenaWins?: number;
+    arenaLosses?: number;
     inventory: InventoryItem[];
     spells: SpellEntry[];
     partyMembers: PartyHudMember[];
