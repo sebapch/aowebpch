@@ -115,6 +115,7 @@ const clientPacketID = {
     spellVisual: 80,
     entityVitalsDelta: 81,
     voiceSignal: 82,
+    challengeVetoState: 83,
 } as const;
 
 const serverPacketID = {

@@ -23,6 +23,7 @@ import CharacterStatsModal from "../../components/CharacterStatsModal";
 import CraftingModal from "../../components/CraftingModal";
 import MarketModal from "../../components/MarketModal";
 import RetosModal from "../../components/RetosModal";
+import ChallengeVetoModal from "../../components/ChallengeVetoModal";
 import TeamVoicePanel from "../../components/TeamVoicePanel";
 import TradeModal from "../../components/TradeModal";
 import {
@@ -42,6 +43,7 @@ import {
 } from "../../lib/hotkeys";
 import type {
     BailOffer,
+    ChallengeVetoState,
     CraftingState,
     CharacterStatsSnapshot,
     ChatChannel,
@@ -767,10 +769,19 @@ function HomeContent() {
     const [retosError, setRetosError] = useState<string | null>(null);
     const [retosInfo, setRetosInfo] = useState<string | null>(null);
     const [retosActionRequest, setRetosActionRequest] = useState<{
-        action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2";
+        action:
+            | "refresh"
+            | "create"
+            | "join"
+            | "cancel"
+            | "enqueue2v2"
+            | "dequeue2v2"
+            | "vetoBan";
         payload?: Record<string, unknown>;
         token: number;
     } | null>(null);
+    const [challengeVetoState, setChallengeVetoState] =
+        useState<ChallengeVetoState | null>(null);
     const [challengeOverlayText, setChallengeOverlayText] = useState<
         string | null
     >(null);
@@ -1040,7 +1051,14 @@ function HomeContent() {
 
     const requestRetosState = useCallback(
         (
-            action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2",
+            action:
+                | "refresh"
+                | "create"
+                | "join"
+                | "cancel"
+                | "enqueue2v2"
+                | "dequeue2v2"
+                | "vetoBan",
             payload?: Record<string, unknown>,
         ) => {
             setRetosError(null);
@@ -1062,6 +1080,18 @@ function HomeContent() {
 
         requestRetosState("refresh");
     }, [requestRetosState, retosOpen]);
+
+    useEffect(() => {
+        if (!challengeVetoState?.resolved) {
+            return;
+        }
+
+        const timeoutId = window.setTimeout(() => {
+            setChallengeVetoState(null);
+        }, 2500);
+
+        return () => window.clearTimeout(timeoutId);
+    }, [challengeVetoState]);
 
     useEffect(() => {
         let cancelled = false;
@@ -1666,6 +1696,7 @@ function HomeContent() {
         setTradeState(null);
         setTradeStatusMessage(null);
         setRetosState(null);
+        setChallengeVetoState(null);
         setRetosOpen(false);
         setRetosLoading(false);
         setRetosActionKey(null);
@@ -2836,6 +2867,10 @@ function HomeContent() {
                                     onTradeStateChange={setTradeState}
                                     onMarketStateChange={setMarketState}
                                     onRetosStateChange={setRetosState}
+                                    onChallengeVetoStateChange={(vetoState) => {
+                                        setChallengeVetoState(vetoState);
+                                        setRetosActionKey(null);
+                                    }}
                                     onBailStateChange={setBailState}
                                     onCraftingStateChange={setCraftingState}
                                     onAdminIntervalsOpen={() =>
@@ -3783,6 +3818,20 @@ function HomeContent() {
                     onDequeueMatchmaking={() => {
                         setRetosActionKey("dequeue2v2");
                         requestRetosState("dequeue2v2");
+                    }}
+                />
+            ) : null}
+
+            {challengeVetoState ? (
+                <ChallengeVetoModal
+                    vetoState={challengeVetoState}
+                    actionKey={retosActionKey}
+                    onBanMap={(mapId) => {
+                        setRetosActionKey(`vetoban-${mapId}`);
+                        requestRetosState("vetoBan", {
+                            vetoId: challengeVetoState.vetoId,
+                            mapId,
+                        });
                     }}
                 />
             ) : null}

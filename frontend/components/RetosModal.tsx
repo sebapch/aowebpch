@@ -13,7 +13,7 @@ type RetosModalProps = {
     actionKey: string | null;
     onClose: () => void;
     onRefresh: () => void;
-    onCreateChallenge: (teamSize: 1 | 2) => void;
+    onCreateChallenge: (teamSize: 1 | 2 | 3 | 4) => void;
     onJoinChallenge: (challengeId: string) => void;
     onCancelChallenge: (challengeId: string) => void;
     onEnqueueMatchmaking?: () => void;
@@ -107,27 +107,19 @@ export default function RetosModal({
                         <div className="space-y-1.5">
                             <div className="text-xs font-medium text-stone-400">Duelos Directos</div>
                             <div className="grid grid-cols-2 gap-2">
-                                <button
-                                    type="button"
-                                    onClick={() => onCreateChallenge(1)}
-                                    disabled={actionKey !== null}
-                                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left text-xs transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    {actionKey === "create-1"
-                                        ? "Crear 1v1..."
-                                        : "Crear 1v1"}
-                                </button>
-
-                                <button
-                                    type="button"
-                                    onClick={() => onCreateChallenge(2)}
-                                    disabled={actionKey !== null}
-                                    className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left text-xs transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                                >
-                                    {actionKey === "create-2"
-                                        ? "Crear 2v2..."
-                                        : "Crear 2v2"}
-                                </button>
+                                {([1, 2, 3, 4] as const).map((teamSize) => (
+                                    <button
+                                        key={teamSize}
+                                        type="button"
+                                        onClick={() => onCreateChallenge(teamSize)}
+                                        disabled={actionKey !== null}
+                                        className="rounded-lg border border-white/10 bg-white/5 px-3 py-2.5 text-left text-xs transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                                    >
+                                        {actionKey === `create-${teamSize}`
+                                            ? `Crear ${teamSize}v${teamSize}...`
+                                            : `Crear ${teamSize}v${teamSize}`}
+                                    </button>
+                                ))}
                             </div>
                         </div>
 

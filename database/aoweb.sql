@@ -144,6 +144,7 @@ CREATE TABLE public.challenge_history (
     match_id text NOT NULL,
     team_size integer NOT NULL,
     instance_map_id integer NOT NULL,
+    base_map_id integer,
     winner_side integer NOT NULL,
     finish_reason text,
     team_one_score integer DEFAULT 0 NOT NULL,
@@ -153,9 +154,42 @@ CREATE TABLE public.challenge_history (
     finished_at timestamp with time zone NOT NULL,
     created_at timestamp with time zone DEFAULT now() NOT NULL,
     CONSTRAINT challenge_history_team_one_score_check CHECK ((team_one_score >= 0)),
-    CONSTRAINT challenge_history_team_size_check CHECK ((team_size = ANY (ARRAY[1, 2]))),
+    CONSTRAINT challenge_history_team_size_check CHECK ((team_size = ANY (ARRAY[2, 3, 4]))),
     CONSTRAINT challenge_history_team_two_score_check CHECK ((team_two_score >= 0)),
     CONSTRAINT challenge_history_winner_side_check CHECK ((winner_side = ANY (ARRAY[1, 2])))
+);
+
+
+--
+-- Name: character_ratings; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.character_ratings (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    character_id uuid NOT NULL,
+    team_size integer NOT NULL,
+    rating integer DEFAULT 1200 NOT NULL,
+    games_played integer DEFAULT 0 NOT NULL,
+    wins integer DEFAULT 0 NOT NULL,
+    losses integer DEFAULT 0 NOT NULL,
+    updated_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT character_ratings_team_size_check CHECK ((team_size = ANY (ARRAY[2, 3, 4])))
+);
+
+
+--
+-- Name: rating_history; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.rating_history (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    challenge_history_id uuid NOT NULL,
+    character_id uuid NOT NULL,
+    team_size integer NOT NULL,
+    rating_before integer NOT NULL,
+    rating_after integer NOT NULL,
+    delta integer NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL
 );
 
 
@@ -686,6 +720,30 @@ ALTER TABLE ONLY public.challenge_history
 
 
 --
+-- Name: character_ratings character_ratings_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.character_ratings
+    ADD CONSTRAINT character_ratings_pkey PRIMARY KEY (id);
+
+
+--
+-- Name: character_ratings character_ratings_character_id_team_size_key; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.character_ratings
+    ADD CONSTRAINT character_ratings_character_id_team_size_key UNIQUE (character_id, team_size);
+
+
+--
+-- Name: rating_history rating_history_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rating_history
+    ADD CONSTRAINT rating_history_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: character_bank_items character_bank_items_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -948,6 +1006,20 @@ CREATE INDEX idx_auth_sessions_expires_at ON public.auth_sessions USING btree (e
 --
 
 CREATE INDEX idx_challenge_history_finished_at ON public.challenge_history USING btree (finished_at DESC);
+
+
+--
+-- Name: idx_character_ratings_leaderboard; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_character_ratings_leaderboard ON public.character_ratings USING btree (team_size, rating DESC);
+
+
+--
+-- Name: idx_rating_history_character; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_rating_history_character ON public.rating_history USING btree (character_id, team_size, created_at DESC);
 
 
 --
@@ -1256,6 +1328,30 @@ ALTER TABLE ONLY public.auth_sessions
 
 ALTER TABLE ONLY public.auth_sessions
     ADD CONSTRAINT auth_sessions_selected_character_id_fkey FOREIGN KEY (selected_character_id) REFERENCES public.characters(id) ON DELETE SET NULL;
+
+
+--
+-- Name: character_ratings character_ratings_character_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.character_ratings
+    ADD CONSTRAINT character_ratings_character_id_fkey FOREIGN KEY (character_id) REFERENCES public.characters(id) ON DELETE CASCADE;
+
+
+--
+-- Name: rating_history rating_history_challenge_history_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rating_history
+    ADD CONSTRAINT rating_history_challenge_history_id_fkey FOREIGN KEY (challenge_history_id) REFERENCES public.challenge_history(id) ON DELETE CASCADE;
+
+
+--
+-- Name: rating_history rating_history_character_id_fkey; Type: FK CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.rating_history
+    ADD CONSTRAINT rating_history_character_id_fkey FOREIGN KEY (character_id) REFERENCES public.characters(id) ON DELETE CASCADE;
 
 
 --

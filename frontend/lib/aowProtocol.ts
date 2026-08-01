@@ -78,6 +78,7 @@ export const CLIENT_PACKET_ID = {
     spellVisual: 80,
     entityVitalsDelta: 81,
     voiceSignal: 82,
+    challengeVetoState: 83,
 } as const;
 
 export type PanelShare = {
@@ -434,7 +435,7 @@ export interface MarketState {
 export interface RetoEntry {
     id: string;
     createdAt: number;
-    teamSize: 1 | 2;
+    teamSize: 1 | 2 | 3 | 4;
     proposer: {
         id: string;
         persistedId: string;
@@ -455,6 +456,30 @@ export interface RetoEntry {
 
 export interface RetosState {
     challenges: RetoEntry[];
+}
+
+export interface ChallengeVetoBannedMap {
+    mapId: number;
+    side: 1 | 2;
+}
+
+export interface ChallengeVetoState {
+    vetoId: string;
+    teamSize: 1 | 2 | 3 | 4;
+    mapPool: number[];
+    remainingMapIds: number[];
+    bannedMapIds: ChallengeVetoBannedMap[];
+    totalSteps: number;
+    stepIndex: number;
+    currentTurnSide: 1 | 2 | null;
+    deadlineAt: number;
+    resolved: boolean;
+    cancelled?: boolean;
+    reason?: string;
+    selectedMapId?: number;
+    matchId?: string;
+    yourSide?: 1 | 2;
+    isLeader?: boolean;
 }
 
 export interface PlayerHudState {
@@ -799,6 +824,7 @@ export type ParsedServerPacket =
     | { type: "openCrafting"; payload: CraftingState }
     | { type: "openMarket"; payload: MarketState }
     | { type: "openRetos"; payload: RetosState }
+    | { type: "challengeVetoState"; payload: ChallengeVetoState }
     | { type: "voiceSignal"; payload: VoiceSignalPayload }
     | { type: "closeBail"; payload: null }
     | { type: "openAdminIntervals"; payload: null }
@@ -1821,6 +1847,13 @@ function parseServerPacketById(
                 payload: JSON.parse(rawState) as RetosState,
             };
         }
+        case CLIENT_PACKET_ID.challengeVetoState: {
+            const rawState = reader.getString();
+            return {
+                type: "challengeVetoState",
+                payload: JSON.parse(rawState) as ChallengeVetoState,
+            };
+        }
         case CLIENT_PACKET_ID.voiceSignal: {
             const rawPayload = reader.getString();
 
@@ -2231,7 +2264,7 @@ export function createMarketActionPacket(
 }
 
 export function createRetosActionPacket(
-    action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2",
+    action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2" | "vetoBan",
     payload: Record<string, unknown> = {},
 ): ArrayBuffer {
     const writer = new PacketWriter(SERVER_PACKET_ID.retosAction);

@@ -11,17 +11,18 @@ const normalizedSiteUrl = rawSiteUrl.startsWith("http")
     : `https://${rawSiteUrl}`;
 
 export const siteUrl = normalizedSiteUrl.replace(/\/+$/, "");
-export const siteName = "AOWeb";
-export const siteTitle = "AOWeb Beta";
+export const siteName = "CSAO2";
+export const siteTitle = "CSAO2 - Counter-Strike Argentum Online 2";
 export const siteDescription =
-    "";
+    "CSAO2: El shooter táctico 2D en tiempo real para navegador. Batallas 5v5, bombas C4, armas y clasificación competitiva.";
 export const siteKeywords = [
-    "AOWeb",
-    "AO Web",
-    "MMORPG web",
-    "AOWeb beta",
-    "changelog AOWeb",
-    "roadmap AOWeb",
+    "CSAO2",
+    "CSAO 2",
+    "Counter Strike Argentum Online",
+    "CS2D web",
+    "shooter 2D web",
+    "Argentum Online Counter Strike",
+    "CSAO2 beta",
 ];
 
 export function absoluteUrl(path = "/"): string {

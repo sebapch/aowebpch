@@ -4,6 +4,13 @@ const fs = require("fs");
 const path = require("path");
 const loadNpcs = require("./loadNpcs");
 
+type ArenaSpawnPoint = { x?: number; y?: number };
+
+type ArenaSpawnConfig = {
+    team1?: ArenaSpawnPoint[];
+    team2?: ArenaSpawnPoint[];
+};
+
 type MapMetadata = {
     id?: number;
     name?: string;
@@ -17,6 +24,8 @@ type MapMetadata = {
     maxLevel?: number;
     backup?: number;
     pk?: number;
+    isArena?: boolean;
+    arenaSpawns?: ArenaSpawnConfig;
 };
 
 type TerrainTile = {
@@ -67,6 +76,25 @@ function toNumber(value: unknown, fallback = 0): number {
     }
 
     return fallback;
+}
+
+function normalizeArenaSpawnList(value: unknown): { x: number; y: number }[] {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+
+    const result: { x: number; y: number }[] = [];
+
+    for (const entry of value) {
+        const point = entry as ArenaSpawnPoint;
+        if (typeof point?.x !== "number" || typeof point?.y !== "number") {
+            continue;
+        }
+
+        result.push({ x: point.x, y: point.y });
+    }
+
+    return result;
 }
 
 function normalizeGraphics(graphics: unknown): Record<number, number> | undefined {
@@ -306,6 +334,11 @@ class LoadMaps {
             vars.mapData[mapNum].maxLevel = toNumber(metadata.maxLevel);
             vars.mapData[mapNum].backup = toNumber(metadata.backup);
             vars.mapData[mapNum].pk = toNumber(metadata.pk);
+            vars.mapData[mapNum].isArena = metadata.isArena === true;
+            vars.mapData[mapNum].arenaSpawns = {
+                team1: normalizeArenaSpawnList(metadata.arenaSpawns?.team1),
+                team2: normalizeArenaSpawnList(metadata.arenaSpawns?.team2),
+            };
 
             resolve(mapNum);
         });

@@ -23,6 +23,16 @@ export type ExpandedTile = {
     spawn?: NpcSpawn;
 };
 
+export type ArenaSpawnPoint = { x: number; y: number };
+
+/** Hasta 4 puntos por equipo, reusados para 2v2/3v3/4v4 (se toman los primeros N). */
+export type ArenaSpawnConfig = {
+    team1: ArenaSpawnPoint[];
+    team2: ArenaSpawnPoint[];
+};
+
+export const MAX_ARENA_SPAWNS_PER_TEAM = 4;
+
 export type MapMetadata = {
     id: number;
     name: string;
@@ -37,6 +47,10 @@ export type MapMetadata = {
     maxLevel?: number;
     backup: number;
     pk: number;
+    /** Habilita el mapa para el veteo de Retos por equipos (2v2/3v3/4v4). */
+    isArena?: boolean;
+    /** Spawns de equipo para Retos. Ausente/incompleto: el servidor usa el fallback fijo. */
+    arenaSpawns?: ArenaSpawnConfig;
 };
 
 /** `tiles` es row-major: indice `(y-1)*width + (x-1)`. */

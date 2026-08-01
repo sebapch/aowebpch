@@ -424,7 +424,7 @@ ALTER TABLE user_online_stats
 CREATE TABLE IF NOT EXISTS challenge_history (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     match_id TEXT NOT NULL UNIQUE,
-    team_size INTEGER NOT NULL CHECK (team_size IN (1, 2)),
+    team_size INTEGER NOT NULL CHECK (team_size IN (2, 3, 4)),
     instance_map_id INTEGER NOT NULL,
     winner_side INTEGER NOT NULL CHECK (winner_side IN (1, 2)),
     finish_reason TEXT,
@@ -435,6 +435,43 @@ CREATE TABLE IF NOT EXISTS challenge_history (
     finished_at TIMESTAMPTZ NOT NULL,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
+
+ALTER TABLE challenge_history
+    ADD COLUMN IF NOT EXISTS base_map_id INTEGER;
+
+ALTER TABLE challenge_history
+    DROP CONSTRAINT IF EXISTS challenge_history_team_size_check;
+
+ALTER TABLE challenge_history
+    ADD CONSTRAINT challenge_history_team_size_check
+    CHECK (team_size IN (2, 3, 4));
+
+CREATE TABLE IF NOT EXISTS character_ratings (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    character_id UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    team_size INTEGER NOT NULL CHECK (team_size IN (2, 3, 4)),
+    rating INTEGER NOT NULL DEFAULT 1200,
+    games_played INTEGER NOT NULL DEFAULT 0,
+    wins INTEGER NOT NULL DEFAULT 0,
+    losses INTEGER NOT NULL DEFAULT 0,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE (character_id, team_size)
+);
+
+CREATE INDEX IF NOT EXISTS idx_character_ratings_leaderboard ON character_ratings(team_size, rating DESC);
+
+CREATE TABLE IF NOT EXISTS rating_history (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    challenge_history_id UUID NOT NULL REFERENCES challenge_history(id) ON DELETE CASCADE,
+    character_id UUID NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+    team_size INTEGER NOT NULL,
+    rating_before INTEGER NOT NULL,
+    rating_after INTEGER NOT NULL,
+    delta INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_rating_history_character ON rating_history(character_id, team_size, created_at DESC);
 
 CREATE TABLE IF NOT EXISTS runtime_settings (
     key TEXT PRIMARY KEY,

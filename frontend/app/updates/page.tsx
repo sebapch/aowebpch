@@ -7,27 +7,27 @@ import { buildPageMetadata } from "@/lib/seo";
 const latestFeatures = changelogEntries[0]?.features ?? [];
 const nextFocus = roadmapEntries[0];
 
-const updatesDescription = `Segui el changelog de AOWeb y el roadmap publico con mejoras como ${latestFeatures[0] ?? "nuevas funciones"}, ${latestFeatures[1] ?? "ajustes continuos"} y proximos objetivos en ${nextFocus?.title ?? "el juego"}.`;
+const updatesDescription = `Novedades, changelog y roadmap de CSAO2 con mejoras continuas en ${latestFeatures[0] ?? "jugabilidad"}, ${latestFeatures[1] ?? "balance de clases"} y objetivos como ${nextFocus?.title ?? "el desarrollo"}.`;
 
 export const metadata: Metadata = buildPageMetadata({
-    title: "Updates, changelog y roadmap",
+    title: "Novedades y Roadmap",
     description: updatesDescription,
     path: "/updates",
-    keywords: ["updates AOWeb", "roadmap Argentum Online", "changelog MMORPG"],
+    keywords: ["novedades CSAO2", "changelog CSAO2", "roadmap CSAO2"],
     imagePath: "/updates/opengraph-image",
     twitterImagePath: "/updates/twitter-image",
 });
 
 export default function UpdatesPage() {
     return (
-        <main className="min-h-screen overflow-y-auto bg-[radial-gradient(circle_at_top,#0f766e33,transparent_35%),radial-gradient(circle_at_bottom,#f59e0b22,transparent_30%),linear-gradient(180deg,#0f172a,#0c0a09)] px-4 py-12 text-stone-100">
+        <main className="min-h-screen csao-bg px-4 py-12 text-slate-100">
             <div className="mx-auto max-w-4xl">
-                <div className="mb-8">
-                    <p className="text-[11px] uppercase tracking-[0.34em] text-cyan-200/75">
-                        AOWeb
-                    </p>
-                    <h1 className="mt-3 text-3xl font-semibold text-white md:text-4xl">
-                        Changelog y roadmap
+                <div className="mb-8 border-b border-slate-800 pb-4">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-slate-400">
+                        CSAO2
+                    </span>
+                    <h1 className="mt-1 text-2xl font-bold uppercase tracking-wide text-white md:text-3xl">
+                        Novedades y Roadmap
                     </h1>
                 </div>
 

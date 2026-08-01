@@ -4394,6 +4394,14 @@ async function retosAction(ws: RuntimeClient) {
                 arenaMatchmakingManager.dequeue(ws.id!);
                 break;
             }
+            case "vetoban": {
+                challengeManager.submitChallengeVetoBan(
+                    ws.id!,
+                    String(payload.vetoId ?? ""),
+                    Number(payload.mapId ?? 0),
+                );
+                break;
+            }
             case "refresh":
             default:
                 break;

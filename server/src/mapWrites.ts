@@ -2,6 +2,9 @@ import fs from "node:fs";
 import path from "node:path";
 import {
     API_MAPS_SOURCE_DIR,
+    MAX_ARENA_SPAWNS_PER_TEAM,
+    type ArenaSpawnConfig,
+    type ArenaSpawnPoint,
     type EditorMapBundle,
     type MapMetadata,
     type MapNpcPlacement,
@@ -111,6 +114,7 @@ function normalizeMapMeta(meta: MapMetadata, mapId: number): MapMetadata {
 
     const minLevel = toFiniteNumber(meta.minLevel);
     const maxLevel = toFiniteNumber(meta.maxLevel);
+    const arenaSpawns = normalizeArenaSpawns(meta.arenaSpawns);
 
     // Orden de claves canonico, el mismo que ya tienen los archivos en disco.
     return {
@@ -126,7 +130,50 @@ function normalizeMapMeta(meta: MapMetadata, mapId: number): MapMetadata {
         ...(maxLevel === undefined ? {} : { maxLevel }),
         backup: toFiniteNumber(meta.backup) ?? 0,
         pk: toFiniteNumber(meta.pk) ?? 0,
+        isArena: meta.isArena === true,
+        ...(arenaSpawns ? { arenaSpawns } : {}),
     };
+}
+
+/** Descarta puntos invalidos y recorta a `MAX_ARENA_SPAWNS_PER_TEAM` por equipo. */
+function normalizeArenaSpawnList(points: ArenaSpawnPoint[] | undefined): ArenaSpawnPoint[] {
+    if (!Array.isArray(points)) {
+        return [];
+    }
+
+    const result: ArenaSpawnPoint[] = [];
+
+    for (const point of points) {
+        const x = toFiniteNumber(point?.x);
+        const y = toFiniteNumber(point?.y);
+
+        if (x === undefined || y === undefined) {
+            continue;
+        }
+
+        result.push({ x, y });
+
+        if (result.length >= MAX_ARENA_SPAWNS_PER_TEAM) {
+            break;
+        }
+    }
+
+    return result;
+}
+
+function normalizeArenaSpawns(config: ArenaSpawnConfig | undefined): ArenaSpawnConfig | undefined {
+    if (!config) {
+        return undefined;
+    }
+
+    const team1 = normalizeArenaSpawnList(config.team1);
+    const team2 = normalizeArenaSpawnList(config.team2);
+
+    if (team1.length === 0 && team2.length === 0) {
+        return undefined;
+    }
+
+    return { team1, team2 };
 }
 
 /** Escribe `meta.json` solo si cambio algo. Devuelve si toco el archivo. */

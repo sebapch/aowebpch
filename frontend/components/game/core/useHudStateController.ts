@@ -6,6 +6,7 @@ import {
 } from "react";
 import type {
     BailOffer,
+    ChallengeVetoState,
     CraftingState,
     InventoryItem,
     MarketState,
@@ -38,6 +39,9 @@ type UseHudStateControllerOptions = {
         | ((marketState: MarketState | null) => void)
         | undefined;
     onRetosStateChange?: ((retosState: RetosState | null) => void) | undefined;
+    onChallengeVetoStateChange?:
+        | ((vetoState: ChallengeVetoState | null) => void)
+        | undefined;
     onBailStateChange?: ((bailState: BailOffer | null) => void) | undefined;
     onCraftingStateChange?:
         | ((craftingState: CraftingState | null) => void)
@@ -57,6 +61,7 @@ export function useHudStateController({
     onTradeStateChange,
     onMarketStateChange,
     onRetosStateChange,
+    onChallengeVetoStateChange,
     onBailStateChange,
     onCraftingStateChange,
     preloadGraphicIds,
@@ -401,6 +406,13 @@ export function useHudStateController({
         [onRetosStateChange],
     );
 
+    const emitChallengeVetoState = useCallback(
+        (vetoState: ChallengeVetoState | null) => {
+            onChallengeVetoStateChange?.(vetoState);
+        },
+        [onChallengeVetoStateChange],
+    );
+
     const emitBailState = useCallback(
         (bailState: BailOffer | null) => {
             onBailStateChange?.(bailState);
@@ -422,6 +434,7 @@ export function useHudStateController({
         emitHud,
         emitMarketState,
         emitRetosState,
+        emitChallengeVetoState,
         emitTradeState,
         mergeHud,
         refreshVisibleClanTagStyles,

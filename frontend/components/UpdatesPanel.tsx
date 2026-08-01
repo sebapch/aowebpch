@@ -95,76 +95,72 @@ export default function UpdatesPanel({
 
             <section
                 id="changelog"
-                className="rounded-[28px] border border-white/8 bg-stone-950/75 p-5 shadow-2xl backdrop-blur-md"
+                className="game-card p-5 shadow-lg space-y-4"
             >
-                <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-cyan-200/75">
-                        Changelog
-                    </p>
+                <div className="flex items-center justify-between gap-3 border-b border-[#3d2719] pb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4a359]">
+                        Historial de Parches
+                    </span>
                     {isPreview ? (
                         <button
                             type="button"
                             onClick={() =>
                                 navigateToUpdatesSection("changelog")
                             }
-                            className="text-xs font-medium uppercase tracking-[0.22em] text-cyan-100 transition hover:text-white"
+                            className="text-xs font-bold uppercase tracking-wider text-slate-300 transition hover:text-white"
                         >
-                            Mostrar mas
+                            Ver Todo
                         </button>
                     ) : null}
                 </div>
 
-                <div className="mt-5 space-y-4">
+                <div className="space-y-4">
                     {isPreview ? (
                         changelogPreview ? (
-                            <article className="relative overflow-hidden rounded-2xl border border-white/7 bg-white/4 p-4">
-                                <span className="mb-3 inline-flex rounded-full bg-cyan-300/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.24em] text-cyan-100">
-                                    Update{" "}
+                            <article className="game-card-inset p-4">
+                                <span className="mb-2 inline-block rounded bg-[#5c2b0e] border border-[#8c582d] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                                    Parche{" "}
                                     {String(changelogEntries.length).padStart(
                                         2,
                                         "0",
                                     )}
                                 </span>
 
-                                <ul className="mt-3 space-y-2 text-sm text-stone-300">
+                                <ul className="mt-2 space-y-2 text-xs text-slate-300">
                                     {changelogPreview.features
                                         .slice(0, 3)
                                         .map((feature) => (
                                             <li
                                                 key={feature}
-                                                className="flex gap-2 leading-6"
+                                                className="flex gap-2 leading-relaxed"
                                             >
-                                                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-amber-200" />
+                                                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#d4a359]" />
                                                 <span>{feature}</span>
                                             </li>
                                         ))}
                                 </ul>
-
-                                {changelogPreview.features.length > 3 ? (
-                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-stone-950 via-stone-950/85 to-transparent" />
-                                ) : null}
                             </article>
                         ) : null
                     ) : (
                         visibleChangelogEntries.map((entry, index) => (
                             <article
                                 key={`${entry.features[0] ?? "update"}-${index}`}
-                                className="relative rounded-2xl border border-white/7 bg-white/4 p-4"
+                                className="game-card-inset p-4"
                             >
-                                <span className="mb-3 inline-flex rounded-full bg-cyan-300/12 px-2.5 py-1 text-[10px] uppercase tracking-[0.24em] text-cyan-100">
-                                    Update{" "}
+                                <span className="mb-2 inline-block rounded bg-[#5c2b0e] border border-[#8c582d] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
+                                    Parche{" "}
                                     {String(
                                         changelogEntries.length - index,
                                     ).padStart(2, "0")}
                                 </span>
 
-                                <ul className="mt-3 space-y-2 text-sm text-stone-300">
+                                <ul className="mt-2 space-y-2 text-xs text-slate-300">
                                     {entry.features.map((feature) => (
                                         <li
                                             key={feature}
-                                            className="flex gap-2 leading-6"
+                                            className="flex gap-2 leading-relaxed"
                                         >
-                                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-amber-200" />
+                                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#d4a359]" />
                                             <span>{feature}</span>
                                         </li>
                                     ))}
@@ -179,11 +175,11 @@ export default function UpdatesPanel({
                             onClick={() =>
                                 setIsChangelogExpanded((current) => !current)
                             }
-                            className="w-full rounded-2xl border border-cyan-300/20 bg-cyan-300/10 px-4 py-3 text-sm font-medium text-cyan-100 transition hover:border-cyan-300/40 hover:bg-cyan-300/15"
+                            className="w-full game-btn-bronze py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm"
                         >
                             {isChangelogExpanded
-                                ? "Mostrar menos"
-                                : "Mostrar mas"}
+                                ? "Mostrar Menos"
+                                : "Mostrar Todo"}
                         </button>
                     ) : null}
                 </div>
@@ -191,69 +187,65 @@ export default function UpdatesPanel({
 
             <section
                 id="roadmap"
-                className="rounded-[28px] border border-white/8 bg-stone-950/75 p-5 shadow-2xl backdrop-blur-md"
+                className="game-card p-5 shadow-lg space-y-4"
             >
-                <div className="flex items-center justify-between gap-3">
-                    <p className="text-[11px] uppercase tracking-[0.3em] text-amber-200/75">
-                        Roadmap
-                    </p>
+                <div className="flex items-center justify-between gap-3 border-b border-[#3d2719] pb-3">
+                    <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4a359]">
+                        Roadmap de Desarrollo
+                    </span>
                     {isPreview ? (
                         <button
                             type="button"
                             onClick={() => navigateToUpdatesSection("roadmap")}
-                            className="text-xs font-medium uppercase tracking-[0.22em] text-amber-100 transition hover:text-white"
+                            className="text-xs font-bold uppercase tracking-wider text-slate-300 transition hover:text-white"
                         >
-                            Mostrar mas
+                            Ver Todo
                         </button>
                     ) : null}
                 </div>
 
-                <div className="mt-5 space-y-4">
+                <div className="space-y-4">
                     {isPreview ? (
                         roadmapPreview ? (
-                            <article className="relative overflow-hidden rounded-2xl border border-white/7 bg-white/4 p-4">
-                                <p className="text-base font-semibold text-white">
+                            <article className="game-card-inset p-4">
+                                <p className="text-sm font-bold text-white uppercase tracking-wide">
                                     {roadmapPreview.title}
                                 </p>
 
-                                <ul className="mt-4 space-y-2 text-sm text-stone-300">
+                                <ul className="mt-2 space-y-2 text-xs text-slate-300">
                                     {roadmapPreview.items
                                         .slice(0, 2)
                                         .map((item) => (
                                             <li
                                                 key={item}
-                                                className="flex gap-2 leading-6"
+                                                className="flex gap-2 leading-relaxed"
                                             >
-                                                <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-200" />
+                                                <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2bb3e5]" />
                                                 <span>{item}</span>
                                             </li>
                                         ))}
                                 </ul>
-
-                                {roadmapPreview.items.length > 2 ? (
-                                    <div className="pointer-events-none absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-stone-950 via-stone-950/85 to-transparent" />
-                                ) : null}
                             </article>
                         ) : null
                     ) : (
                         visibleRoadmapEntries.map((entry) => (
                             <article
                                 key={`${entry.title}`}
-                                className="rounded-2xl border border-white/7 bg-white/4 p-4"
+                                className="game-card-inset p-4"
                             >
                                 <div className="flex flex-wrap items-center justify-between gap-3">
-                                    <p className="text-base font-semibold text-white">
+                                    <p className="text-sm font-bold text-white uppercase tracking-wide">
                                         {entry.title}
                                     </p>
                                 </div>
 
-                                <ul className="mt-4 space-y-2 text-sm text-stone-300">
+                                <ul className="mt-2 space-y-2 text-xs text-slate-300">
                                     {entry.items.map((item) => (
                                         <li
                                             key={item}
-                                            className="flex gap-2 leading-6"
+                                            className="flex gap-2 leading-relaxed"
                                         >
-                                            <span className="mt-2 h-1.5 w-1.5 rounded-full bg-cyan-200" />
+                                            <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-[#2bb3e5]" />
                                             <span>{item}</span>
                                         </li>
                                     ))}
@@ -268,11 +260,11 @@ export default function UpdatesPanel({
                             onClick={() =>
                                 setIsRoadmapExpanded((current) => !current)
                             }
-                            className="w-full rounded-2xl border border-amber-300/20 bg-amber-300/10 px-4 py-3 text-sm font-medium text-amber-100 transition hover:border-amber-300/40 hover:bg-amber-300/15"
+                            className="w-full game-btn-bronze py-2 rounded-lg text-xs font-bold uppercase tracking-wider shadow-sm"
                         >
                             {isRoadmapExpanded
-                                ? "Mostrar menos"
-                                : "Mostrar mas"}
+                                ? "Mostrar Menos"
+                                : "Mostrar Todo"}
                         </button>
                     ) : null}
                 </div>

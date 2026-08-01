@@ -17,6 +17,7 @@ import {
     type CharacterStatsSnapshot,
     type PanelSnapshot,
     type BailOffer,
+    type ChallengeVetoState,
     type CraftingState,
     type CharacterSnapshot,
     type ClanHudMember,
@@ -156,7 +157,14 @@ interface MapRendererProps {
         token: number;
     } | null;
     retosActionRequest?: {
-        action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2";
+        action:
+            | "refresh"
+            | "create"
+            | "join"
+            | "cancel"
+            | "enqueue2v2"
+            | "dequeue2v2"
+            | "vetoBan";
         payload?: Record<string, unknown>;
         token: number;
     } | null;
@@ -205,6 +213,7 @@ interface MapRendererProps {
     onTradeStateChange?: (tradeState: TradeState | null) => void;
     onMarketStateChange?: (marketState: MarketState | null) => void;
     onRetosStateChange?: (retosState: RetosState | null) => void;
+    onChallengeVetoStateChange?: (vetoState: ChallengeVetoState | null) => void;
     onBailStateChange?: (bailState: BailOffer | null) => void;
     onCraftingStateChange?: (craftingState: CraftingState | null) => void;
     onAdminIntervalsOpen?: () => void;
@@ -697,6 +706,7 @@ export default function MapRenderer({
     onTradeStateChange,
     onMarketStateChange,
     onRetosStateChange,
+    onChallengeVetoStateChange,
     onBailStateChange,
     onCraftingStateChange,
     onAdminIntervalsOpen,
@@ -1196,6 +1206,7 @@ export default function MapRenderer({
         emitHud,
         emitMarketState,
         emitRetosState,
+        emitChallengeVetoState,
         emitTradeState,
         mergeHud,
         removeInventoryItem,
@@ -1216,6 +1227,7 @@ export default function MapRenderer({
         onTradeStateChange,
         onMarketStateChange,
         onRetosStateChange,
+        onChallengeVetoStateChange,
         onBailStateChange,
         onCraftingStateChange,
         preloadGraphicIds,
@@ -1872,6 +1884,7 @@ export default function MapRenderer({
                 emitTradeState,
                 emitMarketState,
                 emitRetosState,
+                emitChallengeVetoState,
                 handleVoiceSignalPacket,
                 emitBailState,
                 emitCraftingState,
@@ -1907,6 +1920,7 @@ export default function MapRenderer({
         emitHud,
         emitMarketState,
         emitRetosState,
+        emitChallengeVetoState,
         emitStatus,
         emitTradeState,
         ensureMapTile,
@@ -1993,6 +2007,7 @@ export default function MapRenderer({
         emitTradeState,
         emitMarketState,
         emitRetosState,
+        emitChallengeVetoState,
         emitBailState,
         emitCraftingState,
         panelSnapshotChunkBufferRef,

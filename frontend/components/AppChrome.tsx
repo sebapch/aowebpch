@@ -2,16 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import {
-    Home,
-    Swords,
-    Trophy,
-    UserRound,
-    ScrollText,
-    LogIn,
-    LogOut,
-    MessageCircle,
-} from "lucide-react";
+import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AuthErrorResponse, AuthSession } from "@/lib/auth";
 
@@ -20,28 +11,16 @@ type AppChromeProps = {
 };
 
 const navItems = [
-    { href: "/", label: "Inicio", icon: Home },
-    { href: "/characters", label: "Personajes", icon: UserRound },
-    { href: "/arenas", label: "Arenas", icon: Swords },
-    { href: "/ranking", label: "Ranking", icon: Trophy },
-    { href: "/wiki/equipment", label: "Wiki", icon: ScrollText },
-    {
-        href: "https://discord.gg/sf8rWAvgxs",
-        label: "Discord",
-        icon: MessageCircle,
-        external: true,
-    },
+    { href: "/", label: "Inicio" },
+    { href: "/characters", label: "Personajes" },
+    { href: "/ranking", label: "Ranking" },
+    { href: "/updates", label: "Novedades" },
 ];
 
 function isActivePath(pathname: string, href: string) {
     if (href === "/") {
         return pathname === "/";
     }
-
-    if (href === "/wiki/equipment") {
-        return pathname === "/wiki" || pathname.startsWith("/wiki/");
-    }
-
     return pathname === href || pathname.startsWith(`${href}/`);
 }
 
@@ -84,48 +63,37 @@ export default function AppChrome({ children }: AppChromeProps) {
         };
     }, [pathname]);
 
-    // El juego y el editor de mapas ocupan la pantalla completa.
     if (pathname === "/play" || pathname === "/editor") {
         return <>{children}</>;
     }
 
     return (
         <>
-            <header className="sticky top-0 z-50 border-b border-white/8 bg-[#05080d]/92 backdrop-blur-xl">
-                <div className="mx-auto flex max-w-7xl items-center justify-between gap-4 px-4 py-4">
-                    <Link href="/" className="flex items-center gap-3">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-amber-300 text-sm font-black text-stone-950">
+            <header className="sticky top-0 z-50 border-b border-[#3d2719] bg-[#070a12]/95 backdrop-blur-md">
+                <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
+                    <Link href="/" className="flex items-center gap-2.5">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#6e4624] bg-[#080b12] text-xs font-black tracking-widest text-[#d4a359]">
                             AO
                         </div>
-                        <span className="text-3xl font-semibold tracking-wide text-stone-100">
-                            AOWeb
+                        <span className="text-xl font-bold tracking-wider text-white">
+                            CSAO<span className="text-[#d4a359]">2</span>
                         </span>
                     </Link>
 
-                    <nav className="hidden items-center gap-2 rounded-2xl border border-white/6 bg-black/20 p-1 md:flex">
+                    <nav className="hidden items-center gap-1.5 border-l border-r border-[#3d2719]/80 px-4 md:flex">
                         {navItems.map((item) => {
-                            const Icon = item.icon;
-                            const active = item.external
-                                ? false
-                                : isActivePath(pathname, item.href);
+                            const active = isActivePath(pathname, item.href);
 
                             return (
                                 <Link
                                     key={item.href}
                                     href={item.href}
-                                    target={
-                                        item.external ? "_blank" : undefined
-                                    }
-                                    rel={
-                                        item.external ? "noreferrer" : undefined
-                                    }
-                                    className={`inline-flex items-center gap-2 rounded-xl px-4 py-2 text-sm transition ${
+                                    className={`px-3.5 py-1.5 text-xs font-bold uppercase tracking-wider transition rounded-lg ${
                                         active
-                                            ? "bg-amber-300/12 text-amber-300"
-                                            : "text-stone-400 hover:bg-white/5 hover:text-stone-100"
+                                            ? "bg-[#5c2b0e] text-white border border-[#8c582d]"
+                                            : "text-slate-400 hover:text-slate-200 hover:bg-[#0b0f19]"
                                     }`}
                                 >
-                                    <Icon className="h-4 w-4" />
                                     {item.label}
                                 </Link>
                             );
@@ -133,9 +101,16 @@ export default function AppChrome({ children }: AppChromeProps) {
                     </nav>
 
                     <div className="flex items-center gap-3">
+                        <Link
+                            href={session ? "/characters" : "/login"}
+                            className="hidden sm:inline-flex items-center game-btn-bronze px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md"
+                        >
+                            ¡Jugar CSAO2!
+                        </Link>
+
                         {session ? (
-                            <>
-                                <span className="hidden text-sm text-stone-200 sm:inline">
+                            <div className="flex items-center gap-2">
+                                <span className="hidden text-xs font-medium text-slate-300 md:inline">
                                     {session.account.name}
                                 </span>
                                 <button
@@ -148,18 +123,17 @@ export default function AppChrome({ children }: AppChromeProps) {
                                         router.push("/login");
                                         router.refresh();
                                     }}
-                                    className="inline-flex items-center justify-center rounded-full p-2 text-stone-400 transition hover:bg-white/5 hover:text-stone-100"
+                                    className="inline-flex items-center justify-center rounded-lg border border-[#3d2719] bg-[#0b0f19] p-1.5 text-slate-400 transition hover:border-[#6e4624] hover:text-slate-200"
                                     aria-label="Cerrar sesion"
                                 >
                                     <LogOut className="h-4 w-4" />
                                 </button>
-                            </>
+                            </div>
                         ) : (
                             <Link
                                 href="/login"
-                                className="inline-flex items-center gap-2 rounded-xl border border-white/8 px-4 py-2 text-sm text-stone-200 transition hover:bg-white/5"
+                                className="inline-flex items-center rounded-lg border border-[#3d2719] bg-[#0b0f19] px-3.5 py-1.5 text-xs font-semibold uppercase tracking-wider text-slate-300 transition hover:text-white hover:border-[#6e4624]"
                             >
-                                <LogIn className="h-4 w-4" />
                                 Ingresar
                             </Link>
                         )}
@@ -167,27 +141,21 @@ export default function AppChrome({ children }: AppChromeProps) {
                 </div>
             </header>
 
-            <div className="md:hidden border-b border-white/8 bg-[#05080d]/92 px-4 py-2 backdrop-blur-xl">
-                <nav className="mx-auto flex max-w-7xl items-center gap-2 overflow-x-auto">
+            <div className="md:hidden border-b border-[#3d2719] bg-[#070a12] px-4 py-2">
+                <nav className="mx-auto flex max-w-6xl items-center gap-2 overflow-x-auto">
                     {navItems.map((item) => {
-                        const Icon = item.icon;
-                        const active = item.external
-                            ? false
-                            : isActivePath(pathname, item.href);
+                        const active = isActivePath(pathname, item.href);
 
                         return (
                             <Link
                                 key={item.href}
                                 href={item.href}
-                                target={item.external ? "_blank" : undefined}
-                                rel={item.external ? "noreferrer" : undefined}
-                                className={`inline-flex shrink-0 items-center gap-2 rounded-xl px-3 py-2 text-sm transition ${
+                                className={`inline-flex shrink-0 items-center rounded-lg px-3 py-1.5 text-xs font-semibold uppercase tracking-wider transition ${
                                     active
-                                        ? "bg-amber-300/12 text-amber-300"
-                                        : "text-stone-400 hover:bg-white/5 hover:text-stone-100"
+                                        ? "bg-[#5c2b0e] text-white border border-[#8c582d]"
+                                        : "text-slate-400 hover:text-slate-200"
                                 }`}
                             >
-                                <Icon className="h-4 w-4" />
                                 {item.label}
                             </Link>
                         );

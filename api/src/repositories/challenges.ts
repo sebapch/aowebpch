@@ -1,6 +1,7 @@
 import { z } from "zod";
 import pool from "../db";
 import type { ChallengeHistoryEntry, ChallengeHistoryRecord } from "../types";
+import { applyMatchRatings } from "./ratings";
 
 const challengeParticipantSchema = z.object({
     characterId: z.string().uuid(),
@@ -13,13 +14,14 @@ const challengeParticipantSchema = z.object({
 
 const createChallengeHistorySchema = z.object({
     matchId: z.string().trim().min(1).max(120),
-    teamSize: z.union([z.literal(1), z.literal(2)]),
+    teamSize: z.union([z.literal(2), z.literal(3), z.literal(4)]),
     instanceMapId: z.coerce.number().int().min(1),
+    baseMapId: z.coerce.number().int().min(1).optional().nullable(),
     winnerSide: z.union([z.literal(1), z.literal(2)]),
     finishReason: z.string().trim().min(1).max(120).optional().nullable(),
     teamOneScore: z.coerce.number().int().min(0).max(99),
     teamTwoScore: z.coerce.number().int().min(0).max(99),
-    participants: z.array(challengeParticipantSchema).min(2).max(4),
+    participants: z.array(challengeParticipantSchema).min(4).max(8),
     startedAt: z.union([z.string().datetime(), z.date()]),
     finishedAt: z.union([z.string().datetime(), z.date()]),
 });
@@ -32,6 +34,7 @@ function toChallengeHistoryEntry(
         matchId: record.match_id,
         teamSize: record.team_size,
         instanceMapId: record.instance_map_id,
+        baseMapId: record.base_map_id,
         winnerSide: record.winner_side,
         finishReason: record.finish_reason,
         teamOneScore: record.team_one_score,
@@ -50,44 +53,72 @@ export async function createChallengeHistory(
     const startedAt = new Date(parsed.startedAt);
     const finishedAt = new Date(parsed.finishedAt);
 
-    const result = await pool.query<ChallengeHistoryRecord>(
-        `
-            INSERT INTO challenge_history (
-                match_id,
-                team_size,
-                instance_map_id,
-                winner_side,
-                finish_reason,
-                team_one_score,
-                team_two_score,
-                participants,
-                started_at,
-                finished_at
-            )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9, $10)
-            ON CONFLICT (match_id)
-            DO UPDATE SET winner_side = EXCLUDED.winner_side,
-                          finish_reason = EXCLUDED.finish_reason,
-                          team_one_score = EXCLUDED.team_one_score,
-                          team_two_score = EXCLUDED.team_two_score,
-                          participants = EXCLUDED.participants,
-                          started_at = EXCLUDED.started_at,
-                          finished_at = EXCLUDED.finished_at
-            RETURNING *
-        `,
-        [
-            parsed.matchId,
-            parsed.teamSize,
-            parsed.instanceMapId,
-            parsed.winnerSide,
-            parsed.finishReason ?? null,
-            parsed.teamOneScore,
-            parsed.teamTwoScore,
-            JSON.stringify(parsed.participants),
-            startedAt.toISOString(),
-            finishedAt.toISOString(),
-        ],
-    );
+    const client = await pool.connect();
 
-    return toChallengeHistoryEntry(result.rows[0]);
+    try {
+        await client.query("BEGIN");
+
+        const result = await client.query<ChallengeHistoryRecord & { inserted: boolean }>(
+            `
+                INSERT INTO challenge_history (
+                    match_id,
+                    team_size,
+                    instance_map_id,
+                    base_map_id,
+                    winner_side,
+                    finish_reason,
+                    team_one_score,
+                    team_two_score,
+                    participants,
+                    started_at,
+                    finished_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb, $10, $11)
+                ON CONFLICT (match_id)
+                DO UPDATE SET winner_side = EXCLUDED.winner_side,
+                              finish_reason = EXCLUDED.finish_reason,
+                              team_one_score = EXCLUDED.team_one_score,
+                              team_two_score = EXCLUDED.team_two_score,
+                              participants = EXCLUDED.participants,
+                              started_at = EXCLUDED.started_at,
+                              finished_at = EXCLUDED.finished_at
+                RETURNING *, (xmax = 0) AS inserted
+            `,
+            [
+                parsed.matchId,
+                parsed.teamSize,
+                parsed.instanceMapId,
+                parsed.baseMapId ?? null,
+                parsed.winnerSide,
+                parsed.finishReason ?? null,
+                parsed.teamOneScore,
+                parsed.teamTwoScore,
+                JSON.stringify(parsed.participants),
+                startedAt.toISOString(),
+                finishedAt.toISOString(),
+            ],
+        );
+
+        const row = result.rows[0];
+
+        if (row.inserted) {
+            await applyMatchRatings(client, {
+                challengeHistoryId: row.id,
+                teamSize: parsed.teamSize,
+                winnerSide: parsed.winnerSide,
+                participants: parsed.participants.map((participant) => ({
+                    characterId: participant.characterId,
+                    teamSide: participant.teamSide,
+                })),
+            });
+        }
+
+        await client.query("COMMIT");
+        return toChallengeHistoryEntry(row);
+    } catch (error) {
+        await client.query("ROLLBACK");
+        throw error;
+    } finally {
+        client.release();
+    }
 }

@@ -15,20 +15,60 @@ export {};
 
 const _ = require("lodash");
 const vars = require("./vars");
-const PARTY_MAX_SIZE_FOR_2V2 = 2;
 const CHALLENGE_BASE_MAP_ID = 506;
 const CHALLENGE_INSTANCE_MAP_START = 2000;
-const CHALLENGE_POSITIONS = {
-    teamOneLeader: { x: 65, y: 63 },
-    teamOnePartner: { x: 66, y: 63 },
-    teamTwoLeader: { x: 85, y: 79 },
-    teamTwoPartner: { x: 84, y: 79 },
-} as const;
+const CHALLENGE_VETO_STEP_TIMEOUT_MS = 15_000;
+// Fallback cuando un mapa esta marcado como arena en el editor pero todavia no
+// tiene spawns de equipo configurados (o para el mapa 506 antes de migrarlo).
+const CHALLENGE_TEAM_POSITIONS: Record<TeamSide, Array<{ x: number; y: number }>> = {
+    1: [
+        { x: 65, y: 63 },
+        { x: 66, y: 63 },
+        { x: 65, y: 64 },
+        { x: 66, y: 64 },
+    ],
+    2: [
+        { x: 85, y: 79 },
+        { x: 84, y: 79 },
+        { x: 85, y: 78 },
+        { x: 84, y: 78 },
+    ],
+};
+
+/** Mapas marcados como arena (`isArena: true`) en el editor, ordenados por id. */
+function getArenaMapIds(): number[] {
+    const mapData = vars.mapData ?? {};
+    const ids: number[] = [];
+
+    for (const key of Object.keys(mapData)) {
+        const mapId = Number(key);
+
+        if (Number.isInteger(mapId) && mapData[mapId]?.isArena === true) {
+            ids.push(mapId);
+        }
+    }
+
+    ids.sort((left, right) => left - right);
+
+    return ids.length > 0 ? ids : [CHALLENGE_BASE_MAP_ID];
+}
+
+/** Spawns de equipo configurados en el editor para `mapId`, o el fallback fijo. */
+function getArenaTeamPositions(mapId: number): Record<TeamSide, Array<{ x: number; y: number }>> {
+    const configured = vars.mapData?.[mapId]?.arenaSpawns as
+        | { team1?: Array<{ x: number; y: number }>; team2?: Array<{ x: number; y: number }> }
+        | undefined;
+
+    const team1 = configured?.team1?.length ? configured.team1 : CHALLENGE_TEAM_POSITIONS[1];
+    const team2 = configured?.team2?.length ? configured.team2 : CHALLENGE_TEAM_POSITIONS[2];
+
+    return { 1: team1, 2: team2 };
+}
 const COUNTDOWN_START = 10;
 const COUNTDOWN_STEP_MS = 1000;
 const SHIELD_DISABLE_DELAY_MS = 60_000;
 const CHALLENGE_GLOBAL_ANNOUNCE_COOLDOWN_MS = 30_000;
-type TeamSize = 1 | 2;
+type TeamSize = 1 | 2 | 3 | 4;
 type TeamSide = 1 | 2;
 
 type ParticipantEquipmentSnapshot = {
@@ -89,11 +129,74 @@ type ActiveMatch = {
     teamSize: TeamSize;
     targetScore?: number;
     instanceMapId: number;
+    baseMapId: number;
     teams: Record<TeamSide, MatchTeam>;
     timerIds: number[];
     resolvingRound: boolean;
     finished: boolean;
 };
+
+type ChallengeVetoStep = {
+    side: TeamSide;
+    type: "ban";
+};
+
+type ChallengeVetoBannedMap = {
+    mapId: number;
+    side: TeamSide;
+};
+
+type ChallengeVetoSession = {
+    id: string;
+    createdAt: number;
+    teamSize: TeamSize;
+    teamOneParticipants: RuntimeCharacter[];
+    teamTwoParticipants: RuntimeCharacter[];
+    mapPool: number[];
+    remainingMapIds: number[];
+    bannedMapIds: ChallengeVetoBannedMap[];
+    sequence: ChallengeVetoStep[];
+    stepIndex: number;
+    deadlineAt: number;
+    timerId: number | null;
+    resolved: boolean;
+};
+
+type ChallengeVetoStatePayload = {
+    vetoId: string;
+    teamSize: TeamSize;
+    mapPool: number[];
+    remainingMapIds: number[];
+    bannedMapIds: ChallengeVetoBannedMap[];
+    totalSteps: number;
+    stepIndex: number;
+    currentTurnSide: TeamSide | null;
+    deadlineAt: number;
+    resolved: boolean;
+    cancelled?: boolean;
+    reason?: string;
+    selectedMapId?: number;
+    matchId?: string;
+    yourSide?: TeamSide;
+    isLeader?: boolean;
+};
+
+function buildVetoSequence(poolSize: number): ChallengeVetoStep[] {
+    if (poolSize <= 1) {
+        return [];
+    }
+
+    const banCount = poolSize - 1;
+    const sequence: ChallengeVetoStep[] = [];
+    let side: TeamSide = 1;
+
+    for (let index = 0; index < banCount; index++) {
+        sequence.push({ side, type: "ban" });
+        side = side === 1 ? 2 : 1;
+    }
+
+    return sequence;
+}
 
 type VoiceRoomPayload =
     | {
@@ -261,12 +364,9 @@ function getActiveParticipants(match: ActiveMatch): RuntimeCharacter[] {
         .filter((user): user is RuntimeCharacter => Boolean(user));
 }
 
-function getTeamArenaPosition(teamSide: TeamSide, index: number) {
-    if (teamSide === 1) {
-        return index === 0 ? CHALLENGE_POSITIONS.teamOneLeader : CHALLENGE_POSITIONS.teamOnePartner;
-    }
-
-    return index === 0 ? CHALLENGE_POSITIONS.teamTwoLeader : CHALLENGE_POSITIONS.teamTwoPartner;
+function getTeamArenaPosition(mapId: number, teamSide: TeamSide, index: number) {
+    const positions = getArenaTeamPositions(mapId)[teamSide];
+    return positions[index] ?? positions[positions.length - 1];
 }
 
 function getParticipantSideFromMatch(
@@ -298,6 +398,7 @@ const challengeManager = {
     nextInstanceMapId: CHALLENGE_INSTANCE_MAP_START,
     openChallenges: {} as Record<string, OpenChallenge>,
     activeMatches: {} as Record<string, ActiveMatch>,
+    vetoSessions: {} as Record<string, ChallengeVetoSession>,
     lastGlobalAnnouncementByProposerId: {} as Record<string, number>,
     voiceSignalRates: {} as Record<string, { windowStartedAt: number; count: number }>,
 
@@ -343,10 +444,10 @@ const challengeManager = {
         return mapId;
     },
 
-    createMatchInstanceMap() {
+    createMatchInstanceMap(baseMapId: number = CHALLENGE_BASE_MAP_ID) {
         const mapId = this.createInstanceMapId();
 
-        vars.mapa[mapId] = _.cloneDeep(vars.mapa[CHALLENGE_BASE_MAP_ID]);
+        vars.mapa[mapId] = _.cloneDeep(vars.mapa[baseMapId]);
         vars.mapData[mapId] = [];
 
         for (let y = 1; y <= 100; y++) {
@@ -359,15 +460,15 @@ const challengeManager = {
             }
         }
 
-        vars.mapData[mapId].name = vars.mapData[CHALLENGE_BASE_MAP_ID].name;
-        vars.mapData[mapId].musicNum = vars.mapData[CHALLENGE_BASE_MAP_ID].musicNum;
-        vars.mapData[mapId].magiaSinEfecto = vars.mapData[CHALLENGE_BASE_MAP_ID].magiaSinEfecto;
-        vars.mapData[mapId].noEncriptarMp = vars.mapData[CHALLENGE_BASE_MAP_ID].noEncriptarMp;
-        vars.mapData[mapId].terreno = vars.mapData[CHALLENGE_BASE_MAP_ID].terreno;
-        vars.mapData[mapId].zona = vars.mapData[CHALLENGE_BASE_MAP_ID].zona;
-        vars.mapData[mapId].restringir = vars.mapData[CHALLENGE_BASE_MAP_ID].restringir;
-        vars.mapData[mapId].backup = vars.mapData[CHALLENGE_BASE_MAP_ID].backup;
-        vars.mapData[mapId].pk = vars.mapData[CHALLENGE_BASE_MAP_ID].pk;
+        vars.mapData[mapId].name = vars.mapData[baseMapId].name;
+        vars.mapData[mapId].musicNum = vars.mapData[baseMapId].musicNum;
+        vars.mapData[mapId].magiaSinEfecto = vars.mapData[baseMapId].magiaSinEfecto;
+        vars.mapData[mapId].noEncriptarMp = vars.mapData[baseMapId].noEncriptarMp;
+        vars.mapData[mapId].terreno = vars.mapData[baseMapId].terreno;
+        vars.mapData[mapId].zona = vars.mapData[baseMapId].zona;
+        vars.mapData[mapId].restringir = vars.mapData[baseMapId].restringir;
+        vars.mapData[mapId].backup = vars.mapData[baseMapId].backup;
+        vars.mapData[mapId].pk = vars.mapData[baseMapId].pk;
 
         return mapId;
     },
@@ -425,6 +526,16 @@ const challengeManager = {
             return true;
         }
 
+        const isInVetoSession = Object.values(this.vetoSessions).some((session) =>
+            [...session.teamOneParticipants, ...session.teamTwoParticipants].some(
+                (participant) => String(participant.id) === String(user.id),
+            ),
+        );
+
+        if (isInVetoSession) {
+            return true;
+        }
+
         return Object.values(this.openChallenges).some((challenge) => {
             if (options?.excludeOpenChallengeId && challenge.id === options.excludeOpenChallengeId) {
                 return false;
@@ -474,25 +585,25 @@ const challengeManager = {
         }
 
         if (!user.partyId) {
-            throw new Error("Para crear o unirte a un reto 2vs2 debes estar en una party de 2.");
+            throw new Error(`Para crear o unirte a un reto ${teamSize}vs${teamSize} debes estar en una party de ${teamSize}.`);
         }
 
         if (!isPartyLeader(user)) {
-            throw new Error("Solo el líder de la party puede crear o aceptar retos 2vs2.");
+            throw new Error(`Solo el líder de la party puede crear o aceptar retos ${teamSize}vs${teamSize}.`);
         }
 
         const party = vars.parties?.[String(user.partyId)] as { memberIds?: Array<string | number> } | undefined;
 
-        if (!party || !Array.isArray(party.memberIds) || party.memberIds.length !== PARTY_MAX_SIZE_FOR_2V2) {
-            throw new Error("El reto 2vs2 requiere una party exacta de 2 personajes.");
+        if (!party || !Array.isArray(party.memberIds) || party.memberIds.length !== teamSize) {
+            throw new Error(`El reto ${teamSize}vs${teamSize} requiere una party exacta de ${teamSize} personajes.`);
         }
 
         const members = party.memberIds
             .map((memberId) => getCharacterById(memberId))
             .filter((member): member is RuntimeCharacter => Boolean(member));
 
-        if (members.length !== PARTY_MAX_SIZE_FOR_2V2) {
-            throw new Error("Todos los miembros de la party deben estar conectados para el reto 2vs2.");
+        if (members.length !== teamSize) {
+            throw new Error(`Todos los miembros de la party deben estar conectados para el reto ${teamSize}vs${teamSize}.`);
         }
 
         for (const member of members) {
@@ -594,7 +705,7 @@ const challengeManager = {
 
         this.pruneOpenChallenges();
 
-        if (teamSize !== 1 && teamSize !== 2) {
+        if (![1, 2, 3, 4].includes(teamSize)) {
             throw new Error("El modo de reto es inválido.");
         }
 
@@ -849,7 +960,7 @@ const challengeManager = {
         user.hiddenSkillCooldownUntil = 0;
         this.syncParticipantState(user);
 
-        const arenaPos = getTeamArenaPosition(teamSide, index);
+        const arenaPos = getTeamArenaPosition(match.baseMapId, teamSide, index);
         game.telep(client, match.instanceMapId, arenaPos.x, arenaPos.y, `challenge round ${matchParticipant.name}`);
         this.syncParticipantAppearanceForOthers(user);
     },
@@ -974,6 +1085,7 @@ const challengeManager = {
             matchId: match.id,
             teamSize: match.teamSize,
             instanceMapId: match.instanceMapId,
+            baseMapId: match.baseMapId,
             winnerSide,
             finishReason: reason ?? null,
             teamOneScore: match.teams[1].score,
@@ -1094,12 +1206,45 @@ const challengeManager = {
             }
         }
 
+        delete this.openChallenges[challengeId];
+
+        const arenaMapIds = getArenaMapIds();
+
+        if (arenaMapIds.length <= 1) {
+            const matchId = this.startMatchForTeams(
+                challenge.teamSize,
+                teamOneUsers,
+                teamTwoUsers,
+                arenaMapIds[0] ?? CHALLENGE_BASE_MAP_ID,
+            );
+
+            return {
+                ok: true,
+                matchId,
+            };
+        }
+
+        const vetoId = this.createChallengeVetoSession(challenge.teamSize, teamOneUsers, teamTwoUsers);
+
+        return {
+            ok: true,
+            vetoId,
+        };
+    },
+
+    startMatchForTeams(
+        teamSize: TeamSize,
+        teamOneUsers: RuntimeCharacter[],
+        teamTwoUsers: RuntimeCharacter[],
+        baseMapId: number,
+    ) {
         const matchId = this.createId("match");
         const match: ActiveMatch = {
             id: matchId,
             createdAt: now(),
-            teamSize: challenge.teamSize,
-            instanceMapId: this.createMatchInstanceMap(),
+            teamSize,
+            instanceMapId: this.createMatchInstanceMap(baseMapId),
+            baseMapId,
             teams: {
                 1: {
                     side: 1,
@@ -1118,19 +1263,228 @@ const challengeManager = {
         };
 
         this.activeMatches[matchId] = match;
-        delete this.openChallenges[challengeId];
 
-        this.sendMatchConsole(
-            match,
-            `[Retos] Comienza ${challenge.teamSize}vs${challenge.teamSize}. Primero en ganar 2 rondas.`,
-        );
+        this.sendMatchConsole(match, `[Retos] Comienza ${teamSize}vs${teamSize}. Primero en ganar 2 rondas.`);
         this.openVoiceRooms(match);
         this.startRound(match);
 
+        return matchId;
+    },
+
+    createVetoStepTimeoutTimer(vetoId: string) {
+        return setTimeout(() => {
+            this.autoResolveVetoStep(vetoId);
+        }, CHALLENGE_VETO_STEP_TIMEOUT_MS) as unknown as number;
+    },
+
+    clearVetoTimer(session: ChallengeVetoSession) {
+        if (session.timerId !== null) {
+            clearTimeout(session.timerId);
+            session.timerId = null;
+        }
+    },
+
+    buildVetoStatePayload(session: ChallengeVetoSession): ChallengeVetoStatePayload {
+        const currentStep = session.sequence[session.stepIndex] ?? null;
+
         return {
-            ok: true,
-            matchId,
+            vetoId: session.id,
+            teamSize: session.teamSize,
+            mapPool: session.mapPool,
+            remainingMapIds: session.remainingMapIds,
+            bannedMapIds: session.bannedMapIds,
+            totalSteps: session.sequence.length,
+            stepIndex: session.stepIndex,
+            currentTurnSide: currentStep?.side ?? null,
+            deadlineAt: session.deadlineAt,
+            resolved: session.resolved,
         };
+    },
+
+    getVetoSessionParticipants(session: ChallengeVetoSession) {
+        return [...session.teamOneParticipants, ...session.teamTwoParticipants];
+    },
+
+    broadcastVetoState(session: ChallengeVetoSession, extra?: Partial<ChallengeVetoStatePayload>) {
+        const handleProtocol = getHandleProtocol();
+        const basePayload = { ...this.buildVetoStatePayload(session), ...extra };
+        const teamsBySide: Record<TeamSide, RuntimeCharacter[]> = {
+            1: session.teamOneParticipants,
+            2: session.teamTwoParticipants,
+        };
+
+        for (const side of [1, 2] as TeamSide[]) {
+            teamsBySide[side].forEach((participant, index) => {
+                const client = getClientById(participant.id);
+
+                if (client) {
+                    handleProtocol.challengeVetoState(
+                        { ...basePayload, yourSide: side, isLeader: index === 0 },
+                        client,
+                    );
+                }
+            });
+        }
+    },
+
+    sendVetoConsole(session: ChallengeVetoSession, message: string, color = "#E69500") {
+        const handleProtocol = getHandleProtocol();
+
+        for (const participant of this.getVetoSessionParticipants(session)) {
+            const client = getClientById(participant.id);
+
+            if (client) {
+                handleProtocol.console(message, color, 1, 0, client);
+            }
+        }
+    },
+
+    createChallengeVetoSession(teamSize: TeamSize, teamOneUsers: RuntimeCharacter[], teamTwoUsers: RuntimeCharacter[]) {
+        const vetoId = this.createId("veto");
+        const arenaMapIds = getArenaMapIds();
+        const sequence = buildVetoSequence(arenaMapIds.length);
+        const session: ChallengeVetoSession = {
+            id: vetoId,
+            createdAt: now(),
+            teamSize,
+            teamOneParticipants: teamOneUsers,
+            teamTwoParticipants: teamTwoUsers,
+            mapPool: arenaMapIds,
+            remainingMapIds: [...arenaMapIds],
+            bannedMapIds: [],
+            sequence,
+            stepIndex: 0,
+            deadlineAt: now() + CHALLENGE_VETO_STEP_TIMEOUT_MS,
+            timerId: null,
+            resolved: false,
+        };
+
+        this.vetoSessions[vetoId] = session;
+
+        const firstTurnTeamName = teamOneUsers.map((member) => member.nameCharacter).join(" y ");
+        this.sendVetoConsole(session, `[Retos] Veteo de mapas: le toca banear a ${firstTurnTeamName}.`);
+        this.broadcastVetoState(session);
+        session.timerId = this.createVetoStepTimeoutTimer(vetoId);
+
+        return vetoId;
+    },
+
+    getVetoParticipantSide(session: ChallengeVetoSession, user: RuntimeCharacter): TeamSide | null {
+        if (session.teamOneParticipants[0] && String(session.teamOneParticipants[0].id) === String(user.id)) {
+            return 1;
+        }
+
+        if (session.teamTwoParticipants[0] && String(session.teamTwoParticipants[0].id) === String(user.id)) {
+            return 2;
+        }
+
+        return null;
+    },
+
+    applyVetoBan(session: ChallengeVetoSession, mapId: number, side: TeamSide) {
+        if (!session.remainingMapIds.includes(mapId)) {
+            throw new Error("Ese mapa ya no está disponible para vetar.");
+        }
+
+        this.clearVetoTimer(session);
+
+        session.remainingMapIds = session.remainingMapIds.filter((id) => id !== mapId);
+        session.bannedMapIds.push({ mapId, side });
+        session.stepIndex += 1;
+
+        if (session.remainingMapIds.length <= 1 || session.stepIndex >= session.sequence.length) {
+            this.resolveVetoSession(session);
+            return;
+        }
+
+        session.deadlineAt = now() + CHALLENGE_VETO_STEP_TIMEOUT_MS;
+        this.broadcastVetoState(session);
+        session.timerId = this.createVetoStepTimeoutTimer(session.id);
+    },
+
+    resolveVetoSession(session: ChallengeVetoSession) {
+        session.resolved = true;
+        delete this.vetoSessions[session.id];
+
+        const selectedMapId = session.remainingMapIds[0] ?? session.mapPool[0] ?? CHALLENGE_BASE_MAP_ID;
+        const matchId = this.startMatchForTeams(
+            session.teamSize,
+            session.teamOneParticipants,
+            session.teamTwoParticipants,
+            selectedMapId,
+        );
+
+        this.broadcastVetoState(session, { resolved: true, selectedMapId, matchId });
+    },
+
+    autoResolveVetoStep(vetoId: string) {
+        const session = this.vetoSessions[vetoId];
+
+        if (!session || session.resolved) {
+            return;
+        }
+
+        const currentStep = session.sequence[session.stepIndex];
+
+        if (!currentStep || session.remainingMapIds.length === 0) {
+            return;
+        }
+
+        const randomIndex = Math.floor(Math.random() * session.remainingMapIds.length);
+        const mapId = session.remainingMapIds[randomIndex];
+
+        this.sendVetoConsole(session, "[Retos] Se agotó el tiempo: se baneó un mapa al azar.", "#d94125");
+        this.applyVetoBan(session, mapId, currentStep.side);
+    },
+
+    submitChallengeVetoBan(idUser: string | number, vetoId: string, mapId: number) {
+        const user = getCharacterById(idUser);
+
+        if (!user || user.cerrado || !user.connected) {
+            throw new Error("Debes estar conectado para usar retos.");
+        }
+
+        const session = this.vetoSessions[vetoId];
+
+        if (!session || session.resolved) {
+            throw new Error("El veteo de mapas ya no está disponible.");
+        }
+
+        const currentStep = session.sequence[session.stepIndex];
+
+        if (!currentStep) {
+            throw new Error("El veteo de mapas ya terminó.");
+        }
+
+        const participantSide = this.getVetoParticipantSide(session, user);
+
+        if (!participantSide) {
+            throw new Error("Solo el líder de cada equipo puede vetar mapas.");
+        }
+
+        if (participantSide !== currentStep.side) {
+            throw new Error("No es tu turno de vetar un mapa.");
+        }
+
+        this.applyVetoBan(session, mapId, currentStep.side);
+
+        return { ok: true };
+    },
+
+    cancelVetoSessionForUser(user: RuntimeCharacter, reason: string) {
+        for (const [vetoId, session] of Object.entries(this.vetoSessions)) {
+            const isParticipant = this.getVetoSessionParticipants(session).some(
+                (participant) => String(participant.id) === String(user.id),
+            );
+
+            if (!isParticipant) {
+                continue;
+            }
+
+            this.clearVetoTimer(session);
+            delete this.vetoSessions[vetoId];
+            this.broadcastVetoState(session, { resolved: true, cancelled: true, reason });
+        }
     },
 
     createMatchmaking2v2Match(teamOneUsers: RuntimeCharacter[], teamTwoUsers: RuntimeCharacter[]) {
@@ -1140,7 +1494,8 @@ const challengeManager = {
             createdAt: now(),
             teamSize: 2,
             targetScore: 1,
-            instanceMapId: this.createMatchInstanceMap(),
+            instanceMapId: this.createMatchInstanceMap(getArenaMapIds()[0] ?? CHALLENGE_BASE_MAP_ID),
+            baseMapId: getArenaMapIds()[0] ?? CHALLENGE_BASE_MAP_ID,
             teams: {
                 1: {
                     side: 1,
@@ -1364,6 +1719,8 @@ const challengeManager = {
                 delete this.openChallenges[challengeId];
             }
         }
+
+        this.cancelVetoSessionForUser(user, "abandono");
 
         const match = this.getBusyMatchByCharacter(user);
 

@@ -726,8 +726,8 @@ export function getTileAt(
 export async function loadNPCsDB(): Promise<NPCsDB> {
     try {
         return await fetchJsonWithFallback<NPCsDB>(
+            "/init/npcs_optimized.json?v=2.2",
             "/init/npcs_optimized.json?v=2.1",
-            "/init/npcs_optimized.json?v=2.0",
             "NPCs database",
             { preferLocal: PREFER_LOCAL_NPCS },
         );

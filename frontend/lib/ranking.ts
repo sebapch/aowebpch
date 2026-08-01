@@ -30,3 +30,31 @@ export type RankingHeadSprite = {
     sourceX: number;
     sourceY: number;
 };
+
+export type RatingTeamSize = 2 | 3 | 4;
+
+export type RatingRankingEntry = {
+    characterId: string;
+    name: string;
+    rating: number;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    level: number;
+    idClase: number;
+    idRaza: number;
+    criminal: boolean;
+    faction: "none" | "armada" | "caos";
+    clanName: string | null;
+    headId: number;
+    bodyId: number;
+};
+
+export type RatingRankingResponse = {
+    teamSize: RatingTeamSize;
+    entries: RatingRankingEntry[];
+};
+
+export type RatingRankingPageData = RatingRankingResponse & {
+    headSpritesById: Record<string, RankingHeadSprite | null>;
+};

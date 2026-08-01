@@ -552,6 +552,7 @@ export type ChallengeHistoryRecord = {
     match_id: string;
     team_size: number;
     instance_map_id: number;
+    base_map_id: number | null;
     winner_side: number;
     finish_reason: string | null;
     team_one_score: number;
@@ -567,6 +568,7 @@ export type ChallengeHistoryEntry = {
     matchId: string;
     teamSize: number;
     instanceMapId: number;
+    baseMapId: number | null;
     winnerSide: number;
     finishReason: string | null;
     teamOneScore: number;
@@ -575,4 +577,53 @@ export type ChallengeHistoryEntry = {
     startedAt: Date;
     finishedAt: Date;
     createdAt: Date;
+};
+
+export type CharacterRatingRecord = {
+    character_id: string;
+    team_size: number;
+    rating: number;
+    games_played: number;
+    wins: number;
+    losses: number;
+    updated_at: Date;
+};
+
+export type RatingRankingEntryRecord = {
+    character_id: string;
+    name: string;
+    rating: number;
+    games_played: number;
+    wins: number;
+    losses: number;
+    level: number;
+    id_clase: number;
+    id_raza: number;
+    criminal: boolean;
+    faction: CharacterFaction;
+    clan_name: string | null;
+    id_head: number;
+    id_body: number;
+};
+
+export type RatingRankingEntryResponse = {
+    characterId: string;
+    name: string;
+    rating: number;
+    gamesPlayed: number;
+    wins: number;
+    losses: number;
+    level: number;
+    idClase: number;
+    idRaza: number;
+    criminal: boolean;
+    faction: CharacterFaction;
+    clanName: string | null;
+    headId: number;
+    bodyId: number;
+};
+
+export type RatingRankingListResponse = {
+    teamSize: number;
+    entries: RatingRankingEntryResponse[];
 };

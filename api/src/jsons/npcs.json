@@ -15367,5 +15367,1640 @@
         "poderAtaque": 0,
         "poderEvasion": 0,
         "magicResistance": 0
+    },
+    "9903": {
+        "id": 9903,
+        "name": "Comerciante de Cascos y Gorros",
+        "idHead": 508,
+        "idBody": 203,
+        "npcType": 10,
+        "desc": "¡Tengo los mejores cascos, gorros y sombreros del reino!",
+        "objs": [
+            {
+                "cant": 1000,
+                "item": 131,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 132,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 370,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 383,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 405,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 661,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 662,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 851,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1001,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1002,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1003,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1004,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1010,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1051,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1052,
+                "price": 1
+            }
+        ],
+        "drop": [],
+        "gold": 0,
+        "hp": 0,
+        "maxHp": 0,
+        "minHit": 0,
+        "maxHit": 0,
+        "def": 0,
+        "poderAtaque": 0,
+        "poderEvasion": 0,
+        "magicResistance": 0
+    },
+    "9904": {
+        "id": 9904,
+        "name": "Comerciante de Armas",
+        "idHead": 509,
+        "idBody": 204,
+        "npcType": 10,
+        "desc": "¡Espadas, hachas, dagas y arcos para la batalla!",
+        "objs": [
+            {
+                "cant": 1000,
+                "item": 2,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 3,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 9,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 15,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 19,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 123,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 124,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 125,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 126,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 127,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 129,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 138,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 159,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 164,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 165,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 187,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 198,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 237,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 365,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 366,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 367,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 389,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 398,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 399,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 400,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 401,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 402,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 403,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 460,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 478,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 479,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 543,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 559,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 561,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 562,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 563,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 564,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 565,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 619,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 658,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 659,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 660,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 663,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 664,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 665,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 753,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 859,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 861,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 862,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 990,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1000,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1005,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1009,
+                "price": 1
+            }
+        ],
+        "drop": [],
+        "gold": 0,
+        "hp": 0,
+        "maxHp": 0,
+        "minHit": 0,
+        "maxHit": 0,
+        "def": 0,
+        "poderAtaque": 0,
+        "poderEvasion": 0,
+        "magicResistance": 0
+    },
+    "9905": {
+        "id": 9905,
+        "name": "Comerciante de Armaduras",
+        "idHead": 510,
+        "idBody": 199,
+        "npcType": 10,
+        "desc": "¡Armaduras de placas y cuero de la más alta calidad!",
+        "objs": [
+            {
+                "cant": 1000,
+                "item": 30,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 31,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 32,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 35,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 170,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 195,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 356,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 359,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 360,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 369,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 372,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 382,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 390,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 391,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 463,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 464,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 465,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 481,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 482,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 484,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 485,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 487,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 488,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 489,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 493,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 495,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 496,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 497,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 499,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 503,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 504,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 505,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 506,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 510,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 511,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 512,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 513,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 514,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 520,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 521,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 523,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 529,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 616,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 629,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 631,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 635,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 638,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 675,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 677,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 680,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 683,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 684,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 691,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 693,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 701,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 876,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 879,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 881,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 882,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 883,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 884,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 885,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 886,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 887,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 888,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 889,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 890,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 891,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 892,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 893,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 894,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 895,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 897,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 898,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 899,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 900,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 901,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 902,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 903,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 904,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 905,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 906,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 909,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 925,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 926,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 931,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 933,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 935,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 938,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 941,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 942,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 943,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 944,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 945,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 946,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 947,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 948,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 949,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 950,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 951,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 953,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 954,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 955,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 956,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 957,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 973,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 977,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 979,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 980,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 981,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 982,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 983,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 984,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 985,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 991,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 992,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 993,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 994,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 995,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 996,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 998,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 999,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1046,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1063,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1064,
+                "price": 1
+            }
+        ],
+        "drop": [],
+        "gold": 0,
+        "hp": 0,
+        "maxHp": 0,
+        "minHit": 0,
+        "maxHit": 0,
+        "def": 0,
+        "poderAtaque": 0,
+        "poderEvasion": 0,
+        "magicResistance": 0
+    },
+    "9906": {
+        "id": 9906,
+        "name": "Comerciante de Túnicas",
+        "idHead": 511,
+        "idBody": 201,
+        "npcType": 10,
+        "desc": "¡Las mejores túnicas místicas para magos, clérigos y bardos!",
+        "objs": [
+            {
+                "cant": 1000,
+                "item": 135,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 196,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 238,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 239,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 357,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 381,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 496,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 509,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 516,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 517,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 518,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 519,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 526,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 528,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 614,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 628,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 630,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 634,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 637,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 640,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 646,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 650,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 679,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 687,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 689,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 878,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 880,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 881,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 896,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 936,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 986,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1044,
+                "price": 1
+            }
+        ],
+        "drop": [],
+        "gold": 0,
+        "hp": 0,
+        "maxHp": 0,
+        "minHit": 0,
+        "maxHit": 0,
+        "def": 0,
+        "poderAtaque": 0,
+        "poderEvasion": 0,
+        "magicResistance": 0
+    },
+    "9907": {
+        "id": 9907,
+        "name": "Comerciante de Armaduras Pequeñas (E/G)",
+        "idHead": 80,
+        "idBody": 49,
+        "npcType": 10,
+        "desc": "¡Armaduras forjadas a medida para enanos y gnomos!",
+        "objs": [
+            {
+                "cant": 1000,
+                "item": 243,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 379,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 392,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 393,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 483,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 492,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 500,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 617,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 632,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 639,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 648,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 667,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 668,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 672,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 676,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 678,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 681,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 685,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 694,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 695,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 707,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 854,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 908,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 910,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 911,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 912,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 916,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 917,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 918,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 919,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 922,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 923,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 924,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 927,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 928,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 929,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 930,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 934,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 937,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 940,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 958,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 965,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 966,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 968,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 970,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 971,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 974,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 975,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 976,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1039,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1040,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1041,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1042,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1047,
+                "price": 1
+            }
+        ],
+        "drop": [],
+        "gold": 0,
+        "hp": 0,
+        "maxHp": 0,
+        "minHit": 0,
+        "maxHit": 0,
+        "def": 0,
+        "poderAtaque": 0,
+        "poderEvasion": 0,
+        "magicResistance": 0
+    },
+    "9908": {
+        "id": 9908,
+        "name": "Comerciante de Túnicas Pequeñas (E/G)",
+        "idHead": 81,
+        "idBody": 240,
+        "npcType": 10,
+        "desc": "¡Túnicas especiales adaptadas para razas pequeñas!",
+        "objs": [
+            {
+                "cant": 1000,
+                "item": 524,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 525,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 549,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 558,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 615,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 633,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 636,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 656,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 670,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 671,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 682,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 686,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 688,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 690,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 867,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 877,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 921,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 930,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 932,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 939,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 962,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 969,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 972,
+                "price": 1
+            },
+            {
+                "cant": 1000,
+                "item": 1045,
+                "price": 1
+            }
+        ],
+        "drop": [],
+        "gold": 0,
+        "hp": 0,
+        "maxHp": 0,
+        "minHit": 0,
+        "maxHit": 0,
+        "def": 0,
+        "poderAtaque": 0,
+        "poderEvasion": 0,
+        "magicResistance": 0
     }
 }

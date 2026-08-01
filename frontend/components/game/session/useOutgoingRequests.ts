@@ -61,7 +61,14 @@ type OutgoingRequestProps = {
         token: number;
     } | null;
     retosActionRequest?: {
-        action: "refresh" | "create" | "join" | "cancel" | "enqueue2v2" | "dequeue2v2";
+        action:
+            | "refresh"
+            | "create"
+            | "join"
+            | "cancel"
+            | "enqueue2v2"
+            | "dequeue2v2"
+            | "vetoBan";
         payload?: Record<string, unknown>;
         token: number;
     } | null;

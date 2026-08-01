@@ -8,11 +8,11 @@ import { buildPageMetadata } from "@/lib/seo";
 export const revalidate = 300;
 
 export const metadata: Metadata = buildPageMetadata({
-    title: "Ranking de jugadores",
+    title: "Leaderboard de Operativos",
     description:
-        "Consulta el ranking publico de AOWeb y segui a los mejores jugadores por nivel o kills.",
+        "Consulta la tabla de clasificación pública de CSAO2 y sigue a los mejores tiradores por frags, kills y nivel.",
     path: "/ranking",
-    keywords: ["ranking AOWeb", "top kills", "top nivel"],
+    keywords: ["ranking CSAO2", "leaderboard Counter Strike AO", "top kills CSAO2", "top nivel"],
 });
 
 async function getRanking(): Promise<RankingPageData> {

@@ -58,6 +58,7 @@ type UseGameSessionOptions = {
     emitTradeState: (value: any) => void;
     emitMarketState: (value: any) => void;
     emitRetosState: (value: any) => void;
+    emitChallengeVetoState: (value: any) => void;
     emitBailState: (value: any) => void;
     emitCraftingState: (value: any) => void;
     panelSnapshotChunkBufferRef: RefObject<string>;
@@ -112,6 +113,7 @@ export function useGameSession({
     emitTradeState,
     emitMarketState,
     emitRetosState,
+    emitChallengeVetoState,
     emitBailState,
     emitCraftingState,
     panelSnapshotChunkBufferRef,
@@ -127,6 +129,7 @@ export function useGameSession({
     const emitTradeStateRef = useRef(emitTradeState);
     const emitMarketStateRef = useRef(emitMarketState);
     const emitRetosStateRef = useRef(emitRetosState);
+    const emitChallengeVetoStateRef = useRef(emitChallengeVetoState);
     const emitBailStateRef = useRef(emitBailState);
     const emitCraftingStateRef = useRef(emitCraftingState);
     const clearUseItemQueuesRef = useRef(clearUseItemQueues);
@@ -161,6 +164,10 @@ export function useGameSession({
     useEffect(() => {
         emitRetosStateRef.current = emitRetosState;
     }, [emitRetosState]);
+
+    useEffect(() => {
+        emitChallengeVetoStateRef.current = emitChallengeVetoState;
+    }, [emitChallengeVetoState]);
 
     useEffect(() => {
         emitBailStateRef.current = emitBailState;
@@ -515,6 +522,7 @@ export function useGameSession({
             emitTradeStateRef.current(null);
             emitMarketStateRef.current(null);
             emitRetosStateRef.current(null);
+            emitChallengeVetoStateRef.current(null);
             emitBailStateRef.current(null);
             emitCraftingStateRef.current(null);
             panelSnapshotChunkBufferRef.current = "";

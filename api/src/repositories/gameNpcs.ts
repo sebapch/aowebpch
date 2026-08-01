@@ -210,18 +210,21 @@ async function insertRevision(
 }
 
 async function ensureSeededInternal(): Promise<void> {
-    const countResult = await pool.query<{ count: string }>(
-        "SELECT COUNT(*)::text AS count FROM game_npcs",
+    const rows = loadSeedNpcsJson();
+    const existingIdsResult = await pool.query<{ id: number }>(
+        "SELECT id FROM game_npcs",
     );
-    if (Number(countResult.rows[0]?.count ?? 0) > 0) {
+    const existingIds = new Set(existingIdsResult.rows.map((r) => r.id));
+    const missingRows = rows.filter((r) => !existingIds.has(r.id));
+
+    if (missingRows.length === 0) {
         return;
     }
 
     const client = await pool.connect();
     try {
         await client.query("BEGIN");
-        const rows = loadSeedNpcsJson();
-        for (const row of rows) {
+        for (const row of missingRows) {
             const checksum = computeChecksum(row.data);
             await client.query(
                 `

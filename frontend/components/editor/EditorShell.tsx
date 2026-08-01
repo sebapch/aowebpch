@@ -13,6 +13,7 @@ import {
 } from "../../lib/editor/api";
 import {
     LAYER_NAMES,
+    MAX_ARENA_SPAWNS_PER_TEAM,
     TRIGGER_LABELS,
     type ExpandedTile,
     type MapMetadata,
@@ -28,6 +29,7 @@ import { loadGraphicsDB } from "../../utils/gameLoader";
 import { EditorCanvas, type EditorCanvasHandle, type EditorTool, type PaintMode } from "./EditorCanvas";
 import { GraphicsPicker } from "./GraphicsPicker";
 import { GraphicsCatalogModal } from "./GraphicsCatalogModal";
+import { ArenaPanel } from "./ArenaPanel";
 import { MapConnectionsPanel } from "./MapConnectionsPanel";
 import { MapMetaPanel } from "./MapMetaPanel";
 import { MapSearchModal } from "./MapSearchModal";
@@ -77,6 +79,7 @@ const OVERLAY_LABELS: Record<keyof OverlayFlags, string> = {
     objects: "Objetos",
     npcs: "NPCs",
     triggers: "Triggers",
+    arenaSpawns: "Spawns de arena",
 };
 
 export function EditorShell({ initialMapId }: { initialMapId: number }) {
@@ -98,6 +101,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [quickMapInput, setQuickMapInput] = useState("");
     const [graphicsCatalogOpen, setGraphicsCatalogOpen] = useState(false);
     const [metaPanelOpen, setMetaPanelOpen] = useState(false);
+    const [arenaPanelOpen, setArenaPanelOpen] = useState(false);
+    const [armedArenaTeam, setArmedArenaTeam] = useState<1 | 2 | null>(null);
     const [connectionsOpen, setConnectionsOpen] = useState(false);
     const [newMapOpen, setNewMapOpen] = useState(false);
     const [readOnly, setReadOnly] = useState(false);
@@ -129,6 +134,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         objects: true,
         npcs: true,
         triggers: false,
+        arenaSpawns: true,
     });
 
     const [tool, setTool] = useState<EditorTool>("select");
@@ -242,6 +248,17 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     }, [movePending]);
 
     useEffect(() => {
+        if (armedArenaTeam === null) return;
+        const handleKeyDown = (e: KeyboardEvent) => {
+            if (e.key === "Escape") {
+                setArmedArenaTeam(null);
+            }
+        };
+        window.addEventListener("keydown", handleKeyDown);
+        return () => window.removeEventListener("keydown", handleKeyDown);
+    }, [armedArenaTeam]);
+
+    useEffect(() => {
         const sync = () => setHistoryState({ canUndo: history.canUndo, canRedo: history.canRedo });
 
         sync();
@@ -274,6 +291,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             }
 
             setSelection(null);
+            setArmedArenaTeam(null);
             setMapId(nextMapId);
         },
         [dirty, mapId],
@@ -456,9 +474,37 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         setMovePending({ kind: "spawn", fromX: x, fromY: y });
     }, []);
 
+    const handleAddArenaSpawn = useCallback(
+        (team: 1 | 2, point: { x: number; y: number }) => {
+            if (!model) return;
+
+            const current = model.meta.arenaSpawns ?? { team1: [], team2: [] };
+            const key = team === 1 ? "team1" : "team2";
+            const existing = current[key];
+
+            if (existing.length >= MAX_ARENA_SPAWNS_PER_TEAM) {
+                return;
+            }
+
+            model.setMeta({
+                ...model.meta,
+                arenaSpawns: { ...current, [key]: [...existing, point] },
+            });
+            canvasHandle?.markAllDirty();
+            handleEdit();
+        },
+        [model, handleEdit, canvasHandle],
+    );
+
     const handlePickTile = useCallback(
         (targetTile: { x: number; y: number }) => {
             setSelectedTile(targetTile);
+
+            if (armedArenaTeam !== null) {
+                handleAddArenaSpawn(armedArenaTeam, targetTile);
+                setArmedArenaTeam(null);
+                return;
+            }
 
             if (movePending && model) {
                 const state = movePending;
@@ -1072,6 +1118,20 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 <button
                     type="button"
                     disabled={!model}
+                    onClick={() => setArenaPanelOpen(true)}
+                    className={`rounded border px-2 py-1 text-xs disabled:cursor-not-allowed disabled:opacity-40 ${
+                        model?.meta.isArena
+                            ? "border-amber-600 bg-amber-950/70 text-amber-300 hover:bg-amber-900/80"
+                            : "border-slate-700 text-slate-300 hover:bg-slate-800"
+                    }`}
+                    title="Marcar el mapa como arena y configurar spawns de equipo para Retos"
+                >
+                    {model?.meta.isArena ? "🏟️ Arena" : "Arena"}
+                </button>
+
+                <button
+                    type="button"
+                    disabled={!model}
                     onClick={() => setConnectionsOpen(true)}
                     className="rounded border border-slate-700 px-2 py-1 text-xs text-slate-300 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
                     title="A que mapa se sale por cada borde"
@@ -1595,6 +1655,21 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 </aside>
 
                 <main className="relative min-w-0 flex-1">
+                    {armedArenaTeam !== null && (
+                        <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-lg border border-amber-500/80 bg-slate-900/95 px-4 py-2 text-xs shadow-2xl backdrop-blur-xs">
+                            <span className="font-semibold text-amber-300 flex items-center gap-1.5">
+                                <span className="animate-pulse">🏟️</span> Agregando spawn — Equipo {armedArenaTeam}
+                            </span>
+                            <span className="text-slate-300 font-medium">Haz clic en el tile del mapa donde aparecera el equipo</span>
+                            <button
+                                type="button"
+                                onClick={() => setArmedArenaTeam(null)}
+                                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
+                            >
+                                Cancelar (Esc)
+                            </button>
+                        </div>
+                    )}
                     {movePending && (
                         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-lg border border-amber-500/80 bg-slate-900/95 px-4 py-2 text-xs shadow-2xl backdrop-blur-xs">
                             <span className="font-semibold text-amber-300 flex items-center gap-1.5">
@@ -1732,6 +1807,21 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
 
             {metaPanelOpen && model && (
                 <MapMetaPanel meta={model.meta} onChange={handleSetMeta} onClose={() => setMetaPanelOpen(false)} />
+            )}
+
+            {arenaPanelOpen && model && (
+                <ArenaPanel
+                    meta={model.meta}
+                    armedTeam={armedArenaTeam}
+                    onChange={handleSetMeta}
+                    onArmTeam={(team) => {
+                        if (team !== null) {
+                            setTool("select");
+                        }
+                        setArmedArenaTeam(team);
+                    }}
+                    onClose={() => setArenaPanelOpen(false)}
+                />
             )}
 
             {connectionsOpen && model && (

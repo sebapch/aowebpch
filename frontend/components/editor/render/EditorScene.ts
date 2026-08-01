@@ -30,6 +30,7 @@ export type OverlayFlags = {
     objects: boolean;
     npcs: boolean;
     triggers: boolean;
+    arenaSpawns: boolean;
 };
 
 export type LayerVisibility = Record<LayerIndex, boolean>;
@@ -100,6 +101,7 @@ export class EditorScene {
         objects: true,
         npcs: true,
         triggers: false,
+        arenaSpawns: true,
     };
 
     private destroyed = false;
@@ -759,6 +761,54 @@ export class EditorScene {
                         .fill({ color: tile.spawn ? 0xfacc15 : 0xfb923c, alpha: 0.9 });
                 }
             }
+        }
+
+        if (this.overlays.arenaSpawns) {
+            this.drawArenaSpawns(g, labelStyle, showLabels);
+        }
+    }
+
+    /**
+     * Marcadores de spawns de equipo (`meta.arenaSpawns`), independientes de la
+     * grilla de tiles: viven en la metadata del mapa, no en un tile individual.
+     */
+    private drawArenaSpawns(g: Graphics, labelStyle: TextStyle, showLabels: boolean): void {
+        const spawns = this.model.meta.arenaSpawns;
+
+        if (!spawns) {
+            return;
+        }
+
+        const teams: Array<{ points: { x: number; y: number }[]; color: number; label: string }> = [
+            { points: spawns.team1 ?? [], color: 0x38bdf8, label: "E1" },
+            { points: spawns.team2 ?? [], color: 0xfb7185, label: "E2" },
+        ];
+
+        for (const team of teams) {
+            team.points.forEach((point, index) => {
+                if (!this.model.inBounds(point.x, point.y)) {
+                    return;
+                }
+
+                const px = (point.x - 1) * TILE_SIZE;
+                const py = (point.y - 1) * TILE_SIZE;
+                const cx = px + TILE_SIZE / 2;
+                const cy = py + TILE_SIZE / 2;
+
+                g.rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2).stroke({
+                    width: 2 / this.zoom,
+                    color: team.color,
+                    alpha: 0.95,
+                });
+                g.circle(cx, cy, TILE_SIZE * 0.22).fill({ color: team.color, alpha: 0.85 });
+
+                if (showLabels) {
+                    const label = new Text({ text: `${team.label}·${index + 1}`, style: labelStyle });
+                    label.x = px + 2;
+                    label.y = py + 2;
+                    this.overlayLabels.addChild(label);
+                }
+            });
         }
     }
 

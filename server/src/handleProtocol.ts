@@ -94,7 +94,7 @@ type RetosOpenPayload = {
     challenges: Array<{
         id: string;
         createdAt: number;
-        teamSize: 1 | 2;
+        teamSize: 1 | 2 | 3 | 4;
         proposer: {
             id: string;
             persistedId: string;
@@ -104,6 +104,25 @@ type RetosOpenPayload = {
             raceName: string;
         };
     }>;
+};
+
+type ChallengeVetoStatePayload = {
+    vetoId: string;
+    teamSize: 1 | 2 | 3 | 4;
+    mapPool: number[];
+    remainingMapIds: number[];
+    bannedMapIds: Array<{ mapId: number; side: 1 | 2 }>;
+    totalSteps: number;
+    stepIndex: number;
+    currentTurnSide: 1 | 2 | null;
+    deadlineAt: number;
+    resolved: boolean;
+    cancelled?: boolean;
+    reason?: string;
+    selectedMapId?: number;
+    matchId?: string;
+    yourSide?: 1 | 2;
+    isLeader?: boolean;
 };
 
 type AreaItemSnapshot = {
@@ -388,6 +407,7 @@ export type HandleProtocolApi = {
     openCrafting: (payload: CraftingOpenPayload, client: RuntimeClient) => void;
     openMarket: (payload: MarketOpenPayload, client: RuntimeClient) => void;
     openRetos: (payload: RetosOpenPayload, client: RuntimeClient) => void;
+    challengeVetoState: (payload: ChallengeVetoStatePayload, client: RuntimeClient) => void;
     voiceSignal: (payload: unknown, client: RuntimeClient) => void;
     aprenderSpell: (idUser: EntityId, idPosSpell: number | string) => void;
     closeForce: (idUser: EntityId) => void;
@@ -1479,6 +1499,12 @@ const handleServer: HandleProtocolApi = {
 
     openRetos(payload, client) {
         pkg.setPackageID(pkg.clientPacketID.openRetos);
+        pkg.writeString(JSON.stringify(payload));
+        socket.send(client);
+    },
+
+    challengeVetoState(payload, client) {
+        pkg.setPackageID(pkg.clientPacketID.challengeVetoState);
         pkg.writeString(JSON.stringify(payload));
         socket.send(client);
     },

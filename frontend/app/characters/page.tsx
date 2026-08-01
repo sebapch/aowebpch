@@ -154,13 +154,16 @@ export default function CharactersPage() {
     const activeSession = localSession;
 
     return (
-        <main className="min-h-screen overflow-y-auto bg-[radial-gradient(circle_at_top,#0f766e33,transparent_35%),radial-gradient(circle_at_bottom,#f59e0b22,transparent_30%),linear-gradient(180deg,#0f172a,#0c0a09)] px-4 py-12 text-stone-100">
+        <main className="min-h-screen csao-bg px-4 py-12 text-slate-100">
             <div className="mx-auto max-w-5xl">
-                <div className="mb-8 flex items-center justify-between gap-4">
+                <div className="mb-8 flex items-center justify-between border-b border-[#3d2719] pb-4">
                     <div>
-                        <p className="text-[11px] uppercase tracking-[0.34em] text-cyan-200/75">
-                            Seleccion de personaje
-                        </p>
+                        <span className="text-[10px] font-bold uppercase tracking-widest text-[#d4a359]">
+                            CSAO2
+                        </span>
+                        <h1 className="text-2xl font-black uppercase tracking-wide text-white md:text-3xl">
+                            Selección de Personaje
+                        </h1>
                     </div>
                 </div>
 
@@ -171,9 +174,9 @@ export default function CharactersPage() {
                                 <Link
                                     href="/createcharacter"
                                     prefetch={false}
-                                    className="rounded-full border border-amber-300/30 bg-amber-300/10 px-4 py-2 text-sm font-medium text-amber-100 transition hover:border-amber-300/55 hover:bg-amber-300/16"
+                                    className="game-btn-bronze px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md"
                                 >
-                                    Crear personaje
+                                    + Crear Personaje
                                 </Link>
                             </div>
 
@@ -223,17 +226,22 @@ export default function CharactersPage() {
                                             role="button"
                                             tabIndex={isBusy ? -1 : 0}
                                             aria-disabled={isBusy}
-                                            className={`group flex h-full flex-col rounded-[26px] border px-3 py-3 text-left shadow-xl transition ${
+                                            className={`group flex h-full flex-col rounded-2xl border px-3 py-3 text-left transition shadow-md ${
                                                 isSelected
-                                                    ? "border-cyan-300/70 bg-cyan-300/10 shadow-cyan-950/40"
-                                                    : "border-white/8 bg-stone-950/80 hover:border-white/20 hover:bg-white/6"
+                                                    ? "border-[#8c582d] bg-[#5c2b0e]/30 shadow-[0_0_15px_rgba(140,88,45,0.25)]"
+                                                    : "border-[#3d2719] bg-[#0b0f19] hover:border-[#6e4624] hover:bg-[#0e1320]"
                                             } ${
                                                 isBusy
                                                     ? "cursor-not-allowed opacity-70"
                                                     : "cursor-pointer"
                                             }`}
                                         >
-                                            <div className="flex justify-center">
+                                            <div className="flex justify-center relative">
+                                                <div className="absolute top-1 left-1 z-10">
+                                                    <span className="game-badge-circle h-6 w-6 text-[10px]">
+                                                        {character.level}
+                                                    </span>
+                                                </div>
                                                 {appearance.bodyId > 0 &&
                                                 appearance.headId > 0 ? (
                                                     <CharacterSpritePreview
@@ -253,45 +261,41 @@ export default function CharactersPage() {
                                                             appearance.helmetId
                                                         }
                                                         scale={1}
-                                                        className="border-white/8"
+                                                        className="border-[#3d2719] bg-[#080b12]"
                                                     />
                                                 ) : (
-                                                    <div className="flex h-[186px] w-[152px] items-center justify-center rounded-[22px] border border-white/10 bg-black/20 px-4 text-center text-xs text-stone-400">
-                                                        El personaje no tiene
-                                                        apariencia renderizable.
+                                                    <div className="flex h-[186px] w-[152px] items-center justify-center rounded-xl border border-[#3d2719] bg-[#080b12] px-4 text-center text-xs text-slate-500">
+                                                        Sin apariencia.
                                                     </div>
                                                 )}
                                             </div>
 
                                             <div className="mt-3 min-h-9 text-center">
                                                 <p
-                                                    className="text-sm font-semibold leading-none"
+                                                    className="text-sm font-bold leading-none uppercase tracking-wide"
                                                     style={{
                                                         color: presentation.color,
                                                     }}
                                                 >
                                                     {isPending
-                                                        ? "Entrando..."
+                                                        ? "Ingresando..."
                                                         : character.name}
                                                 </p>
                                                 {character.clanName ? (
-                                                    <p className="mt-1 min-h-4 text-[11px] tracking-[0.04em] text-stone-300">
+                                                    <p className="mt-1 min-h-4 text-xs font-semibold text-[#d4a359]">
                                                         {`<${character.clanName}>`}
                                                     </p>
                                                 ) : null}
                                             </div>
 
-                                            <div className="mt-auto flex items-end justify-between gap-3 pt-4">
+                                            <div className="mt-auto flex items-end justify-between gap-3 pt-3 border-t border-[#2d1d12]">
                                                 <div className="min-w-0">
-                                                    <p className="mb-1 text-[10px] uppercase tracking-[0.18em] text-stone-400">
+                                                    <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                                                         {character.className}{" "}
                                                         {character.raceName}
                                                     </p>
-                                                    <p className="text-[10px] uppercase tracking-[0.22em] text-stone-500">
+                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#d4a359]">
                                                         Nivel {character.level}
-                                                    </p>
-                                                    <p className="mt-1 text-[10px] uppercase tracking-[0.22em] text-stone-500">
-                                                        Mapa {character.map}
                                                     </p>
                                                 </div>
 
@@ -309,7 +313,7 @@ export default function CharactersPage() {
                                                         }}
                                                         disabled={isBusy}
                                                         aria-label={`Borrar ${character.name}`}
-                                                        className="rounded-full border border-rose-400/30 bg-rose-400/10 p-2 text-rose-100 opacity-0 transition hover:border-rose-400/55 hover:bg-rose-400/16 group-hover:opacity-100 group-focus-within:opacity-100 disabled:cursor-not-allowed disabled:opacity-0"
+                                                        className="rounded-lg border border-[#3d2719] bg-[#080b12] p-1.5 text-slate-400 opacity-0 transition hover:border-red-900/50 hover:bg-red-950/40 hover:text-red-300 group-hover:opacity-100 disabled:cursor-not-allowed disabled:opacity-0"
                                                     >
                                                         <Trash2 className="h-3.5 w-3.5" />
                                                     </button>
@@ -321,14 +325,13 @@ export default function CharactersPage() {
                             </div>
 
                             {activeSession.characters.length === 0 ? (
-                                <div className="rounded-[28px] border border-dashed border-white/10 bg-stone-950/70 p-6 text-stone-400">
-                                    Esta cuenta todavía no tiene personajes.
-                                    Crea el primero desde /createcharacter.
+                                <div className="game-card p-6 text-slate-400 text-xs text-center border-dashed">
+                                    Esta cuenta todavía no posee personajes creados.
                                 </div>
                             ) : null}
 
                             {error ? (
-                                <div className="rounded-2xl bg-rose-500/12 px-4 py-3 text-sm text-rose-200">
+                                <div className="rounded-xl border border-red-900/50 bg-red-950/40 px-4 py-2.5 text-xs text-red-300">
                                     {error}
                                 </div>
                             ) : null}
@@ -339,7 +342,7 @@ export default function CharactersPage() {
                         </aside>
                     </div>
                 ) : (
-                    <div className="rounded-[28px] border border-white/8 bg-stone-950/80 p-6 text-stone-300 shadow-2xl backdrop-blur-md">
+                    <div className="game-card p-6 text-slate-400 text-xs shadow-md">
                         Cargando personajes...
                     </div>
                 )}

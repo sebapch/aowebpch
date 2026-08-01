@@ -118,6 +118,7 @@ import {
     listUserOnlineStats,
 } from "./repositories/userOnlineStats";
 import { createChallengeHistory } from "./repositories/challenges";
+import { listRatingRanking } from "./repositories/ratings";
 
 const app = express();
 const SLOW_REQUEST_LOG_THRESHOLD_MS = 2000;
@@ -317,6 +318,27 @@ app.get("/ranking", async (request, response) => {
                 ? rawClassId
                 : undefined;
         const result = await listCharacterRanking({ sort, classId });
+        response.json(result);
+    } catch (error) {
+        response.status(500).json({
+            error: error instanceof Error ? error.message : "Unexpected error",
+        });
+    }
+});
+
+app.get("/ranking/rating", async (request, response) => {
+    try {
+        const rawTeamSize =
+            typeof request.query.teamSize === "string"
+                ? Number.parseInt(request.query.teamSize, 10)
+                : Number.NaN;
+
+        if (![2, 3, 4].includes(rawTeamSize)) {
+            response.status(400).json({ error: "teamSize must be 2, 3, or 4" });
+            return;
+        }
+
+        const result = await listRatingRanking({ teamSize: rawTeamSize });
         response.json(result);
     } catch (error) {
         response.status(500).json({
