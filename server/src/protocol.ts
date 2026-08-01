@@ -15,6 +15,7 @@ import type { LoginApi } from "./login";
 import type { PackageApi } from "./package";
 import type { SocketApi } from "./socket";
 import { getCharacterById, getClientById } from "./runtimeRegistry";
+import { VOICE_SIGNAL_MAX_LENGTH } from "./voiceChat";
 
 const game = require("./game");
 const login = require("./login") as LoginApi;
@@ -1033,6 +1034,7 @@ dictionaryServer[pkg.serverPacketID.withdrawBankGold] = withdrawBankGold;
 dictionaryServer[pkg.serverPacketID.closeTrade] = closeTrade;
 dictionaryServer[pkg.serverPacketID.marketAction] = marketAction;
 dictionaryServer[pkg.serverPacketID.retosAction] = retosAction;
+dictionaryServer[pkg.serverPacketID.voiceSignal] = voiceSignal;
 dictionaryServer[pkg.serverPacketID.toggleHiddenSkill] = toggleHiddenSkill;
 dictionaryServer[pkg.serverPacketID.useItemU] = useItemU;
 dictionaryServer[pkg.serverPacketID.craftItem] = craftItem;
@@ -4416,6 +4418,40 @@ async function retosAction(ws: RuntimeClient) {
         } catch {
             return;
         }
+    }
+}
+
+/**
+ * Señalización WebRTC del chat de voz por equipo. Sólo viaja el handshake
+ * (oferta, respuesta y candidatos ICE); el audio va directo entre los jugadores.
+ */
+function voiceSignal(ws: RuntimeClient) {
+    try {
+        if (!game.existPjOrClose(ws)) {
+            return;
+        }
+
+        if (!pkg.canReadBytes(2)) {
+            return;
+        }
+
+        const rawPayload = pkg.getString();
+
+        if (!rawPayload || rawPayload.length > VOICE_SIGNAL_MAX_LENGTH) {
+            return;
+        }
+
+        let payload: unknown;
+
+        try {
+            payload = JSON.parse(rawPayload);
+        } catch {
+            return;
+        }
+
+        challengeManager.relayVoiceSignal(ws.id!, payload);
+    } catch (err) {
+        funct.dumpError(err);
     }
 }
 

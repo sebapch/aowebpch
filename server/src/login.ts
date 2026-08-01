@@ -284,6 +284,7 @@ function ensureCharacterHasValidMapPosition(user: RuntimeCharacter | StoredChara
     user.pos = { x: FALLBACK_POS_X, y: FALLBACK_POS_Y };
     user.challengeMatchId = null;
     user.challengeTeam = null;
+    user.challengeTeamColor = null;
     user.challengeLockedUntil = 0;
     user.inmovilizado = 0;
     user.paralizado = 0;
@@ -789,14 +790,7 @@ function Login(this: LoginApi) {
 
                 personaje.spells = spells;
 
-                const classCannotUseMagic =
-                    personaje.idClase === vars.clases.guerrero || personaje.idClase === vars.clases.cazador;
-
-                if (classCannotUseMagic) {
-                    personaje.mana = 0;
-                    personaje.maxMana = 0;
-                    personaje.spells = {};
-                }
+                const classCannotUseMagic = false;
 
                 personaje.gold = balance.clampGold(personaje.gold || 0);
                 relocateToJailIfNeeded(personaje);

@@ -388,6 +388,7 @@ export type HandleProtocolApi = {
     openCrafting: (payload: CraftingOpenPayload, client: RuntimeClient) => void;
     openMarket: (payload: MarketOpenPayload, client: RuntimeClient) => void;
     openRetos: (payload: RetosOpenPayload, client: RuntimeClient) => void;
+    voiceSignal: (payload: unknown, client: RuntimeClient) => void;
     aprenderSpell: (idUser: EntityId, idPosSpell: number | string) => void;
     closeForce: (idUser: EntityId) => void;
     nameMap: (idUser: EntityId) => void;
@@ -1478,6 +1479,12 @@ const handleServer: HandleProtocolApi = {
 
     openRetos(payload, client) {
         pkg.setPackageID(pkg.clientPacketID.openRetos);
+        pkg.writeString(JSON.stringify(payload));
+        socket.send(client);
+    },
+
+    voiceSignal(payload, client) {
+        pkg.setPackageID(pkg.clientPacketID.voiceSignal);
         pkg.writeString(JSON.stringify(payload));
         socket.send(client);
     },

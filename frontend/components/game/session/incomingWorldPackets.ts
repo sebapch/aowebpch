@@ -320,6 +320,10 @@ export async function handleIncomingWorldPacket({
             ctx.emitRetosState(packet.payload);
             return true;
 
+        case "voiceSignal":
+            ctx.handleVoiceSignalPacket(packet.payload);
+            return true;
+
         case "closeTrade":
             ctx.emitTradeState(null);
             ctx.emitMarketState(null);

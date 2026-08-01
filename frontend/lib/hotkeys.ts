@@ -14,7 +14,8 @@ export type HotkeyAction =
     | "meditate"
     | "equipItem"
     | "useItem"
-    | "dropItem";
+    | "dropItem"
+    | "pushToTalk";
 
 export type HotkeySettings = Record<HotkeyAction, string[]>;
 
@@ -33,6 +34,7 @@ export const DEFAULT_HOTKEY_SETTINGS: HotkeySettings = {
     equipItem: ["KeyE"],
     useItem: ["KeyU"],
     dropItem: ["KeyT"],
+    pushToTalk: ["KeyV"],
 };
 
 const HOTKEY_ACTIONS = Object.keys(DEFAULT_HOTKEY_SETTINGS) as HotkeyAction[];

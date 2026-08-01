@@ -4,6 +4,12 @@ import type { SocketApi } from "./socket";
 import type { RuntimeCharacter } from "./types/runtime";
 import { getCharacterById, getClientById, getOnlineSessionById } from "./runtimeRegistry";
 import * as safeZone from "./safeZone";
+import {
+    VOICE_SIGNAL_MAX_PER_WINDOW,
+    VOICE_SIGNAL_WINDOW_MS,
+    getVoiceIceServers,
+    type VoiceIceServer,
+} from "./voiceChat";
 
 export {};
 
@@ -88,6 +94,18 @@ type ActiveMatch = {
     resolvingRound: boolean;
     finished: boolean;
 };
+
+type VoiceRoomPayload =
+    | {
+          type: "room";
+          roomId: string;
+          peerId: string;
+          peerName: string;
+          initiator: boolean;
+          iceServers: VoiceIceServer[];
+      }
+    | { type: "signal"; roomId: string; fromId: string; signal: unknown }
+    | { type: "closed"; roomId: string };
 
 type ChallengeListItem = {
     id: string;
@@ -272,11 +290,16 @@ function isPartyLeader(user: RuntimeCharacter) {
     return Boolean(user.partyId && user.partyLeaderId && String(user.partyLeaderId) === String(user.id));
 }
 
+function getVoiceRoomId(match: ActiveMatch, side: TeamSide) {
+    return `${match.id}:${side}`;
+}
+
 const challengeManager = {
     nextInstanceMapId: CHALLENGE_INSTANCE_MAP_START,
     openChallenges: {} as Record<string, OpenChallenge>,
     activeMatches: {} as Record<string, ActiveMatch>,
     lastGlobalAnnouncementByProposerId: {} as Record<string, number>,
+    voiceSignalRates: {} as Record<string, { windowStartedAt: number; count: number }>,
 
     createId(prefix: string) {
         return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
@@ -840,6 +863,7 @@ const challengeManager = {
             if (offlineUser) {
                 offlineUser.challengeMatchId = null;
                 offlineUser.challengeTeam = null;
+                offlineUser.challengeTeamColor = null;
                 offlineUser.challengeLockedUntil = 0;
                 offlineUser.challengeShieldBlockedForRound = 0;
                 offlineUser.inmovilizado = 0;
@@ -863,6 +887,7 @@ const challengeManager = {
         this.setShieldBlockedForRound(user, false);
         user.challengeMatchId = null;
         user.challengeTeam = null;
+        this.clearTeamColor(user);
         this.syncParticipantState(user);
         game.telep(
             client,
@@ -888,6 +913,7 @@ const challengeManager = {
                 if (user) {
                     user.challengeMatchId = match.id;
                     user.challengeTeam = side;
+                    this.applyTeamColor(match, user, side);
                     this.setShieldBlockedForRound(user, false);
                     this.setParticipantLock(user, true, releaseAt);
                 }
@@ -974,6 +1000,7 @@ const challengeManager = {
 
         match.finished = true;
         this.clearTimers(match);
+        this.closeVoiceRooms(match);
 
         const winnerTeam = match.teams[winnerSide];
         const loserTeam = match.teams[winnerSide === 1 ? 2 : 1];
@@ -1097,6 +1124,7 @@ const challengeManager = {
             match,
             `[Retos] Comienza ${challenge.teamSize}vs${challenge.teamSize}. Primero en ganar 2 rondas.`,
         );
+        this.openVoiceRooms(match);
         this.startRound(match);
 
         return {
@@ -1137,12 +1165,174 @@ const challengeManager = {
             "[Arena Matchmaking 2v2] ¡Partida encontrada! Preparando arena...",
             "#00E676",
         );
+        this.openVoiceRooms(match);
         this.startRound(match, 3);
 
         return {
             ok: true,
             matchId,
         };
+    },
+
+    /**
+     * En los 2v2 cada equipo se pinta de un color: el 1 como ciudadano y el 2 como criminal.
+     * En 1v1 no hace falta porque no hay aliados que confundir.
+     */
+    applyTeamColor(match: ActiveMatch, user: RuntimeCharacter, side: TeamSide) {
+        if (match.teamSize !== 2) {
+            return;
+        }
+
+        getGame().setChallengeTeamColor(user.id, side);
+    },
+
+    clearTeamColor(user: RuntimeCharacter) {
+        getGame().setChallengeTeamColor(user.id, null);
+    },
+
+    sendVoicePayload(idUser: RuntimeCharacter["id"], payload: VoiceRoomPayload) {
+        const client = getClientById(idUser);
+
+        if (!client) {
+            return;
+        }
+
+        getHandleProtocol().voiceSignal(payload, client);
+    },
+
+    getVoiceTeammate(match: ActiveMatch, user: RuntimeCharacter) {
+        const side = getParticipantSideFromMatch(match, user);
+
+        if (!side) {
+            return null;
+        }
+
+        const teammate = match.teams[side].participants.find(
+            (participant) => String(participant.id) !== String(user.id),
+        );
+
+        return teammate ? (getCharacterById(teammate.id) ?? null) : null;
+    },
+
+    /**
+     * Avisa a cada integrante de un equipo 2v2 quién es su compañero de voz.
+     * El cliente sólo pide el micrófono si el jugador acepta unirse.
+     */
+    openVoiceRooms(match: ActiveMatch) {
+        if (match.teamSize !== 2) {
+            return;
+        }
+
+        const iceServers = getVoiceIceServers();
+
+        for (const side of [1, 2] as TeamSide[]) {
+            const [first, second] = match.teams[side].participants;
+
+            if (!first || !second) {
+                continue;
+            }
+
+            const roomId = getVoiceRoomId(match, side);
+            // El de id menor arranca la negociación para que no haya oferta cruzada.
+            const initiatorId = String(first.id) < String(second.id) ? String(first.id) : String(second.id);
+
+            for (const [self, peer] of [
+                [first, second],
+                [second, first],
+            ] as const) {
+                this.sendVoicePayload(self.id, {
+                    type: "room",
+                    roomId,
+                    peerId: String(peer.id),
+                    peerName: peer.name,
+                    initiator: String(self.id) === initiatorId,
+                    iceServers,
+                });
+
+                const client = getClientById(self.id);
+
+                if (client) {
+                    getHandleProtocol().console(
+                        `[Voz] Podés hablar con ${peer.name}: unite desde el panel de voz del equipo.`,
+                        "#00E676",
+                        0,
+                        0,
+                        client,
+                    );
+                }
+            }
+        }
+    },
+
+    closeVoiceRooms(match: ActiveMatch) {
+        if (match.teamSize !== 2) {
+            return;
+        }
+
+        for (const side of [1, 2] as TeamSide[]) {
+            const roomId = getVoiceRoomId(match, side);
+
+            for (const participant of match.teams[side].participants) {
+                delete this.voiceSignalRates[String(participant.id)];
+                this.sendVoicePayload(participant.id, { type: "closed", roomId });
+            }
+        }
+    },
+
+    isVoiceSignalRateExceeded(idUser: RuntimeCharacter["id"]) {
+        const key = String(idUser);
+        const currentTime = now();
+        const bucket = this.voiceSignalRates[key];
+
+        if (!bucket || currentTime - bucket.windowStartedAt >= VOICE_SIGNAL_WINDOW_MS) {
+            this.voiceSignalRates[key] = { windowStartedAt: currentTime, count: 1 };
+            return false;
+        }
+
+        bucket.count += 1;
+
+        return bucket.count > VOICE_SIGNAL_MAX_PER_WINDOW;
+    },
+
+    /**
+     * Reenvía la señalización WebRTC (oferta/respuesta/candidatos ICE) al compañero
+     * de equipo. El servidor nunca ve ni transporta el audio: sólo el handshake.
+     */
+    relayVoiceSignal(idUser: string | number, signal: unknown) {
+        const user = getCharacterById(idUser);
+
+        if (!user) {
+            return;
+        }
+
+        const match = this.getBusyMatchByCharacter(user);
+
+        if (!match || match.finished || match.teamSize !== 2) {
+            return;
+        }
+
+        const side = getParticipantSideFromMatch(match, user);
+
+        if (!side) {
+            return;
+        }
+
+        if (this.isVoiceSignalRateExceeded(user.id)) {
+            return;
+        }
+
+        const teammate = this.getVoiceTeammate(match, user);
+
+        if (!teammate) {
+            return;
+        }
+
+        this.sendVoicePayload(teammate.id, {
+            type: "signal",
+            roomId: getVoiceRoomId(match, side),
+            fromId: String(user.id),
+            signal,
+        });
     },
 
     onCharacterDeath(user: RuntimeCharacter | undefined) {

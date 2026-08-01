@@ -23,7 +23,12 @@ import CharacterStatsModal from "../../components/CharacterStatsModal";
 import CraftingModal from "../../components/CraftingModal";
 import MarketModal from "../../components/MarketModal";
 import RetosModal from "../../components/RetosModal";
+import TeamVoicePanel from "../../components/TeamVoicePanel";
 import TradeModal from "../../components/TradeModal";
+import {
+    INITIAL_TEAM_VOICE_STATE,
+    type TeamVoiceState,
+} from "../../lib/teamVoice";
 import {
     createEmptyMacros,
     normalizeCharacterSettings,
@@ -769,6 +774,13 @@ function HomeContent() {
     const [challengeOverlayText, setChallengeOverlayText] = useState<
         string | null
     >(null);
+    const [voiceState, setVoiceState] = useState<TeamVoiceState>(
+        INITIAL_TEAM_VOICE_STATE,
+    );
+    const [voiceActionRequest, setVoiceActionRequest] = useState<{
+        action: "join" | "leave" | "mutePeer" | "unmutePeer";
+        token: number;
+    } | null>(null);
     const [globalCanvasNotice, setGlobalCanvasNotice] =
         useState<GlobalCanvasNotice | null>(null);
     const [bailState, setBailState] = useState<BailOffer | null>(null);
@@ -2000,6 +2012,13 @@ function HomeContent() {
         }));
     }, []);
 
+    const requestVoiceAction = useCallback(
+        (action: "join" | "leave" | "mutePeer" | "unmutePeer") => {
+            setVoiceActionRequest({ action, token: Date.now() });
+        },
+        [],
+    );
+
     const handleGlobalNotice = useCallback(
         (notice: { text: string; durationMs: number }) => {
             setGlobalCanvasNotice({
@@ -2774,6 +2793,7 @@ function HomeContent() {
                                     rangeAttackRequest={rangeAttackRequest}
                                     spellTargetRequest={spellTargetRequest}
                                     chatRequest={chatRequest}
+                                    voiceActionRequest={voiceActionRequest}
                                     runtimeTiming={runtimeTiming}
                                     hotkeySettings={hotkeySettings}
                                     macros={macros}
@@ -2801,6 +2821,23 @@ function HomeContent() {
                                         setCharacterStatsLoading(false);
                                         setCharacterStatsOpen(true);
                                     }}
+                                    onVoiceStateChange={setVoiceState}
+                                />
+
+                                <TeamVoicePanel
+                                    state={voiceState}
+                                    pushToTalkLabel={formatHotkeyBinding(
+                                        hotkeySettings.pushToTalk,
+                                    )}
+                                    onJoin={() => requestVoiceAction("join")}
+                                    onLeave={() => requestVoiceAction("leave")}
+                                    onTogglePeerMute={() =>
+                                        requestVoiceAction(
+                                            voiceState.peerMuted
+                                                ? "unmutePeer"
+                                                : "mutePeer",
+                                        )
+                                    }
                                 />
 
                                 {!arenaMode &&

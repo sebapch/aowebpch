@@ -167,27 +167,19 @@ function getStarterLoadout(
 } {
     const isLowRace = raceKey === "enano" || raceKey === "gnomo";
     const items: StarterInventoryItem[] = [
-        { idItem: 857, amount: 500 },
-        { idItem: 467, amount: 100 },
-        { idItem: 468, amount: 50 },
+        { idItem: 38, amount: 500 }, // Poción Roja (Vida)
+        { idItem: 37, amount: 500 }, // Poción Azul (Maná)
+        { idItem: 36, amount: 500 }, // Poción Amarilla (Fuerza)
+        { idItem: 39, amount: 500 }, // Poción Verde (Agilidad)
     ];
 
-    if (classKey !== "guerrero" && classKey !== "cazador") {
-        items.push({ idItem: 856, amount: 250 });
-    }
-
-    if (classKey !== "mago") {
-        items.push({ idItem: 855, amount: 100 });
-        items.push({ idItem: 858, amount: 100 });
-    }
+    const spells = Array.from({ length: 47 }, (_, i) => i + 1);
 
     if (
         ["mago", "clerigo", "bardo", "druida", "paladin", "asesino"].includes(
             classKey,
         )
     ) {
-        const spells = [2];
-
         switch (classKey) {
             case "mago":
                 items.push({ idItem: 862, amount: 1 });
@@ -230,16 +222,16 @@ function getStarterLoadout(
             items.push({ idItem: 1048, amount: 1 });
             items.push({ idItem: 1051, amount: 1 });
             items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-            return { items, spells: [] };
+            return { items, spells };
         case "cazador":
             items.push({ idItem: 859, amount: 1 });
             items.push({ idItem: 860, amount: 500 });
             items.push({ idItem: 1052, amount: 1 });
             items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-            return { items, spells: [] };
+            return { items, spells };
     }
 
-    return { items, spells: [] };
+    return { items, spells };
 }
 
 function createSessionToken(): string {

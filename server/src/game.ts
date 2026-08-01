@@ -2439,6 +2439,7 @@ export type GameApi = {
     navegar: (idUser: EntityId, idBarco?: number) => void;
     deleteUserToAllNpcs: (idUser: EntityId) => void;
     hacerCriminal: (idUser: EntityId) => void;
+    setChallengeTeamColor: (idUser: EntityId, side: 1 | 2 | null) => void;
     setCharacterFaction: (idUser: EntityId, faction: CharacterFaction) => void;
     clearCharacterFaction: (idUser: EntityId) => void;
     getFactionScore: (idUser: EntityId, faction: CharacterFaction) => number;
@@ -2463,6 +2464,10 @@ const sharedVaultSessions = new Map<string, SharedVaultSession>();
 const CITIZEN_COLOR = "#3333ff";
 const CRIMINAL_COLOR = "red";
 const STAFF_COLOR = "#419900";
+const CHALLENGE_TEAM_COLORS: Record<1 | 2, string> = {
+    1: CITIZEN_COLOR,
+    2: CRIMINAL_COLOR,
+};
 const MARKET_DEFAULT_LISTING_HOURS = 24;
 const MARKET_MAX_LISTING_HOURS = 72;
 const MARKET_PUBLICATION_FEE_BPS = 200;
@@ -2691,7 +2696,15 @@ function getRewardsFieldName(faction: CharacterFaction): "factionRewardsArmada" 
     return null;
 }
 
-function getDefaultCharacterColor(user: Pick<GameCharacter, "privileges" | "criminal" | "faction">): string {
+function getDefaultCharacterColor(
+    user: Pick<GameCharacter, "privileges" | "criminal" | "faction" | "challengeTeamColor">,
+): string {
+    const teamColorSide = Number(user.challengeTeamColor ?? 0);
+
+    if (teamColorSide === 1 || teamColorSide === 2) {
+        return CHALLENGE_TEAM_COLORS[teamColorSide];
+    }
+
     if (user.privileges === 1 || user.privileges === 2) {
         return STAFF_COLOR;
     }
@@ -4048,7 +4061,8 @@ function Game(this: GameApi) {
                         return;
                     }
 
-                    game.quitarUserInvItem(clientId, idPos, 1);
+                    // Pociones infinitas: no se gastan del inventario
+                    // game.quitarUserInvItem(clientId, idPos, 1);
                     await persistCharacterItems(user);
 
                     if (isAdminSummonedBot(user)) {
@@ -4068,7 +4082,7 @@ function Game(this: GameApi) {
                 }
                 case vars.objType.comida:
                 case vars.objType.bebidas:
-                    game.quitarUserInvItem(clientId, idPos, 1);
+                    // game.quitarUserInvItem(clientId, idPos, 1);
                     await persistCharacterItems(user);
 
                     game.loopArea(ws, function (client: AreaTarget) {
@@ -9623,6 +9637,28 @@ function Game(this: GameApi) {
         } catch (err) {
             funct.dumpError(err);
         }
+    };
+
+    /**
+     * Pinta el nick del personaje con el color de su equipo mientras dura un 2v2:
+     * el equipo 1 usa el color de ciudadano y el equipo 2 el de criminal.
+     * Con `side` en null vuelve al color que le corresponde por facción/criminalidad.
+     */
+    this.setChallengeTeamColor = function (idUser: EntityId, side: 1 | 2 | null) {
+        const user = getCharacterById(idUser);
+
+        if (!user) {
+            return;
+        }
+
+        const nextSide = side === 1 || side === 2 ? side : null;
+
+        if ((user.challengeTeamColor ?? null) === nextSide) {
+            return;
+        }
+
+        user.challengeTeamColor = nextSide;
+        syncCharacterColor(user);
     };
 
     this.setCharacterFaction = function (idUser: EntityId, faction: CharacterFaction) {

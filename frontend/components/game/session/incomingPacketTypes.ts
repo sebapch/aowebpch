@@ -89,6 +89,7 @@ export type IncomingPacketHandlerContext = {
     emitTradeState: (tradeState: any) => void;
     emitMarketState: (marketState: any) => void;
     emitRetosState: (retosState: any) => void;
+    handleVoiceSignalPacket: (payload: any) => void;
     emitBailState: (bailState: any) => void;
     emitCraftingState: (craftingState: any) => void;
     onAdminIntervalsOpen?: (() => void) | undefined;

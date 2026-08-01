@@ -273,6 +273,13 @@ const HOTKEY_SECTIONS: HotkeySection[] = [
                 description: "Envía el comando /meditar.",
                 slots: 1,
             },
+            {
+                action: "pushToTalk",
+                label: "Hablar por voz",
+                description:
+                    "Manténla apretada para hablar con tu companero en los 2v2.",
+                slots: 1,
+            },
         ],
     },
     {

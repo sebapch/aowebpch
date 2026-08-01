@@ -36,6 +36,7 @@ function ensureCharacterHasValidMapPosition(user: RuntimeCharacter | undefined) 
     user.posY = FALLBACK_POS_Y;
     user.challengeMatchId = null;
     user.challengeTeam = null;
+    user.challengeTeamColor = null;
     user.challengeLockedUntil = 0;
     user.inmovilizado = 0;
     user.paralizado = 0;

@@ -77,6 +77,7 @@ export const CLIENT_PACKET_ID = {
     selfMapMetaDelta: 79,
     spellVisual: 80,
     entityVitalsDelta: 81,
+    voiceSignal: 82,
 } as const;
 
 export type PanelShare = {
@@ -201,7 +202,32 @@ export const SERVER_PACKET_ID = {
     closeTrade: 190,
     marketAction: 239,
     retosAction: 248,
+    voiceSignal: 250,
 } as const;
+
+export type VoiceIceServer = {
+    urls: string | string[];
+    username?: string;
+    credential?: string;
+};
+
+/** Handshake WebRTC que intercambian los dos jugadores de un mismo equipo 2v2. */
+export type VoicePeerSignal =
+    | { kind: "ready"; reply: boolean }
+    | { kind: "offer" | "answer"; sdp: string }
+    | { kind: "candidate"; candidate: RTCIceCandidateInit };
+
+export type VoiceSignalPayload =
+    | {
+          type: "room";
+          roomId: string;
+          peerId: string;
+          peerName: string;
+          initiator: boolean;
+          iceServers: VoiceIceServer[];
+      }
+    | { type: "signal"; roomId: string; fromId: string; signal: VoicePeerSignal }
+    | { type: "closed"; roomId: string };
 
 export interface CharacterSnapshot {
     id: number;
@@ -773,6 +799,7 @@ export type ParsedServerPacket =
     | { type: "openCrafting"; payload: CraftingState }
     | { type: "openMarket"; payload: MarketState }
     | { type: "openRetos"; payload: RetosState }
+    | { type: "voiceSignal"; payload: VoiceSignalPayload }
     | { type: "closeBail"; payload: null }
     | { type: "openAdminIntervals"; payload: null }
     | { type: "panelSnapshot"; payload: PanelSnapshot }
@@ -1794,6 +1821,18 @@ function parseServerPacketById(
                 payload: JSON.parse(rawState) as RetosState,
             };
         }
+        case CLIENT_PACKET_ID.voiceSignal: {
+            const rawPayload = reader.getString();
+
+            try {
+                return {
+                    type: "voiceSignal",
+                    payload: JSON.parse(rawPayload) as VoiceSignalPayload,
+                };
+            } catch {
+                return { type: "unknown", payload: { packetId } };
+            }
+        }
         case CLIENT_PACKET_ID.closeTrade:
             return { type: "closeTrade", payload: null };
         case CLIENT_PACKET_ID.closeBail:
@@ -2197,6 +2236,12 @@ export function createRetosActionPacket(
 ): ArrayBuffer {
     const writer = new PacketWriter(SERVER_PACKET_ID.retosAction);
     writer.writeString(JSON.stringify({ action, ...payload }));
+    return writer.toArrayBuffer();
+}
+
+export function createVoiceSignalPacket(signal: VoicePeerSignal): ArrayBuffer {
+    const writer = new PacketWriter(SERVER_PACKET_ID.voiceSignal);
+    writer.writeString(JSON.stringify(signal));
     return writer.toArrayBuffer();
 }
 

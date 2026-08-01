@@ -33,6 +33,7 @@ type UseKeyboardGameplayOptions = {
         event: KeyboardEvent,
     ) => string | null;
     setTargetingMode: (mode: { type: "range" }) => void;
+    setVoiceTransmitting: (active: boolean) => void;
     syncMovementState: (engine: Engine) => void;
     setIsDebugMode: (updater: (previous: boolean) => boolean) => void;
 };
@@ -54,6 +55,7 @@ export function useKeyboardGameplay({
     recordClientGameAction,
     resolveBlockedGameplayKeyboardReason,
     setTargetingMode,
+    setVoiceTransmitting,
     syncMovementState,
     setIsDebugMode,
 }: UseKeyboardGameplayOptions) {
@@ -123,6 +125,17 @@ export function useKeyboardGameplay({
 
             if (e.key === "Escape") {
                 clearTargetingMode();
+                return;
+            }
+
+            // El push to talk se atiende antes que los bloqueos de gameplay:
+            // hablar con el companero tiene que funcionar incluso muerto o inmovilizado.
+            if (isHotkeyMatch(e, hotkeySettingsRef.current.pushToTalk)) {
+                if (!e.repeat) {
+                    setVoiceTransmitting(true);
+                }
+
+                e.preventDefault();
                 return;
             }
 
@@ -278,6 +291,13 @@ export function useKeyboardGameplay({
 
         const handleKeyUp = (e: KeyboardEvent) => {
             const activeEngine = engineRef.current;
+
+            if (isHotkeyMatch(e, hotkeySettingsRef.current.pushToTalk)) {
+                setVoiceTransmitting(false);
+                e.preventDefault();
+                return;
+            }
+
             const movementKeyCode = movementKeyMap.get(e.code);
             if (movementKeyCode !== undefined) {
                 const nextCount = Math.max(
@@ -313,6 +333,7 @@ export function useKeyboardGameplay({
 
         const handleBlur = () => {
             clearMovementInputState(engineRef.current);
+            setVoiceTransmitting(false);
         };
 
         document.addEventListener("keydown", handleKeyDown, true);
@@ -341,6 +362,7 @@ export function useKeyboardGameplay({
         resolveBlockedGameplayKeyboardReason,
         setIsDebugMode,
         setTargetingMode,
+        setVoiceTransmitting,
         syncMovementState,
         websocketRef,
     ]);

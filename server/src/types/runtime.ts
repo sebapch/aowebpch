@@ -362,6 +362,7 @@ export type RuntimeCharacter = {
     lastCombatActivityAt?: number;
     challengeMatchId?: string | null;
     challengeTeam?: 1 | 2 | null;
+    challengeTeamColor?: 1 | 2 | null;
     challengeLockedUntil?: number;
     adminSummonedBot?: boolean;
     adminSummonedBotOwnerId?: EntityId;

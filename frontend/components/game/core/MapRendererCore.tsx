@@ -59,6 +59,8 @@ import {
 } from "../rendering/textureCaches";
 import { useOutgoingRequests } from "../session/useOutgoingRequests";
 import { useGameSession } from "../session/useGameSession";
+import { useTeamVoiceChat } from "../session/useTeamVoiceChat";
+import type { TeamVoiceState } from "../../../lib/teamVoice";
 import { handleIncomingGamePacket } from "../session/handleIncomingGamePacket";
 import { useRendererBootstrap } from "./useRendererBootstrap";
 import { useAssetPipeline } from "./useAssetPipeline";
@@ -187,6 +189,10 @@ interface MapRendererProps {
         token: number;
     } | null;
     chatRequest?: { message: string; token: number } | null;
+    voiceActionRequest?: {
+        action: "join" | "leave" | "mutePeer" | "unmutePeer";
+        token: number;
+    } | null;
     runtimeTiming?: RuntimeTimingConfig;
     hotkeySettings?: HotkeySettings;
     macros?: Array<StoredMacro | null>;
@@ -204,6 +210,7 @@ interface MapRendererProps {
     onAdminIntervalsOpen?: () => void;
     onAdminOverviewSnapshot?: (snapshot: PanelSnapshot) => void;
     onCharacterStatsSnapshot?: (snapshot: CharacterStatsSnapshot) => void;
+    onVoiceStateChange?: (state: TeamVoiceState) => void;
     onPerformanceSample?: (sample: PerformanceSample) => void;
 }
 
@@ -677,6 +684,7 @@ export default function MapRenderer({
     rangeAttackRequest,
     spellTargetRequest,
     chatRequest,
+    voiceActionRequest,
     runtimeTiming = DEFAULT_RUNTIME_TIMING,
     hotkeySettings = DEFAULT_HOTKEY_SETTINGS,
     macros = [],
@@ -694,6 +702,7 @@ export default function MapRenderer({
     onAdminIntervalsOpen,
     onAdminOverviewSnapshot,
     onCharacterStatsSnapshot,
+    onVoiceStateChange,
     onPerformanceSample,
 }: MapRendererProps) {
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -1303,11 +1312,52 @@ export default function MapRenderer({
         mergeHud,
     });
 
+    const {
+        handleVoiceSignalPacket,
+        joinVoiceChat,
+        leaveVoiceChat,
+        setVoiceTransmitting,
+        setVoicePeerMuted,
+    } = useTeamVoiceChat({
+        websocketRef,
+        onVoiceStateChange,
+    });
+
+    const lastVoiceActionTokenRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const request = voiceActionRequest;
+
+        if (!request || lastVoiceActionTokenRef.current === request.token) {
+            return;
+        }
+
+        lastVoiceActionTokenRef.current = request.token;
+
+        if (request.action === "join") {
+            joinVoiceChat();
+            return;
+        }
+
+        if (request.action === "leave") {
+            leaveVoiceChat();
+            return;
+        }
+
+        setVoicePeerMuted(request.action === "mutePeer");
+    }, [
+        joinVoiceChat,
+        leaveVoiceChat,
+        setVoicePeerMuted,
+        voiceActionRequest,
+    ]);
+
     useKeyboardGameplay({
         isMounted,
         engineRef,
         websocketRef,
         hotkeySettingsRef,
+        setVoiceTransmitting,
         playerHudRef,
         movementKeyMapRef,
         movementPressCountsRef,
@@ -1822,6 +1872,7 @@ export default function MapRenderer({
                 emitTradeState,
                 emitMarketState,
                 emitRetosState,
+                handleVoiceSignalPacket,
                 emitBailState,
                 emitCraftingState,
                 onAdminIntervalsOpen,
@@ -1860,6 +1911,7 @@ export default function MapRenderer({
         emitTradeState,
         ensureMapTile,
         flushBufferedRemoteEntities,
+        handleVoiceSignalPacket,
         lockMovementInput,
         mergeHud,
         onAdminIntervalsOpen,

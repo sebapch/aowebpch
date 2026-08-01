@@ -114,6 +114,7 @@ const clientPacketID = {
     selfMapMetaDelta: 79,
     spellVisual: 80,
     entityVitalsDelta: 81,
+    voiceSignal: 82,
 } as const;
 
 const serverPacketID = {
@@ -147,6 +148,7 @@ const serverPacketID = {
     closeTrade: 190,
     marketAction: 239,
     retosAction: 248,
+    voiceSignal: 250,
 } as const;
 
 type PacketChunk = Buffer | ArrayBuffer | ArrayBufferView | string;
