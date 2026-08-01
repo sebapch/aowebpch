@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
     LAYER_NAMES,
     TRIGGER_LABELS,
@@ -9,6 +9,9 @@ import {
     type ObjectInfo,
     type TileExit,
 } from "../../lib/editor/types";
+import type { NPCsDB } from "../../types/game";
+import { loadNPCsDB } from "../../utils/gameLoader";
+import { isFriendlyNpc } from "./NpcSelectorModal";
 import { ItemSearchField, useItemNames } from "./ItemSearchField";
 import type { LayerIndex } from "./model/EditorMapModel";
 
@@ -212,68 +215,13 @@ export function TileInspector({
                         )}
                     </div>
                 ) : (
-                    <div className="py-2 space-y-2">
-                        <div className="flex items-center justify-between">
-                            <span className="text-[11px] uppercase tracking-wide text-slate-500">Agregar NPC</span>
-                            {onOpenCatalog && (
-                                <button
-                                    type="button"
-                                    onClick={onOpenCatalog}
-                                    className="text-[11px] font-semibold text-sky-400 hover:text-sky-300 underline"
-                                >
-                                    🔍 Catálogo (Amistosos / Monstruos)
-                                </button>
-                            )}
-                        </div>
-                        <form
-                            onSubmit={(e) => {
-                                e.preventDefault();
-                                const form = e.currentTarget;
-                                const input = form.elements.namedItem("npcId") as HTMLInputElement;
-                                const val = Number.parseInt(input.value, 10);
-                                if (Number.isInteger(val) && val > 0) {
-                                    onAddNpc?.(x, y, val);
-                                    input.value = "";
-                                }
-                            }}
-                            className="flex gap-1"
-                        >
-                            <input
-                                name="npcId"
-                                type="number"
-                                min={1}
-                                placeholder="ID NPC (ej. 1)"
-                                className="w-24 rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-xs text-slate-200"
-                            />
-                            <button
-                                type="submit"
-                                className="rounded border border-amber-600/80 bg-amber-950/80 px-2 py-0.5 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-900"
-                            >
-                                Colocar
-                            </button>
-                        </form>
-
-                        {recentNpcs && recentNpcs.length > 0 && (
-                            <div>
-                                <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400 block mb-1">
-                                    🕒 NPCs Recientes
-                                </span>
-                                <div className="flex flex-wrap gap-1">
-                                    {recentNpcs.map((id) => (
-                                        <button
-                                            key={id}
-                                            type="button"
-                                            onClick={() => onAddNpc?.(x, y, id)}
-                                            className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-yellow-300 hover:border-amber-500 hover:bg-amber-950 transition-colors"
-                                            title={`Colocar NPC #${id} en este tile`}
-                                        >
-                                            #{id}
-                                        </button>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
-                    </div>
+                    <NpcAddSection
+                        x={x}
+                        y={y}
+                        onAddNpc={onAddNpc}
+                        onOpenCatalog={onOpenCatalog}
+                        recentNpcs={recentNpcs}
+                    />
                 )}
 
                 <ExitSection
@@ -564,3 +512,156 @@ function ExitSection({
         </div>
     );
 }
+
+function NpcAddSection({
+    x,
+    y,
+    onAddNpc,
+    onOpenCatalog,
+    recentNpcs,
+}: {
+    x: number;
+    y: number;
+    onAddNpc?: (x: number, y: number, npcIndex: number) => void;
+    onOpenCatalog?: () => void;
+    recentNpcs?: number[];
+}) {
+    const [db, setDb] = useState<NPCsDB | null>(null);
+
+    useEffect(() => {
+        let active = true;
+        void loadNPCsDB()
+            .then((data) => {
+                if (active) setDb(data);
+            })
+            .catch(() => {});
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const npcList = useMemo(() => {
+        if (!db) return [];
+        const result: Array<{ id: number; name: string; isFriendly: boolean }> = [];
+        for (const [idStr, data] of Object.entries(db)) {
+            const id = Number.parseInt(idStr, 10);
+            if (!Number.isFinite(id)) continue;
+            result.push({
+                id,
+                name: data.name ?? `NPC #${id}`,
+                isFriendly: isFriendlyNpc(data),
+            });
+        }
+        return result.sort((a, b) => a.id - b.id);
+    }, [db]);
+
+    const friendlyNpcs = useMemo(() => npcList.filter((n) => n.isFriendly), [npcList]);
+    const monsterNpcs = useMemo(() => npcList.filter((n) => !n.isFriendly), [npcList]);
+
+    return (
+        <div className="py-2 space-y-2">
+            <div className="flex items-center justify-between">
+                <span className="text-[11px] uppercase tracking-wide text-slate-500">Agregar NPC</span>
+            </div>
+
+            {onOpenCatalog && (
+                <button
+                    type="button"
+                    onClick={onOpenCatalog}
+                    className="w-full rounded-lg border border-sky-600/80 bg-sky-950/80 px-2.5 py-1.5 text-xs font-semibold text-sky-200 transition-colors hover:bg-sky-900 flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                    📋 Catálogo Visual (Amistosos / Monstruos)
+                </button>
+            )}
+
+            <div>
+                <label className="block text-[10px] uppercase font-semibold text-slate-400 mb-1">
+                    Desplegar todos los NPCs ({npcList.length}):
+                </label>
+                <select
+                    className="w-full rounded border border-slate-700 bg-slate-950 px-2 py-1.5 text-xs text-amber-200 focus:border-amber-500 focus:outline-none"
+                    value=""
+                    onChange={(e) => {
+                        const val = Number.parseInt(e.target.value, 10);
+                        if (val > 0) {
+                            onAddNpc?.(x, y, val);
+                            e.target.value = "";
+                        }
+                    }}
+                >
+                    <option value="" disabled>
+                        -- Elegir de la lista completa --
+                    </option>
+                    {friendlyNpcs.length > 0 && (
+                        <optgroup label="🟢 Pacíficos / Servicios">
+                            {friendlyNpcs.map((npc) => (
+                                <option key={npc.id} value={npc.id}>
+                                    #{npc.id} · {npc.name}
+                                </option>
+                            ))}
+                        </optgroup>
+                    )}
+                    {monsterNpcs.length > 0 && (
+                        <optgroup label="🔴 Monstruos / Hostiles">
+                            {monsterNpcs.map((npc) => (
+                                <option key={npc.id} value={npc.id}>
+                                    #{npc.id} · {npc.name}
+                                </option>
+                            ))}
+                        </optgroup>
+                    )}
+                </select>
+            </div>
+
+            <form
+                onSubmit={(e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget;
+                    const input = form.elements.namedItem("npcId") as HTMLInputElement;
+                    const val = Number.parseInt(input.value, 10);
+                    if (Number.isInteger(val) && val > 0) {
+                        onAddNpc?.(x, y, val);
+                        input.value = "";
+                    }
+                }}
+                className="flex gap-1 pt-1"
+            >
+                <input
+                    name="npcId"
+                    type="number"
+                    min={1}
+                    placeholder="ID NPC exacto..."
+                    className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-xs text-slate-200 placeholder-slate-500"
+                />
+                <button
+                    type="submit"
+                    className="shrink-0 rounded border border-amber-600/80 bg-amber-950/80 px-3 py-1 text-xs font-semibold text-amber-200 transition-colors hover:bg-amber-900"
+                >
+                    Colocar
+                </button>
+            </form>
+
+            {recentNpcs && recentNpcs.length > 0 && (
+                <div className="pt-1">
+                    <span className="text-[10px] font-semibold uppercase tracking-wide text-amber-400 block mb-1">
+                        🕒 NPCs Recientes
+                    </span>
+                    <div className="flex flex-wrap gap-1">
+                        {recentNpcs.map((id) => (
+                            <button
+                                key={id}
+                                type="button"
+                                onClick={() => onAddNpc?.(x, y, id)}
+                                className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-mono text-[11px] text-yellow-300 hover:border-amber-500 hover:bg-amber-950 transition-colors"
+                                title={`Colocar NPC #${id} en este tile`}
+                            >
+                                #{id}
+                            </button>
+                        ))}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+

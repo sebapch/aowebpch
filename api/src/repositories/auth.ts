@@ -175,60 +175,67 @@ function getStarterLoadout(
 
     const spells = Array.from({ length: 47 }, (_, i) => i + 1);
 
-    if (
-        ["mago", "clerigo", "bardo", "druida", "paladin", "asesino"].includes(
-            classKey,
-        )
-    ) {
-        switch (classKey) {
-            case "mago":
-                items.push({ idItem: 862, amount: 1 });
-                items.push({ idItem: isLowRace ? 1045 : 1044, amount: 1 });
-                return { items, spells };
-            case "clerigo":
-                items.push({ idItem: 861, amount: 1 });
-                items.push({ idItem: 1048, amount: 1 });
-                items.push({ idItem: 1051, amount: 1 });
-                items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-                return { items, spells };
-            case "bardo":
-                items.push({ idItem: 864, amount: 1 });
-                items.push({ idItem: 1051, amount: 1 });
-                items.push({ idItem: isLowRace ? 1045 : 1044, amount: 1 });
-                return { items, spells };
-            case "druida":
-                items.push({ idItem: 863, amount: 1 });
-                items.push({ idItem: isLowRace ? 1045 : 1044, amount: 1 });
-                return { items, spells };
-            case "paladin":
-                items.push({ idItem: 861, amount: 1 });
-                items.push({ idItem: 1048, amount: 1 });
-                items.push({ idItem: 1051, amount: 1 });
-                items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-                return { items, spells };
-            case "asesino":
-                items.push({ idItem: 460, amount: 1 });
-                items.push({ idItem: 861, amount: 1 });
-                items.push({ idItem: 1048, amount: 1 });
-                items.push({ idItem: 1051, amount: 1 });
-                items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-                return { items, spells };
-        }
-    }
-
     switch (classKey) {
+        case "mago":
+            items.push({ idItem: 660, amount: 1 }); // Báculo Engarzado (+7 Daño Mágico)
+            items.push({ idItem: 400, amount: 1 }); // Vara de Mago (+5 Daño Mágico)
+            items.push({ idItem: isLowRace ? 558 : 518, amount: 1 }); // Túnica de Mago Oscuro / E/G
+            items.push({ idItem: 404, amount: 1 }); // Escudo de Tortuga
+            items.push({ idItem: 662, amount: 1 }); // Sombrero de Mago
+            break;
+        case "clerigo":
+            items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
+            items.push({ idItem: 990, amount: 1 }); // Mazo del Juicio (Hit 5-16)
+            items.push({ idItem: isLowRace ? 393 : 391, amount: 1 }); // Armadura de Placas Completa +2 / E/G (Def 45-50)
+            items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
+            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            break;
         case "guerrero":
-            items.push({ idItem: 861, amount: 1 });
-            items.push({ idItem: 1048, amount: 1 });
-            items.push({ idItem: 1051, amount: 1 });
-            items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-            return { items, spells };
+            items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
+            items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
+            items.push({ idItem: isLowRace ? 393 : 391, amount: 1 }); // Armadura de Placas Completa +2 / E/G (Def 45-50)
+            items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
+            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            break;
+        case "asesino":
+            items.push({ idItem: 559, amount: 1 }); // Daga de Plata (Hit 6-9 - Apuñalar)
+            items.push({ idItem: 124, amount: 1 }); // Katana (Hit 8-16)
+            items.push({ idItem: isLowRace ? 632 : 895, amount: 1 }); // Armadura Legendaria / Real E/G (Def 55-60)
+            items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
+            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            break;
+        case "bardo":
+            items.push({ idItem: 399, amount: 1 }); // Cimitarra (Hit 7-15)
+            items.push({ idItem: 559, amount: 1 }); // Daga de Plata
+            items.push({ idItem: 864, amount: 1 }); // Laúd
+            items.push({ idItem: isLowRace ? 881 : 895, amount: 1 }); // Armadura Legendaria / Ciénaga
+            items.push({ idItem: 404, amount: 1 }); // Escudo de Tortuga
+            items.push({ idItem: 1004, amount: 1 }); // Casco de Tigre (Def 6-9)
+            break;
+        case "druida":
+            items.push({ idItem: 399, amount: 1 }); // Cimitarra (Hit 7-15)
+            items.push({ idItem: 659, amount: 1 }); // Bastón Nudoso (+5 Daño Mágico)
+            items.push({ idItem: 863, amount: 1 }); // Flauta
+            items.push({ idItem: isLowRace ? 881 : 895, amount: 1 }); // Armadura Legendaria / Ciénaga
+            items.push({ idItem: 404, amount: 1 }); // Escudo de Tortuga
+            items.push({ idItem: 1004, amount: 1 }); // Casco de Tigre (Def 6-9)
+            break;
+        case "paladin":
+            items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
+            items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
+            items.push({ idItem: isLowRace ? 393 : 391, amount: 1 }); // Armadura de Placas Completa +2 / E/G (Def 45-50)
+            items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
+            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            break;
         case "cazador":
-            items.push({ idItem: 859, amount: 1 });
-            items.push({ idItem: 860, amount: 500 });
-            items.push({ idItem: 1052, amount: 1 });
-            items.push({ idItem: isLowRace ? 1047 : 1046, amount: 1 });
-            return { items, spells };
+            items.push({ idItem: 665, amount: 1 }); // Arco de Cazador (Hit 9-12)
+            items.push({ idItem: 664, amount: 1 }); // Arco Compuesto Reforzado (Hit 5-10)
+            items.push({ idItem: 860, amount: 500 }); // Flechas
+            items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
+            items.push({ idItem: isLowRace ? 617 : 616, amount: 1 }); // Armadura de Guerrero Campeón / E/G (Def 80-85)
+            items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
+            items.push({ idItem: 370, amount: 1 }); // Capucha de Cazador (Def 15-20)
+            break;
     }
 
     return { items, spells };
@@ -573,9 +580,9 @@ export async function createCharacterForSession(
         $1,
         $2,
         $3,
-        1,
+        276,
         50,
-        60,
+        50,
         1000000,
         $4,
         $4,
@@ -620,9 +627,9 @@ export async function createCharacterForSession(
         0,
         0,
         0,
-        1,
-        54,
-        60,
+        276,
+        50,
+        50,
         FALSE
       )
       RETURNING id

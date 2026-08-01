@@ -703,14 +703,23 @@ export class EditorScene {
                 }
 
                 if (this.overlays.triggers && tile.trigger !== undefined) {
+                    const isSafeZone = tile.trigger === 6;
+                    const strokeColor = isSafeZone ? 0x10b981 : 0xff5cf2;
+                    const fillColor = isSafeZone ? 0x10b981 : 0xff5cf2;
+
+                    g.rect(px + 1, py + 1, TILE_SIZE - 2, TILE_SIZE - 2).fill({
+                        color: fillColor,
+                        alpha: isSafeZone ? 0.25 : 0.15,
+                    });
                     g.rect(px + 2, py + 2, TILE_SIZE - 4, TILE_SIZE - 4).stroke({
                         width: lineWidth * 1.5,
-                        color: 0xff5cf2,
+                        color: strokeColor,
                         alpha: 0.9,
                     });
 
                     if (showLabels) {
-                        const label = new Text({ text: String(tile.trigger), style: labelStyle });
+                        const labelText = isSafeZone ? "6 (Segura)" : String(tile.trigger);
+                        const label = new Text({ text: labelText, style: labelStyle });
                         label.x = px + 3;
                         label.y = py + 2;
                         this.overlayLabels.addChild(label);

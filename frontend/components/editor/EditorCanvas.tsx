@@ -11,7 +11,7 @@ import { EditorScene, type LayerVisibility, type OverlayFlags, type TileRegion }
 import { EditorTextureCache } from "./render/editorTextures";
 
 export type EditorTool = "select" | "paint" | "eyedropper" | "region";
-export type PaintMode = "graphic" | "blocked";
+export type PaintMode = "graphic" | "blocked" | "trigger";
 
 export type EditorCanvasHandle = {
     fitToScreen: () => void;
@@ -28,6 +28,7 @@ type Props = {
     activeLayer: LayerIndex;
     paintMode: PaintMode;
     brushGraphic: number | null;
+    brushTrigger?: number | null;
     brushSize?: 1 | 2 | 3 | 5;
     paintToolMode?: "brush" | "bucket";
     selection: TileRegion | null;
@@ -73,6 +74,7 @@ export function EditorCanvas({
     activeLayer,
     paintMode,
     brushGraphic,
+    brushTrigger,
     brushSize,
     paintToolMode,
     selection,
@@ -104,6 +106,7 @@ export function EditorCanvas({
     const activeLayerRef = useRef(activeLayer);
     const paintModeRef = useRef(paintMode);
     const brushGraphicRef = useRef(brushGraphic);
+    const brushTriggerRef = useRef(brushTrigger ?? 6);
     const brushSizeRef = useRef(brushSize ?? 1);
     const paintToolModeRef = useRef(paintToolMode ?? "brush");
     const modelRef = useRef(model);
@@ -120,11 +123,12 @@ export function EditorCanvas({
         activeLayerRef.current = activeLayer;
         paintModeRef.current = paintMode;
         brushGraphicRef.current = brushGraphic;
+        brushTriggerRef.current = brushTrigger ?? 6;
         brushSizeRef.current = brushSize ?? 1;
         paintToolModeRef.current = paintToolMode ?? "brush";
         modelRef.current = model;
         historyRef.current = history;
-    }, [onHoverTile, onPickTile, onPickGraphic, onSelectRegion, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushSize, paintToolMode, model, history]);
+    }, [onHoverTile, onPickTile, onPickGraphic, onSelectRegion, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushTrigger, brushSize, paintToolMode, model, history]);
 
     useEffect(() => {
         sceneRef.current?.setSelection(selection);
@@ -315,6 +319,40 @@ export function EditorCanvas({
                 queue.push({ x, y: y + 1 });
                 queue.push({ x, y: y - 1 });
             }
+        } else if (mode === "trigger") {
+            const targetTrigger = targetTile.trigger;
+            const newTrigger = brushTriggerRef.current ?? undefined;
+            if (targetTrigger === newTrigger) return;
+
+            const queue: Array<{ x: number; y: number }> = [{ x: originX, y: originY }];
+            const visited = new Set<number>();
+
+            while (queue.length > 0) {
+                const { x, y } = queue.shift()!;
+                if (!model.inBounds(x, y)) continue;
+
+                const index = model.indexOf(x, y);
+                if (visited.has(index)) continue;
+                visited.add(index);
+
+                const currentTile = model.get(x, y);
+                if (!currentTile || currentTile.trigger !== targetTrigger) continue;
+
+                const edit = model.applyEdit(x, y, (tile) => {
+                    tile.trigger = newTrigger;
+                    return tile;
+                });
+
+                if (edit) {
+                    stroke.touched.set(index, { x, y, before: edit.before, after: edit.after });
+                    sceneRef.current?.markTileDirty(x, y);
+                }
+
+                queue.push({ x: x + 1, y });
+                queue.push({ x: x - 1, y });
+                queue.push({ x, y: y + 1 });
+                queue.push({ x, y: y - 1 });
+            }
         } else {
             const targetGrh = targetTile.graphics[layer - 1];
             if (targetGrh === graphic) return;
@@ -388,6 +426,8 @@ export function EditorCanvas({
                     const edit = model.applyEdit(x, y, (tile) => {
                         if (mode === "blocked") {
                             tile.blocked = !tile.blocked;
+                        } else if (mode === "trigger") {
+                            tile.trigger = brushTriggerRef.current ?? undefined;
                         } else {
                             tile.graphics[layer - 1] = graphic;
                         }

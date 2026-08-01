@@ -13,6 +13,7 @@ import {
 } from "../../lib/editor/api";
 import {
     LAYER_NAMES,
+    TRIGGER_LABELS,
     type ExpandedTile,
     type MapMetadata,
     type MapSummary,
@@ -29,6 +30,7 @@ import { GraphicsPicker } from "./GraphicsPicker";
 import { GraphicsCatalogModal } from "./GraphicsCatalogModal";
 import { MapConnectionsPanel } from "./MapConnectionsPanel";
 import { MapMetaPanel } from "./MapMetaPanel";
+import { MapSearchModal } from "./MapSearchModal";
 import { NewMapModal } from "./NewMapModal";
 import { NpcPanel } from "./NpcPanel";
 import { NpcSelectorModal } from "./NpcSelectorModal";
@@ -92,6 +94,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [selectedTile, setSelectedTile] = useState<{ x: number; y: number } | null>(null);
     const [npcPanelIndex, setNpcPanelIndex] = useState<number | null>(null);
     const [catalogOpen, setCatalogOpen] = useState(false);
+    const [mapSearchOpen, setMapSearchOpen] = useState(false);
+    const [quickMapInput, setQuickMapInput] = useState("");
     const [graphicsCatalogOpen, setGraphicsCatalogOpen] = useState(false);
     const [metaPanelOpen, setMetaPanelOpen] = useState(false);
     const [connectionsOpen, setConnectionsOpen] = useState(false);
@@ -130,6 +134,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     const [tool, setTool] = useState<EditorTool>("select");
     const [paintMode, setPaintMode] = useState<PaintMode>("graphic");
     const [brushGraphic, setBrushGraphic] = useState<number | null>(null);
+    const [brushTrigger, setBrushTrigger] = useState<number>(6);
     const [brushSize, setBrushSize] = useState<1 | 2 | 3 | 5>(1);
     const [paintToolMode, setPaintToolMode] = useState<"brush" | "bucket">("brush");
     const [graphicsDB, setGraphicsDB] = useState<GraphicsDB | null>(null);
@@ -716,14 +721,51 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         commitRegionEdit("vaciar region", selection, () => emptyTile());
     }, [selection, commitRegionEdit]);
 
+    const handleSetRegionTrigger = useCallback(
+        (triggerVal: number | null) => {
+            if (!selection) return;
+
+            setOverlays((current) => ({ ...current, triggers: true }));
+
+            const label =
+                triggerVal === 6
+                    ? "asignar zona segura (trigger 6) a region"
+                    : triggerVal === null
+                      ? "quitar triggers de la region"
+                      : `asignar trigger ${triggerVal} a region`;
+
+            commitRegionEdit(label, selection, (tile) => {
+                tile.trigger = triggerVal ?? undefined;
+                return tile;
+            });
+        },
+        [selection, commitRegionEdit],
+    );
+
+    const handleSetRegionBlocked = useCallback(
+        (blocked: boolean) => {
+            if (!selection) return;
+
+            setOverlays((current) => ({ ...current, blocked: true }));
+
+            commitRegionEdit(blocked ? "bloquear region" : "desbloquear region", selection, (tile) => {
+                tile.blocked = blocked;
+                return tile;
+            });
+        },
+        [selection, commitRegionEdit],
+    );
+
     const handleFillRegion = useCallback(() => {
         if (!selection) return;
 
         if (paintMode === "blocked") {
-            commitRegionEdit("bloquear region", selection, (tile) => {
-                tile.blocked = true;
-                return tile;
-            });
+            handleSetRegionBlocked(true);
+            return;
+        }
+
+        if (paintMode === "trigger") {
+            handleSetRegionTrigger(brushTrigger);
             return;
         }
 
@@ -734,7 +776,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             tile.graphics[layerIdx] = grhId;
             return tile;
         });
-    }, [selection, commitRegionEdit, paintMode, activeLayer, brushGraphic]);
+    }, [selection, commitRegionEdit, paintMode, activeLayer, brushGraphic, brushTrigger, handleSetRegionBlocked, handleSetRegionTrigger]);
 
     const handleSave = useCallback(async () => {
         if (!model || saving) {
@@ -839,6 +881,12 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 return;
             }
 
+            if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+                event.preventDefault();
+                setMapSearchOpen(true);
+                return;
+            }
+
             if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "c") {
                 event.preventDefault();
                 handleCopyRegion();
@@ -911,21 +959,83 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             <header className="flex flex-wrap items-center gap-3 border-b border-slate-800 bg-slate-900 px-4 py-2">
                 <span className="text-sm font-semibold text-slate-100">Editor de mapas</span>
 
-                <select
-                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm"
-                    value={mapId}
-                    onChange={(event) => requestMapChange(Number(event.target.value))}
-                >
-                    {maps.length === 0 && <option value={mapId}>Mapa {mapId}</option>}
-                    {maps.map((summary) => {
-                        const isActive = activeMapIds.includes(summary.id);
-                        return (
-                            <option key={summary.id} value={summary.id}>
-                                {isActive ? "🟢" : "⚪"} {summary.id} · {summary.name || "(sin nombre)"}
-                            </option>
-                        );
-                    })}
-                </select>
+                <div className="flex items-center gap-1.5">
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const idx = maps.findIndex((m) => m.id === mapId);
+                            if (idx > 0) requestMapChange(maps[idx - 1].id);
+                        }}
+                        disabled={maps.findIndex((m) => m.id === mapId) <= 0}
+                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Mapa anterior en la lista"
+                    >
+                        ←
+                    </button>
+
+                    <select
+                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-sm max-w-[190px] truncate"
+                        value={mapId}
+                        onChange={(event) => requestMapChange(Number(event.target.value))}
+                    >
+                        {maps.length === 0 && <option value={mapId}>Mapa {mapId}</option>}
+                        {maps.map((summary) => {
+                            const isActive = activeMapIds.includes(summary.id);
+                            return (
+                                <option key={summary.id} value={summary.id}>
+                                    {isActive ? "🟢" : "⚪"} {summary.id} · {summary.name || "(sin nombre)"}
+                                </option>
+                            );
+                        })}
+                    </select>
+
+                    <button
+                        type="button"
+                        onClick={() => {
+                            const idx = maps.findIndex((m) => m.id === mapId);
+                            if (idx >= 0 && idx < maps.length - 1) requestMapChange(maps[idx + 1].id);
+                        }}
+                        disabled={maps.findIndex((m) => m.id === mapId) >= maps.length - 1}
+                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
+                        title="Mapa siguiente en la lista"
+                    >
+                        →
+                    </button>
+
+                    <button
+                        type="button"
+                        onClick={() => setMapSearchOpen(true)}
+                        className="flex items-center gap-1.5 rounded border border-sky-600/80 bg-sky-950/80 px-2.5 py-1 text-xs font-semibold text-sky-200 hover:bg-sky-900 transition-colors shadow-sm"
+                        title="Buscar cualquier mapa por nombre o número (Ctrl+K)"
+                    >
+                        🔍 Buscar mapa <kbd className="rounded bg-slate-800 px-1 py-0.5 text-[10px] font-mono text-slate-300">Ctrl+K</kbd>
+                    </button>
+
+                    <form
+                        onSubmit={(e) => {
+                            e.preventDefault();
+                            const targetId = Number.parseInt(quickMapInput, 10);
+                            if (Number.isInteger(targetId) && targetId > 0) {
+                                requestMapChange(targetId);
+                                setQuickMapInput("");
+                            }
+                        }}
+                        className="flex items-center gap-1"
+                    >
+                        <input
+                            type="number"
+                            min={1}
+                            placeholder="Ir a #..."
+                            value={quickMapInput}
+                            onChange={(e) => setQuickMapInput(e.target.value)}
+                            className="w-16 rounded border border-slate-700 bg-slate-800 px-2 py-1 font-mono text-xs text-slate-200 placeholder-slate-500 focus:border-sky-500 focus:outline-none"
+                            title="Escribe el número de mapa (ej. 276) y presiona Enter"
+                        />
+                        <button type="submit" className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs hover:bg-slate-700 font-semibold">
+                            Ir
+                        </button>
+                    </form>
+                </div>
 
                 <button
                     type="button"
@@ -1123,6 +1233,14 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         >
                             🧪 Cuentagotas <span className="text-[10px] text-slate-400">(Alt + Clic)</span>
                         </button>
+                        <button
+                            type="button"
+                            className="w-full rounded border border-amber-600/80 bg-amber-950/60 px-2 py-1 text-xs font-semibold text-amber-200 hover:bg-amber-900 transition-colors flex items-center justify-center gap-1.5"
+                            onClick={() => setCatalogOpen(true)}
+                            title="Abrir catálogo completo de NPCs para elegir y colocar"
+                        >
+                            📋 Catálogo de NPCs
+                        </button>
                     </div>
 
                     {tool === "select" && (
@@ -1138,63 +1256,133 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     )}
 
                     {tool === "region" && (
-                        <div className="mb-4 space-y-2 rounded border border-sky-900/50 bg-sky-950/30 p-2">
-                            <p className="text-[11px] leading-relaxed text-sky-300/90">
+                        <div className="mb-4 space-y-2.5 rounded border border-sky-900/50 bg-sky-950/30 p-2.5">
+                            <p className="text-[11px] leading-relaxed text-sky-300/90 font-medium">
                                 {selection
-                                    ? `${selection.x1 - selection.x0 + 1} x ${selection.y1 - selection.y0 + 1} tiles desde (${selection.x0}, ${selection.y0})`
-                                    : "Arrastra sobre el mapa para seleccionar un rectángulo."}
+                                    ? `${selection.x1 - selection.x0 + 1} x ${selection.y1 - selection.y0 + 1} tiles (${(selection.x1 - selection.x0 + 1) * (selection.y1 - selection.y0 + 1)} casilleros)`
+                                    : "Arrastra sobre el mapa para seleccionar un rectángulo de casilleros."}
                             </p>
 
-                            <label className="flex items-center gap-2 text-[11px] text-slate-400">
-                                <input
-                                    type="checkbox"
-                                    checked={copyEntities}
-                                    onChange={(event) => setCopyEntities(event.target.checked)}
-                                />
-                                Copiar también entidades
-                            </label>
+                            {/* Acciones principales de Zona Segura y Triggers en la región */}
+                            <div className="space-y-1.5 pt-1 border-t border-sky-900/40">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Triggers y Zona Segura</span>
 
-                            <div className="grid grid-cols-2 gap-1 text-[11px]">
                                 <button
                                     type="button"
                                     disabled={!selection}
-                                    onClick={handleCopyRegion}
-                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                    title="Ctrl+C"
+                                    onClick={() => handleSetRegionTrigger(6)}
+                                    className="w-full rounded-lg border border-emerald-600/90 bg-emerald-950/90 px-2.5 py-1.5 text-xs font-bold text-emerald-200 hover:bg-emerald-900 transition-colors flex items-center justify-center gap-1.5 shadow-md disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title="Asignar Trigger 6 (Zona Segura / Sin PK) a todos los tiles de la selección"
                                 >
-                                    Copiar
+                                    🛡️ Asignar Zona Segura (Trigger 6)
                                 </button>
-                                <button
-                                    type="button"
-                                    disabled={!clipboard || !selection}
-                                    onClick={() => selection && handlePasteAt(selection.x0, selection.y0)}
-                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                    title="Ctrl+V"
-                                >
-                                    Pegar
-                                </button>
+
+                                <div className="flex gap-1">
+                                    <select
+                                        disabled={!selection}
+                                        className="flex-1 min-w-0 rounded border border-slate-700 bg-slate-900 px-2 py-1 text-xs text-fuchsia-300 disabled:opacity-40"
+                                        value={brushTrigger}
+                                        onChange={(e) => setBrushTrigger(Number(e.target.value))}
+                                    >
+                                        {Object.entries(TRIGGER_LABELS).map(([val, label]) => (
+                                            <option key={val} value={val}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <button
+                                        type="button"
+                                        disabled={!selection}
+                                        onClick={() => handleSetRegionTrigger(brushTrigger)}
+                                        className="rounded border border-fuchsia-700 bg-fuchsia-950 px-2.5 py-1 text-xs font-semibold text-fuchsia-200 hover:bg-fuchsia-900 disabled:opacity-40 shrink-0"
+                                        title="Aplicar el trigger seleccionado a la región"
+                                    >
+                                        Aplicar
+                                    </button>
+                                </div>
+
                                 <button
                                     type="button"
                                     disabled={!selection}
-                                    onClick={handleFillRegion}
-                                    className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-40"
-                                    title={
-                                        paintMode === "blocked"
-                                            ? "Bloquear todos los tiles de la selección"
-                                            : `Pintar la selección con el pincel activo en la capa ${activeLayer}`
-                                    }
+                                    onClick={() => handleSetRegionTrigger(null)}
+                                    className="w-full rounded border border-slate-700 bg-slate-900 px-2 py-1 text-[11px] font-medium text-slate-300 hover:bg-slate-800 disabled:opacity-40"
                                 >
-                                    Rellenar
+                                    ❌ Quitar Triggers de Región
                                 </button>
-                                <button
-                                    type="button"
-                                    disabled={!selection}
-                                    onClick={handleClearRegion}
-                                    className="rounded border border-red-800/80 bg-red-950/60 px-2 py-1 text-red-300 hover:bg-red-900 disabled:cursor-not-allowed disabled:opacity-40"
-                                    title="Supr"
-                                >
-                                    Vaciar
-                                </button>
+                            </div>
+
+                            {/* Acciones de Bloqueos en la región */}
+                            <div className="space-y-1.5 pt-1.5 border-t border-sky-900/40">
+                                <span className="text-[10px] uppercase font-bold text-slate-400 block">Bloqueos</span>
+                                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                    <button
+                                        type="button"
+                                        disabled={!selection}
+                                        onClick={() => handleSetRegionBlocked(true)}
+                                        className="rounded border border-rose-800/80 bg-rose-950/70 px-2 py-1 font-semibold text-rose-200 hover:bg-rose-900 disabled:opacity-40"
+                                    >
+                                        🔒 Bloquear
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!selection}
+                                        onClick={() => handleSetRegionBlocked(false)}
+                                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 font-semibold text-slate-300 hover:bg-slate-700 disabled:opacity-40"
+                                    >
+                                        🔓 Desbloquear
+                                    </button>
+                                </div>
+                            </div>
+
+                            {/* Edición gráfica y portapapeles */}
+                            <div className="space-y-1.5 pt-1.5 border-t border-sky-900/40">
+                                <label className="flex items-center gap-2 text-[11px] text-slate-400">
+                                    <input
+                                        type="checkbox"
+                                        checked={copyEntities}
+                                        onChange={(event) => setCopyEntities(event.target.checked)}
+                                    />
+                                    Copiar también entidades
+                                </label>
+
+                                <div className="grid grid-cols-2 gap-1 text-[11px]">
+                                    <button
+                                        type="button"
+                                        disabled={!selection}
+                                        onClick={handleCopyRegion}
+                                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:opacity-40"
+                                        title="Ctrl+C"
+                                    >
+                                        Copiar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!clipboard || !selection}
+                                        onClick={() => selection && handlePasteAt(selection.x0, selection.y0)}
+                                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:opacity-40"
+                                        title="Ctrl+V"
+                                    >
+                                        Pegar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!selection}
+                                        onClick={handleFillRegion}
+                                        className="rounded border border-slate-700 bg-slate-800 px-2 py-1 hover:bg-slate-700 disabled:opacity-40"
+                                        title={`Rellenar la región seleccionada según el modo activo (${paintMode})`}
+                                    >
+                                        Rellenar
+                                    </button>
+                                    <button
+                                        type="button"
+                                        disabled={!selection}
+                                        onClick={handleClearRegion}
+                                        className="rounded border border-red-800/80 bg-red-950/60 px-2 py-1 text-red-300 hover:bg-red-900 disabled:opacity-40"
+                                        title="Supr"
+                                    >
+                                        Vaciar
+                                    </button>
+                                </div>
                             </div>
 
                             {clipboard && (
@@ -1211,25 +1399,39 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             <div className="flex gap-1 text-xs">
                                 <button
                                     type="button"
-                                    className={`flex-1 rounded border px-2 py-1 ${
+                                    className={`flex-1 rounded border px-1.5 py-1 text-[11px] ${
                                         paintMode === "graphic"
-                                            ? "border-sky-400 bg-sky-950 text-sky-200"
+                                            ? "border-sky-400 bg-sky-950 text-sky-200 font-semibold"
                                             : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
                                     }`}
                                     onClick={() => setPaintMode("graphic")}
                                 >
-                                    Grafico
+                                    Gráfico
                                 </button>
                                 <button
                                     type="button"
-                                    className={`flex-1 rounded border px-2 py-1 ${
+                                    className={`flex-1 rounded border px-1.5 py-1 text-[11px] ${
                                         paintMode === "blocked"
-                                            ? "border-sky-400 bg-sky-950 text-sky-200"
+                                            ? "border-sky-400 bg-sky-950 text-sky-200 font-semibold"
                                             : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
                                     }`}
                                     onClick={() => setPaintMode("blocked")}
                                 >
                                     Bloqueo
+                                </button>
+                                <button
+                                    type="button"
+                                    className={`flex-1 rounded border px-1.5 py-1 text-[11px] ${
+                                        paintMode === "trigger"
+                                            ? "border-fuchsia-400 bg-fuchsia-950 text-fuchsia-200 font-semibold"
+                                            : "border-slate-700 bg-slate-800 text-slate-300 hover:bg-slate-700"
+                                    }`}
+                                    onClick={() => {
+                                        setPaintMode("trigger");
+                                        setOverlays((current) => ({ ...current, triggers: true }));
+                                    }}
+                                >
+                                    Trigger
                                 </button>
                             </div>
 
@@ -1254,7 +1456,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                                             : "border-slate-700 bg-slate-800 text-slate-400 hover:bg-slate-700"
                                     }`}
                                     onClick={() => setPaintToolMode("bucket")}
-                                    title="Rellenar zona contigua con el mismo terreno (Flood Fill)"
+                                    title="Rellenar zona contigua con el mismo modo (Flood Fill)"
                                 >
                                     🪣 Relleno (Bote)
                                 </button>
@@ -1299,6 +1501,26 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                                 <p className="text-[11px] leading-relaxed text-slate-600">
                                     Click o arrastre alterna el bloqueo de cada tile tocado.
                                 </p>
+                            )}
+
+                            {paintMode === "trigger" && (
+                                <div className="space-y-2 pt-1">
+                                    <span className="text-[10px] uppercase tracking-wide text-slate-500 block">Trigger Activo</span>
+                                    <select
+                                        className="w-full rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-fuchsia-300"
+                                        value={brushTrigger}
+                                        onChange={(e) => setBrushTrigger(Number(e.target.value))}
+                                    >
+                                        {Object.entries(TRIGGER_LABELS).map(([val, label]) => (
+                                            <option key={val} value={val}>
+                                                {label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-[11px] leading-relaxed text-fuchsia-300/80 bg-fuchsia-950/40 p-2 rounded border border-fuchsia-900/50">
+                                        Pinta o usa el bote de relleno 🪣 para asignar <strong>{TRIGGER_LABELS[brushTrigger] ?? `Trigger ${brushTrigger}`}</strong> directamente en el mapa.
+                                    </p>
+                                </div>
                             )}
                         </div>
                     )}
@@ -1414,6 +1636,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             activeLayer={activeLayer}
                             paintMode={paintMode}
                             brushGraphic={brushGraphic}
+                            brushTrigger={brushTrigger}
                             brushSize={brushSize}
                             paintToolMode={paintToolMode}
                             selection={selection}
@@ -1482,10 +1705,19 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 isOpen={catalogOpen}
                 onClose={() => setCatalogOpen(false)}
                 onSelectNpc={(npcIndex) => {
-                    if (selectedTile) {
-                        handleAddNpc(selectedTile.x, selectedTile.y, npcIndex);
-                    }
+                    const target = selectedTile ?? hoverTile ?? { x: 50, y: 50 };
+                    setSelectedTile(target);
+                    handleAddNpc(target.x, target.y, npcIndex);
                 }}
+            />
+
+            <MapSearchModal
+                isOpen={mapSearchOpen}
+                onClose={() => setMapSearchOpen(false)}
+                maps={maps}
+                activeMapIds={activeMapIds}
+                currentMapId={mapId}
+                onSelectMap={(targetMapId) => requestMapChange(targetMapId)}
             />
 
             <GraphicsCatalogModal
