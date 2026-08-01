@@ -100,7 +100,10 @@ export default function ChallengeVetoModal({
 
     const mapNames = vetoState.mapNames ?? {};
     const votesByMap = vetoState.votesByMap ?? {};
+    const votersByMap = vetoState.votersByMap ?? {};
     const userVotes = vetoState.userVotes ?? {};
+
+    const hasUserVoted = Boolean(actionKey?.startsWith("vetoban-"));
 
     if (isTransitioning && vetoState.selectedMapId) {
         const activeMapId = isSpinning
@@ -193,6 +196,7 @@ export default function ChallengeVetoModal({
     const mapPool = vetoState.mapPool ?? [];
     const totalVotes = Object.keys(userVotes).length;
     const totalExpectedVoters = (vetoState.teamSize ?? 2) * 2;
+    const banThreshold = Math.ceil(totalExpectedVoters / 2); // 2 votes in 2v2
 
     return (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm">
@@ -204,7 +208,7 @@ export default function ChallengeVetoModal({
                                 Selección y Veteo de Mapas · Arena {vetoState.teamSize}v{vetoState.teamSize}
                             </div>
                             <div className="mt-0.5 text-xs text-stone-400">
-                                Votación simultánea: Vota para banear el mapa que NO quieres jugar. Votos: {totalVotes}/{totalExpectedVoters}.
+                                Votación simultánea para banear. Límite de descalificación: {banThreshold} votos. Progreso: {totalVotes}/{totalExpectedVoters} votos.
                             </div>
                         </div>
                         <span
@@ -225,13 +229,14 @@ export default function ChallengeVetoModal({
                             const mapName = mapNames[mapId] ?? `Mapa ${mapId}`;
                             const isBanned = vetoState.bannedMapIds?.some((b) => b.mapId === mapId);
                             const banVoteCount = votesByMap[mapId] ?? 0;
+                            const voters = votersByMap[mapId] ?? [];
 
                             return (
                                 <div
                                     key={mapId}
                                     className={`relative flex flex-col justify-between overflow-hidden rounded-xl border transition ${
                                         isBanned
-                                            ? "border-rose-500/20 bg-rose-500/5 opacity-50"
+                                            ? "border-rose-500/30 bg-stone-900/60 opacity-60 grayscale-[40%]"
                                             : "border-white/10 bg-white/5 hover:border-emerald-500/40"
                                     }`}
                                 >
@@ -249,15 +254,18 @@ export default function ChallengeVetoModal({
                                         />
                                         <div className="absolute inset-0 bg-gradient-to-t from-stone-950 via-stone-950/40 to-transparent" />
                                         {isBanned && (
-                                            <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-[1px]">
-                                                <span className="rounded bg-rose-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-white shadow">
-                                                    Baneado
+                                            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/70 backdrop-blur-[1px]">
+                                                <span className="rounded bg-rose-600/90 px-2 py-0.5 text-xs font-bold uppercase tracking-wider text-white shadow">
+                                                    🚫 MAPA BANEADO
+                                                </span>
+                                                <span className="text-[10px] text-stone-300 mt-1">
+                                                    Alcanzó el límite ({banVoteCount}/{banThreshold} votos)
                                                 </span>
                                             </div>
                                         )}
                                     </div>
 
-                                    <div className="p-3">
+                                    <div className="p-3 flex flex-col flex-1 justify-between">
                                         <div>
                                             <div className="text-sm font-bold text-white truncate" title={mapName}>
                                                 {mapName}
@@ -265,24 +273,40 @@ export default function ChallengeVetoModal({
                                             <div className="text-[11px] text-stone-400 font-mono">
                                                 Mapa {mapId}
                                             </div>
-                                        </div>
 
-                                        <div className="mt-2 text-xs text-stone-400">
-                                            Votos para banear:{" "}
-                                            <span className="font-bold text-amber-400">{banVoteCount}</span>
+                                            <div className="mt-2 text-xs text-stone-400">
+                                                Votos para banear:{" "}
+                                                <span className="font-bold text-amber-400">
+                                                    {banVoteCount}/{banThreshold}
+                                                </span>
+                                            </div>
+
+                                            {/* Voter character names */}
+                                            {voters.length > 0 && (
+                                                <div className="mt-2 text-[11px] leading-tight text-stone-300 bg-stone-900/90 rounded-md p-1.5 border border-white/5">
+                                                    <span className="text-stone-400 font-medium">Baneado por: </span>
+                                                    <span className="text-amber-300 font-semibold">{voters.join(", ")}</span>
+                                                </div>
+                                            )}
                                         </div>
 
                                         <button
                                             type="button"
-                                            disabled={isBanned || actionKey !== null}
+                                            disabled={isBanned || hasUserVoted || actionKey !== null}
                                             onClick={() => onBanMap(mapId)}
                                             className={`mt-3 w-full rounded-lg border py-2 text-center text-xs font-semibold transition ${
                                                 isBanned
-                                                    ? "border-stone-800 bg-stone-900 text-stone-600 cursor-not-allowed"
+                                                    ? "border-stone-800 bg-stone-900/80 text-stone-500 cursor-not-allowed"
+                                                    : hasUserVoted
+                                                    ? "border-stone-700 bg-stone-800/80 text-stone-400 cursor-not-allowed"
                                                     : "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 active:scale-[0.98]"
                                             } disabled:opacity-50`}
                                         >
-                                            🚫 Banear Mapa
+                                            {isBanned
+                                                ? "🚫 Mapa Bloqueado"
+                                                : hasUserVoted
+                                                ? "✔ Voto Registrado"
+                                                : "🚫 Banear Mapa"}
                                         </button>
                                     </div>
                                 </div>
@@ -291,7 +315,7 @@ export default function ChallengeVetoModal({
                     </div>
 
                     <p className="text-[11px] text-stone-500 text-center">
-                        Tienen 1 minuto para votar. La opción con más descalificaciones se descarta. Si hay empate, la ruleta elegirá el mapa al azar.
+                        Cada jugador tiene 1 voto para banear. Al alcanzar {banThreshold} votos, el mapa se bloquea en gris. Cuando todos votan o queda 1 solo mapa disponible, el duelo inicia automáticamente.
                     </p>
                 </div>
             </div>

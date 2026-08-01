@@ -294,6 +294,19 @@ function isArenaCombatCharacter(user: PlayerCharacter | undefined) {
     return Boolean(user && (user.pvpChar || user.arenaRoomId || user.challengeMatchId));
 }
 
+function isMapCombatLocked(mapId: number | undefined): boolean {
+    if (!mapId) {
+        return false;
+    }
+
+    try {
+        const challengeManager = require("./challengeManager");
+        return Boolean(challengeManager.isMapCombatLocked(mapId));
+    } catch {
+        return false;
+    }
+}
+
 function canRenderCharacter(viewerId: EntityId, character: PlayerCharacter | undefined) {
     if (!character) {
         return true;
@@ -2189,7 +2202,7 @@ function Npcs(this: NpcsApi) {
             for (const idNpc in vars.npcs) {
                 const npc = vars.npcs[idNpc] as NpcCharacter | undefined;
 
-                if (!npc) {
+                if (!npc || isMapCombatLocked(npc.map)) {
                     continue;
                 }
 
@@ -2354,8 +2367,7 @@ function Npcs(this: NpcsApi) {
         try {
             const npc = vars.npcs[idNpc] as NpcCharacter | undefined;
 
-            if (!npc) {
-                console.log(`No existe npc ${idNpc}`);
+            if (!npc || isMapCombatLocked(npc.map)) {
                 return;
             }
 

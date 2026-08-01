@@ -109,6 +109,19 @@ const mapInstanceManager = {
             tmpNpc.snd1 = datNpc.snd1 ?? 0;
             tmpNpc.snd2 = datNpc.snd2 ?? 0;
             tmpNpc.soundClose = datNpc.soundClose ?? 0;
+            tmpNpc.spawnMapNum = Number(baseMapId);
+            tmpNpc.spawnOrigin = { x: Number(entry.x), y: Number(entry.y) };
+            tmpNpc.spellCastIntervalMs = datNpc.spellCastIntervalMs ?? 0;
+            tmpNpc.spellRange = datNpc.spellRange ?? 0;
+            tmpNpc.spells = Array.isArray(datNpc.spells)
+                ? datNpc.spells
+                      .filter((spell: any) => Number(spell?.idSpell ?? 0) > 0)
+                      .map((spell: any) => ({
+                          idSpell: Number(spell.idSpell),
+                          cooldownSeconds: Math.max(0, Number(spell.cooldownSeconds ?? 0)),
+                          lastUsedAt: 0,
+                      }))
+                : [];
             tmpNpc.drop = datNpc.drop;
             tmpNpc.objs = datNpc.objs;
             tmpNpc.aguaValida = datNpc.aguaValida;
@@ -140,6 +153,7 @@ const mapInstanceManager = {
 
             vars.npcs[tmpNpc.id] = tmpNpc;
             vars.npcs[tmpNpc.id].cooldownAtaque = Date.now() + 4000;
+            vars.npcs[tmpNpc.id].nextThinkAt = Date.now() + vars.timing.npcThinkMs;
             vars.areaNpc[tmpNpc.id] = [];
             vars.mapData[targetMapId][tmpNpc.pos.y][tmpNpc.pos.x].id = tmpNpc.id;
         }
@@ -164,7 +178,7 @@ const mapInstanceManager = {
     resetMapNpcs(mapId: number) {
         const baseMapId = this.isInstanceMap(mapId) ? this.getBaseMapId(mapId) : mapId;
 
-        if (!baseMapId || baseMapId < 500 || !vars.mapData[mapId]) {
+        if (!baseMapId || !vars.mapData[mapId]) {
             return false;
         }
 

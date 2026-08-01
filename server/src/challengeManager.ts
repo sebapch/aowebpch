@@ -143,6 +143,8 @@ type ActiveMatch = {
     timerIds: number[];
     resolvingRound: boolean;
     finished: boolean;
+    combatStarted?: boolean;
+    releaseAt?: number;
 };
 
 type ChallengeVetoStep = {
@@ -181,6 +183,7 @@ type ChallengeVetoStatePayload = {
     bannedMapIds: ChallengeVetoBannedMap[];
     userVotes: Record<string, number>;
     votesByMap: Record<number, number>;
+    votersByMap: Record<number, string[]>;
     mapNames: Record<number, string>;
     totalSteps: number;
     stepIndex: number;
@@ -496,7 +499,15 @@ const challengeManager = {
         vars.mapData[mapId].restringir = baseMeta.restringir;
         vars.mapData[mapId].backup = baseMeta.backup;
         vars.mapData[mapId].pk = baseMeta.pk;
+        vars.mapData[mapId].isArena = true;
         vars.mapData[mapId].arenaSpawns = baseMeta.arenaSpawns;
+
+        try {
+            const mapInstanceManager = require("./mapInstanceManager");
+            mapInstanceManager.spawnMapNpcs(baseMapId, mapId);
+        } catch (err) {
+            console.error(`[ChallengeManager] Error spawning NPCs for map ${mapId}:`, err);
+        }
 
         return mapId;
     },
@@ -506,8 +517,25 @@ const challengeManager = {
             return;
         }
 
-        delete vars.mapData[mapId];
-        delete vars.mapa[mapId];
+        try {
+            const mapInstanceManager = require("./mapInstanceManager");
+            mapInstanceManager.destroyInstance(mapId);
+        } catch {
+            delete vars.mapData[mapId];
+            delete vars.mapa[mapId];
+        }
+    },
+
+    isMapCombatLocked(mapId: number): boolean {
+        for (const match of Object.values(this.activeMatches)) {
+            if (match.instanceMapId === mapId) {
+                if (!match.combatStarted || (match.releaseAt && now() < match.releaseAt) || match.resolvingRound) {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     },
 
     getBusyMatchByCharacter(user: RuntimeCharacter | undefined) {
@@ -1042,10 +1070,12 @@ const challengeManager = {
 
     startRound(match: ActiveMatch, customCountdown?: number) {
         match.resolvingRound = false;
+        match.combatStarted = false;
         this.clearTimers(match);
 
         const countdownStart = typeof customCountdown === "number" ? customCountdown : COUNTDOWN_START;
         const releaseAt = now() + (countdownStart + 1) * COUNTDOWN_STEP_MS;
+        match.releaseAt = releaseAt;
 
         for (const side of [1, 2] as TeamSide[]) {
             match.teams[side].participants.forEach((participant, index) => {
@@ -1083,6 +1113,9 @@ const challengeManager = {
                 if (match.finished) {
                     return;
                 }
+
+                match.combatStarted = true;
+                match.releaseAt = 0;
 
                 for (const participant of getActiveParticipants(match)) {
                     this.setParticipantLock(participant, false);
@@ -1175,7 +1208,7 @@ const challengeManager = {
     scheduleNextRound(match: ActiveMatch, winnerSide: TeamSide) {
         match.resolvingRound = true;
         match.teams[winnerSide].score += 1;
-        const targetScore = match.targetScore ?? 2;
+        const targetScore = match.targetScore ?? 1;
 
         if (match.teams[winnerSide].score >= targetScore) {
             const finishTimerId = setTimeout(() => {
@@ -1288,15 +1321,16 @@ const challengeManager = {
                 },
             },
             timerIds: [],
+            targetScore: 1,
             resolvingRound: false,
             finished: false,
         };
 
         this.activeMatches[matchId] = match;
 
-        this.sendMatchConsole(match, `[Retos] Comienza ${teamSize}vs${teamSize}. Primero en ganar 2 rondas.`);
+        this.sendMatchConsole(match, `[Retos] Comienza ${teamSize}vs${teamSize} (Combate a 1 ronda).`);
         this.openVoiceRooms(match);
-        this.startRound(match, 15);
+        this.startRound(match, 10);
 
         return matchId;
     },
@@ -1316,10 +1350,12 @@ const challengeManager = {
 
     buildVetoStatePayload(session: ChallengeVetoSession): ChallengeVetoStatePayload {
         const votesByMap: Record<number, number> = {};
+        const votersByMap: Record<number, string[]> = {};
         const mapNames: Record<number, string> = {};
 
         for (const mapId of session.mapPool) {
             votesByMap[mapId] = 0;
+            votersByMap[mapId] = [];
             const customName = vars.mapData?.[mapId]?.name;
             if (typeof customName === "string" && customName.trim().length > 0) {
                 mapNames[mapId] = customName.trim();
@@ -1334,9 +1370,31 @@ const challengeManager = {
             }
         }
 
-        for (const votedMapId of Object.values(session.userVotes)) {
-            if (typeof votesByMap[votedMapId] === "number") {
-                votesByMap[votedMapId] += 1;
+        const participants = this.getVetoSessionParticipants(session);
+        const nameById = new Map(
+            participants.map((p) => [String(p.id), p.nameCharacter ?? p.name ?? "Jugador"]),
+        );
+
+        for (const [userId, mapId] of Object.entries(session.userVotes)) {
+            if (typeof votesByMap[mapId] === "number") {
+                votesByMap[mapId] += 1;
+            }
+            const voterName = nameById.get(String(userId));
+            if (voterName && Array.isArray(votersByMap[mapId])) {
+                votersByMap[mapId].push(voterName);
+            }
+        }
+
+        const banThreshold = Math.ceil(participants.length / 2);
+        const dynamicBannedMaps: ChallengeVetoBannedMap[] = [...session.bannedMapIds];
+        for (const mapId of session.mapPool) {
+            if ((votesByMap[mapId] ?? 0) >= banThreshold) {
+                if (!dynamicBannedMaps.some((b) => b.mapId === mapId)) {
+                    dynamicBannedMaps.push({
+                        mapId,
+                        side: 1,
+                    });
+                }
             }
         }
 
@@ -1345,11 +1403,12 @@ const challengeManager = {
             teamSize: session.teamSize,
             mapPool: session.mapPool,
             remainingMapIds: session.mapPool.filter(
-                (id) => !session.bannedMapIds.some((b) => b.mapId === id),
+                (id) => !dynamicBannedMaps.some((b) => b.mapId === id),
             ),
-            bannedMapIds: session.bannedMapIds,
+            bannedMapIds: dynamicBannedMaps,
             userVotes: session.userVotes,
             votesByMap,
+            votersByMap,
             mapNames,
             totalSteps: session.mapPool.length - 1,
             stepIndex: Object.keys(session.userVotes).length,
@@ -1464,17 +1523,29 @@ const challengeManager = {
             throw new Error("No estás participando en esta votación de mapas.");
         }
 
+        if (session.userVotes[String(user.id)] !== undefined) {
+            throw new Error("Ya has emitido tu voto para banear un mapa y no puedes cambiarlo.");
+        }
+
         if (!session.mapPool.includes(mapId)) {
             throw new Error("Ese mapa no forma parte del pool de la arena.");
         }
 
+        const payloadBefore = this.buildVetoStatePayload(session);
+        if (payloadBefore.bannedMapIds.some((b) => b.mapId === mapId)) {
+            throw new Error("Este mapa ya alcanzó el límite de votos y está baneado.");
+        }
+
         session.userVotes[String(user.id)] = mapId;
+
+        const totalParticipants = this.getVetoSessionParticipants(session).length;
+        const totalVotesCast = Object.keys(session.userVotes).length;
+        const updatedPayload = this.buildVetoStatePayload(session);
+        const unbannedMapCount = session.mapPool.length - updatedPayload.bannedMapIds.length;
+
         this.broadcastVetoState(session);
 
-        const totalParticipants = session.teamOneParticipants.length + session.teamTwoParticipants.length;
-        const totalVotesCast = Object.keys(session.userVotes).length;
-
-        if (totalVotesCast >= totalParticipants) {
+        if (totalVotesCast >= totalParticipants || unbannedMapCount <= 1) {
             this.resolveVetoVoting(session);
         }
 
@@ -1615,7 +1686,7 @@ const challengeManager = {
             "#00E676",
         );
         this.openVoiceRooms(match);
-        this.startRound(match, 3);
+        this.startRound(match, 10);
 
         return {
             ok: true,

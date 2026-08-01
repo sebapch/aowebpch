@@ -876,10 +876,7 @@ function isArenaCombat(user: GameCharacter | undefined, userAttacked: GameCharac
         (user?.pvpChar && userAttacked?.pvpChar && user.arenaRoomId && user.arenaRoomId === userAttacked.arenaRoomId) ||
         (user?.challengeMatchId &&
             userAttacked?.challengeMatchId &&
-            user.challengeMatchId === userAttacked.challengeMatchId &&
-            user.challengeTeam &&
-            userAttacked.challengeTeam &&
-            user.challengeTeam !== userAttacked.challengeTeam),
+            user.challengeMatchId === userAttacked.challengeMatchId),
     );
 }
 
@@ -890,6 +887,7 @@ function getChallengeManager() {
             right: GameCharacter | undefined,
         ) => "ally" | "enemy" | null;
         isCharacterInActiveMatch: (user: GameCharacter | undefined) => boolean;
+        onCharacterDeath: (user: GameCharacter | undefined) => void;
     };
 }
 
@@ -6263,6 +6261,11 @@ function Game(this: GameApi) {
             resetFuerzaAgilidadBuffs(user, userClient ?? undefined);
             user.dead = 1;
             user.deadWorldActive = false;
+            try {
+                getChallengeManager().onCharacterDeath(user);
+            } catch (err) {
+                funct.dumpError(err);
+            }
             user.invisibleSpell = false;
             user.hiddenSkill = false;
             user.hiddenSkillStartedAt = 0;
@@ -7072,7 +7075,15 @@ function Game(this: GameApi) {
                 return 0;
             }
 
-            if (idUser !== idUserAttacked && (isJailTile(user) || isJailTile(userAttacked))) {
+            const arenaCombat = isArenaCombat(user, userAttacked);
+            const challengeCombatRelation = getChallengeManager().getCombatRelation(user, userAttacked);
+
+            if (
+                idUser !== idUserAttacked &&
+                (isJailTile(user) || isJailTile(userAttacked)) &&
+                !arenaCombat &&
+                !vars.mapData[user.map]?.isArena
+            ) {
                 withUserClient(idUser, (userClient) => {
                     handleProtocol.console(
                         "No puedes lanzar hechizos sobre otros usuarios en la carcel.",
@@ -7084,9 +7095,6 @@ function Game(this: GameApi) {
                 });
                 return 0;
             }
-
-            const arenaCombat = isArenaCombat(user, userAttacked);
-            const challengeCombatRelation = getChallengeManager().getCombatRelation(user, userAttacked);
 
             if (
                 vars.mapData[user.map].pk &&
@@ -7126,21 +7134,8 @@ function Game(this: GameApi) {
                 return 0;
             }
 
-            if (challengeCombatRelation === "ally" && isOffensiveSpell) {
-                withUserClient(idUser, (userClient) => {
-                    handleProtocol.console(
-                        "[Retos] No puedes atacar a tu compañero de equipo.",
-                        "white",
-                        0,
-                        0,
-                        userClient,
-                    );
-                });
-                return 0;
-            }
-
             if (
-                challengeCombatRelation !== "enemy" &&
+                !arenaCombat &&
                 isSameParty(idUser, idUserAttacked) &&
                 idUser !== idUserAttacked &&
                 isOffensiveSpell
@@ -7152,7 +7147,7 @@ function Game(this: GameApi) {
             }
 
             if (
-                challengeCombatRelation !== "enemy" &&
+                !arenaCombat &&
                 user.seguroClanActivado &&
                 isSameClan(idUser, idUserAttacked) &&
                 idUser !== idUserAttacked &&
@@ -7647,7 +7642,15 @@ function Game(this: GameApi) {
                 return 0;
             }
 
-            if (idUser !== idUserAttacked && (isJailTile(user) || isJailTile(userAttacked))) {
+            const arenaCombat = isArenaCombat(user, userAttacked);
+            const challengeCombatRelation = getChallengeManager().getCombatRelation(user, userAttacked);
+
+            if (
+                idUser !== idUserAttacked &&
+                (isJailTile(user) || isJailTile(userAttacked)) &&
+                !arenaCombat &&
+                !vars.mapData[user.map]?.isArena
+            ) {
                 withUserClient(idUser, (userClient) => {
                     handleProtocol.console(
                         "No puedes atacar a otros usuarios en la carcel.",
@@ -7660,9 +7663,6 @@ function Game(this: GameApi) {
                 return 0;
             }
 
-            const arenaCombat = isArenaCombat(user, userAttacked);
-            const challengeCombatRelation = getChallengeManager().getCombatRelation(user, userAttacked);
-
             if (idUser == idUserAttacked) {
                 withUserClient(idUser, (userClient) => {
                     handleProtocol.console("¡No puedes atacarte a ti mismo!", "white", 0, 0, userClient);
@@ -7670,20 +7670,7 @@ function Game(this: GameApi) {
                 return 0;
             }
 
-            if (challengeCombatRelation === "ally") {
-                withUserClient(idUser, (userClient) => {
-                    handleProtocol.console(
-                        "[Retos] No puedes atacar a tu compañero de equipo.",
-                        "white",
-                        0,
-                        0,
-                        userClient,
-                    );
-                });
-                return 0;
-            }
-
-            if (challengeCombatRelation !== "enemy" && isSameParty(idUser, idUserAttacked)) {
+            if (!arenaCombat && isSameParty(idUser, idUserAttacked)) {
                 withUserClient(idUser, (userClient) => {
                     handleProtocol.console("No puedes atacar a un miembro de tu party.", "white", 0, 0, userClient);
                 });
@@ -7691,7 +7678,7 @@ function Game(this: GameApi) {
             }
 
             if (
-                challengeCombatRelation !== "enemy" &&
+                !arenaCombat &&
                 user.seguroClanActivado &&
                 isSameClan(idUser, idUserAttacked) &&
                 isBlockedBySafeZone(user, userAttacked)
@@ -8526,7 +8513,14 @@ function Game(this: GameApi) {
             const maxExpandedDropRadius = 5;
             let droppedItemsCount = 0;
 
-            if (!user) {
+            if (
+                !user ||
+                user.pvpChar ||
+                user.arenaRoomId ||
+                user.challengeMatchId ||
+                vars.mapData[user.map]?.isArena === true ||
+                (typeof user.map === "number" && user.map >= 1000)
+            ) {
                 return;
             }
 

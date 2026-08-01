@@ -471,6 +471,7 @@ export interface ChallengeVetoState {
     bannedMapIds: ChallengeVetoBannedMap[];
     userVotes?: Record<string, number>;
     votesByMap?: Record<number, number>;
+    votersByMap?: Record<number, string[]>;
     mapNames?: Record<number, string>;
     totalSteps: number;
     stepIndex: number;

@@ -143,6 +143,8 @@ const arenaManager = {
 
             tmpNpc.id = this.createUniqueEntityId();
             tmpNpc.templateNpcIndex = Number(npcInMap.npcIndex);
+            tmpNpc.spawnMapNum = Number(baseMapId);
+            tmpNpc.spawnOrigin = { x: Number(npcInMap.x), y: Number(npcInMap.y) };
             tmpNpc.map = targetMapId;
             tmpNpc.pos.x = Number(npcInMap.x);
             tmpNpc.pos.y = Number(npcInMap.y);
@@ -162,11 +164,25 @@ const arenaManager = {
             tmpNpc.minHit = datNpc.minHit;
             tmpNpc.maxHit = datNpc.maxHit;
             tmpNpc.def = datNpc.def;
+            tmpNpc.defM = datNpc.defM ?? datNpc.magicDef ?? 0;
+            tmpNpc.magicDef = datNpc.magicDef ?? datNpc.defM ?? 0;
+            tmpNpc.magicResistance = datNpc.magicResistance ?? 0;
             tmpNpc.poderAtaque = datNpc.poderAtaque;
             tmpNpc.poderEvasion = datNpc.poderEvasion;
             tmpNpc.snd1 = datNpc.snd1 ?? 0;
             tmpNpc.snd2 = datNpc.snd2 ?? 0;
             tmpNpc.soundClose = datNpc.soundClose ?? 0;
+            tmpNpc.spellCastIntervalMs = datNpc.spellCastIntervalMs ?? 0;
+            tmpNpc.spellRange = datNpc.spellRange ?? 0;
+            tmpNpc.spells = Array.isArray(datNpc.spells)
+                ? datNpc.spells
+                      .filter((spell: any) => Number(spell?.idSpell ?? 0) > 0)
+                      .map((spell: any) => ({
+                          idSpell: Number(spell.idSpell),
+                          cooldownSeconds: Math.max(0, Number(spell.cooldownSeconds ?? 0)),
+                          lastUsedAt: 0,
+                      }))
+                : [];
 
             if (datNpc.drop) tmpNpc.drop = datNpc.drop;
             if (datNpc.objs) tmpNpc.objs = datNpc.objs;
@@ -201,6 +217,7 @@ const arenaManager = {
 
             vars.npcs[tmpNpc.id] = tmpNpc;
             vars.npcs[tmpNpc.id].cooldownAtaque = Date.now() + 4000;
+            vars.npcs[tmpNpc.id].nextThinkAt = Date.now() + (vars.timing?.npcThinkMs ?? 250);
             vars.areaNpc[tmpNpc.id] = [];
             vars.mapData[targetMapId][tmpNpc.pos.y][tmpNpc.pos.x].id = tmpNpc.id;
         });
