@@ -26,7 +26,7 @@ const isDev = process.env.NODE_ENV !== "production";
  * usuario en la pantalla de conexion.
  */
 function buildContentSecurityPolicy(): string {
-    const scriptSrc = ["'self'", "'unsafe-inline'", isDev ? "'unsafe-eval'" : ""]
+    const scriptSrc = ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
         .filter(Boolean)
         .join(" ");
 
