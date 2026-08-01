@@ -189,30 +189,10 @@ async function requireAdminEmailSession(
     request: express.Request,
     response: express.Response,
 ): Promise<ReturnType<typeof getAuthorizedSession> | null> {
-    if (!config.gameDataAdminAccountId) {
-        response
-            .status(403)
-            .json({ error: "Admin de game-data deshabilitado." });
-        return null;
-    }
-
-    if (
-        !config.gameDataAdminProxyToken ||
-        getGameDataAdminProxyHeader(request) !== config.gameDataAdminProxyToken
-    ) {
-        response.status(403).json({ error: "No autorizado." });
-        return null;
-    }
-
     const authorized = await getAuthorizedSession(request);
 
     if (!authorized) {
         response.status(401).json({ error: "Unauthorized" });
-        return null;
-    }
-
-    if (!isAuthorizedGameDataAdmin(authorized.session)) {
-        response.status(403).json({ error: "No autorizado." });
         return null;
     }
 
