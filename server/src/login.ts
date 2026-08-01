@@ -561,6 +561,9 @@ function Login(this: LoginApi) {
                 personaje.factionRankCaos = Number(personaje.factionRankCaos ?? 0);
                 personaje.factionRewardsArmada = Number(personaje.factionRewardsArmada ?? 0);
                 personaje.factionRewardsCaos = Number(personaje.factionRewardsCaos ?? 0);
+                personaje.rating = Number((personaje as any).rating ?? 1200);
+                personaje.arenaWins = Number((personaje as any).arenaWins ?? (personaje as any).arena_wins ?? 0);
+                personaje.arenaLosses = Number((personaje as any).arenaLosses ?? (personaje as any).arena_losses ?? 0);
                 personaje.clanId = personaje.clanId ?? null;
                 personaje.clanAlignment = personaje.clanAlignment ?? null;
                 personaje.clanMinJoinLevel = personaje.clanMinJoinLevel ?? null;

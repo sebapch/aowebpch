@@ -294,6 +294,9 @@ function toCharacterResponse(
         factionRankCaos: character.faction_rank_caos,
         factionRewardsArmada: character.faction_rewards_armada,
         factionRewardsCaos: character.faction_rewards_caos,
+        rating: Number(character.rating ?? 1200),
+        arenaWins: Number(character.arena_wins ?? 0),
+        arenaLosses: Number(character.arena_losses ?? 0),
         jailMinutes: character.jail_minutes,
         jailReason: character.jail_reason,
         connected: character.connected,
@@ -400,8 +403,9 @@ async function getCharacterRecord(
 ): Promise<CharacterRecord | null> {
     const result = await client.query<CharacterRecord>(
         `
-      SELECT c.*, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
+      SELECT c.*, COALESCE(cr.rating, 1200) AS rating, COALESCE(cr.wins, 0) AS arena_wins, COALESCE(cr.losses, 0) AS arena_losses, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
       FROM characters c
+      LEFT JOIN character_ratings cr ON cr.character_id = c.id
       LEFT JOIN clans cl ON cl.id = c.clan_id
       LEFT JOIN clan_members cm ON cm.character_id = c.id AND cm.clan_id = c.clan_id
       WHERE c.id = $1
@@ -420,8 +424,9 @@ async function getCharacterRecordByName(
 ): Promise<CharacterRecord | null> {
     const result = await client.query<CharacterRecord>(
         `
-      SELECT c.*, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
+      SELECT c.*, COALESCE(cr.rating, 1200) AS rating, COALESCE(cr.wins, 0) AS arena_wins, COALESCE(cr.losses, 0) AS arena_losses, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
       FROM characters c
+      LEFT JOIN character_ratings cr ON cr.character_id = c.id
       LEFT JOIN clans cl ON cl.id = c.clan_id
       LEFT JOIN clan_members cm ON cm.character_id = c.id AND cm.clan_id = c.clan_id
       WHERE LOWER(TRIM(c.name)) = LOWER(TRIM($1))
@@ -762,8 +767,9 @@ export async function getCharacterByAccountAndEmail(
 
         const characterResult = await client.query<CharacterRecord>(
             `
-      SELECT c.*, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
+      SELECT c.*, COALESCE(cr.rating, 1200) AS rating, COALESCE(cr.wins, 0) AS arena_wins, COALESCE(cr.losses, 0) AS arena_losses, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
       FROM characters c
+      LEFT JOIN character_ratings cr ON cr.character_id = c.id
       LEFT JOIN clans cl ON cl.id = c.clan_id
       LEFT JOIN clan_members cm ON cm.character_id = c.id AND cm.clan_id = c.clan_id
       WHERE c.id = $1
@@ -1029,8 +1035,9 @@ export async function getCharactersByAccountId(
     try {
         const characterResult = await client.query<CharacterRecord>(
             `
-        SELECT c.*, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
+        SELECT c.*, COALESCE(cr.rating, 1200) AS rating, COALESCE(cr.wins, 0) AS arena_wins, COALESCE(cr.losses, 0) AS arena_losses, cl.name AS clan_name, cl.alignment AS clan_alignment, cl.min_join_level AS clan_min_join_level, cm.role AS clan_role
         FROM characters c
+        LEFT JOIN character_ratings cr ON cr.character_id = c.id
         LEFT JOIN clans cl ON cl.id = c.clan_id
         LEFT JOIN clan_members cm ON cm.character_id = c.id AND cm.clan_id = c.clan_id
         WHERE c.account_id = $1

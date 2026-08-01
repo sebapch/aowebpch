@@ -117,6 +117,13 @@ function Funct(this: any) {
                         );
 
                         if (onlineUser) {
+                            onlineUser.rating = change.after;
+                            if (change.won) {
+                                onlineUser.arenaWins = (onlineUser.arenaWins ?? 0) + 1;
+                            } else {
+                                onlineUser.arenaLosses = (onlineUser.arenaLosses ?? 0) + 1;
+                            }
+
                             const client = runtimeRegistry.getClientById(onlineUser.id);
                             if (client) {
                                 const sign = change.delta >= 0 ? "+" : "";
@@ -130,6 +137,7 @@ function Funct(this: any) {
                                     0,
                                     client,
                                 );
+                                handleProtocol.getMyCharacter(client, onlineUser);
                             }
                         }
                     }

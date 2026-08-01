@@ -1138,6 +1138,9 @@ const handleServer: HandleProtocolApi = {
         }
 
         pkg.writeInt(invisibilitySpellRemainingMs);
+        pkg.writeInt(Number((character as any).rating ?? 1200));
+        pkg.writeShort(Number((character as any).arenaWins ?? 0));
+        pkg.writeShort(Number((character as any).arenaLosses ?? 0));
     },
 
     sendNpc(npc) {

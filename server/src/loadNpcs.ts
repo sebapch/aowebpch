@@ -36,8 +36,7 @@ class LoadNpcs {
             } catch (error) {
                 console.warn("[GAME DATA] Falling back to default custom NPCs if API unavailable:", error);
             }
-
-            ensureCustomNpcs(vars.datNpc);
+            // NPCs are loaded dynamically from DB templates via API
 
             const cooldownKeys = initializeNpcRespawnCooldowns((npc: any) => {
                 this.createNpcInMap(npc, true, true);

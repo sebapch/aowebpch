@@ -278,6 +278,9 @@ export interface CharacterSnapshot {
     maxHit?: number;
     buffAgilidadSeconds?: number;
     buffFuerzaSeconds?: number;
+    rating?: number;
+    arenaWins?: number;
+    arenaLosses?: number;
     stateVersion?: number;
     inventory?: InventoryItem[];
     spells?: SpellEntry[];
@@ -1179,6 +1182,12 @@ function parseCharacter(
         snapshot.invisibleSpellRemainingMs = reader.canReadBytes(4)
             ? reader.getInt()
             : undefined;
+
+        if (reader.canReadBytes(8)) {
+            snapshot.rating = reader.getInt();
+            snapshot.arenaWins = reader.getShort();
+            snapshot.arenaLosses = reader.getShort();
+        }
     } else {
         snapshot.privileges = reader.getByte();
         snapshot.heading = reader.getByte();
@@ -2358,6 +2367,9 @@ export function toPlayerHudState(snapshot: CharacterSnapshot): PlayerHudState {
         buffAgilidadUpdatedAt: snapshot.buffAgilidadSeconds ? now : 0,
         buffFuerzaUpdatedAt: snapshot.buffFuerzaSeconds ? now : 0,
         gold: snapshot.gold,
+        rating: snapshot.rating ?? 1200,
+        arenaWins: snapshot.arenaWins ?? 0,
+        arenaLosses: snapshot.arenaLosses ?? 0,
         inventory: snapshot.inventory ?? [],
         spells: snapshot.spells ?? [],
         partyMembers: [],
