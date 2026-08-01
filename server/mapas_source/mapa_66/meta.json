@@ -1,1 +1,52 @@
-{"id":66,"name":"Cárcel de Banderbill.","musicNum":14,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"BOSQUE","zona":"CIUDAD","restringir":"No","maxLevel":0,"backup":0,"pk":0}
+{
+    "id": 66,
+    "name": "Cárcel de Banderbill.",
+    "musicNum": 14,
+    "magiaSinEfecto": 0,
+    "noEncriptarMp": 0,
+    "terreno": "BOSQUE",
+    "zona": "CIUDAD",
+    "restringir": "No",
+    "maxLevel": 0,
+    "backup": 0,
+    "pk": 0,
+    "isArena": true,
+    "arenaSpawns": {
+        "team1": [
+            {
+                "x": 54,
+                "y": 40
+            },
+            {
+                "x": 54,
+                "y": 41
+            },
+            {
+                "x": 55,
+                "y": 40
+            },
+            {
+                "x": 55,
+                "y": 41
+            }
+        ],
+        "team2": [
+            {
+                "x": 91,
+                "y": 55
+            },
+            {
+                "x": 91,
+                "y": 54
+            },
+            {
+                "x": 90,
+                "y": 54
+            },
+            {
+                "x": 90,
+                "y": 55
+            }
+        ]
+    }
+}

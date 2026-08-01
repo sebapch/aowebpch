@@ -35,6 +35,14 @@ const applyMatchRatingsSchema = z.object({
         .max(8),
 });
 
+export type RatingChangeResult = {
+    characterId: string;
+    before: number;
+    after: number;
+    delta: number;
+    won: boolean;
+};
+
 export async function applyMatchRatings(
     client: PoolClient,
     input: {
@@ -43,7 +51,7 @@ export async function applyMatchRatings(
         winnerSide: number;
         participants: MatchParticipantInput[];
     },
-): Promise<void> {
+): Promise<RatingChangeResult[]> {
     const { challengeHistoryId, teamSize, winnerSide, participants } =
         applyMatchRatingsSchema.parse(input);
     const characterIds = participants.map((participant) => participant.characterId);
@@ -95,10 +103,21 @@ export async function applyMatchRatings(
         ...losers.map((participant) => ({ participant, sign: -1, won: false })),
     ];
 
+    const ratingChanges: RatingChangeResult[] = [];
+
     for (const { participant, sign, won } of updates) {
         const before =
             ratingByCharacterId.get(participant.characterId) ?? DEFAULT_RATING;
         const after = before + sign * delta;
+        const netDelta = after - before;
+
+        ratingChanges.push({
+            characterId: participant.characterId,
+            before,
+            after,
+            delta: netDelta,
+            won,
+        });
 
         await client.query(
             `
@@ -125,10 +144,12 @@ export async function applyMatchRatings(
                 teamSize,
                 before,
                 after,
-                after - before,
+                netDelta,
             ],
         );
     }
+
+    return ratingChanges;
 }
 
 function toRatingRankingEntryResponse(

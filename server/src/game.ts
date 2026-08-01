@@ -2451,6 +2451,7 @@ export type GameApi = {
     claimFactionRewards: (idUser: EntityId) => { ok: boolean; message: string; rank: number; grantedItems: number[] };
     canUseFactionItem: (idUser: EntityId, idItem: number) => boolean;
     isRazaEnana: (idRaza: number) => boolean;
+    rebuildEquippedInventoryState: (idUser: EntityId) => void;
 };
 
 const game = {} as GameApi;
@@ -9868,6 +9869,13 @@ function Game(this: GameApi) {
 
     this.isNewbieCharacter = function (user: Pick<GameCharacter, "level"> | undefined | null): boolean {
         return isNewbieCharacter(user);
+    };
+
+    this.rebuildEquippedInventoryState = function (idUser: EntityId) {
+        const user = getCharacterById(idUser);
+        if (user) {
+            rebuildEquippedInventoryState(user);
+        }
     };
 
     this.logCharacterActivity = logCharacterActivity;

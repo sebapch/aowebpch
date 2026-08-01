@@ -317,7 +317,7 @@ export const arenaMatchmakingManager = {
         }
 
         try {
-            getChallengeManager().createMatchmaking2v2Match(teamOne, teamTwo);
+            getChallengeManager().createChallengeVetoSession(2, teamOne, teamTwo);
         } catch (error) {
             funct.dumpError(error);
 

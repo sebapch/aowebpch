@@ -94,16 +94,50 @@ function Funct(this: any) {
     this.logChallengeHistory = (payload: unknown): void => {
         const vars = require("./vars");
 
-        void this.fetchUrl("/internal/challenges/history", {
-            method: "POST",
-            body: JSON.stringify(payload),
-            headers: {
-                "Content-Type": "application/json",
-                Authorization: vars.tokenAuth,
+        void (this.fetchUrl as (url: string, options?: RequestInit) => Promise<any>)(
+            "/internal/challenges/history",
+            {
+                method: "POST",
+                body: JSON.stringify(payload),
+                headers: {
+                    "Content-Type": "application/json",
+                    Authorization: vars.tokenAuth,
+                },
             },
-        }).catch((error: unknown) => {
-            this.dumpError(error);
-        });
+        )
+            .then((result: any) => {
+                if (result && Array.isArray(result.ratingChanges) && result.ratingChanges.length > 0) {
+                    const handleProtocol = require("./handleProtocol");
+                    const runtimeRegistry = require("./runtimeRegistry");
+                    const teamSizeLabel = `${result.teamSize ?? 2}v${result.teamSize ?? 2}`;
+
+                    for (const change of result.ratingChanges) {
+                        const onlineUser = (Object.values(vars.personajes ?? {}) as any[]).find(
+                            (p) => p && String(p._id) === String(change.characterId) && p.connected && !p.cerrado,
+                        );
+
+                        if (onlineUser) {
+                            const client = runtimeRegistry.getClientById(onlineUser.id);
+                            if (client) {
+                                const sign = change.delta >= 0 ? "+" : "";
+                                const color = change.won ? "#00E676" : "#FF5252";
+                                const outcome = change.won ? "¡VICTORIA!" : "DERROTA.";
+
+                                handleProtocol.console(
+                                    `[Arena ${teamSizeLabel}] ${outcome} Cambio de ELO: ${sign}${change.delta} (${change.before} ➔ ${change.after})`,
+                                    color,
+                                    1,
+                                    0,
+                                    client,
+                                );
+                            }
+                        }
+                    }
+                }
+            })
+            .catch((error: unknown) => {
+                this.dumpError(error);
+            });
     };
 
     this.fetchUrl = async <T>(url: string, options: RequestInit = {}): Promise<T> => {

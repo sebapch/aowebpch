@@ -101,8 +101,10 @@ export async function createChallengeHistory(
 
         const row = result.rows[0];
 
+        let ratingChanges: import("./ratings").RatingChangeResult[] = [];
+
         if (row.inserted) {
-            await applyMatchRatings(client, {
+            ratingChanges = await applyMatchRatings(client, {
                 challengeHistoryId: row.id,
                 teamSize: parsed.teamSize,
                 winnerSide: parsed.winnerSide,
@@ -114,7 +116,10 @@ export async function createChallengeHistory(
         }
 
         await client.query("COMMIT");
-        return toChallengeHistoryEntry(row);
+        return {
+            ...toChallengeHistoryEntry(row),
+            ratingChanges,
+        };
     } catch (error) {
         await client.query("ROLLBACK");
         throw error;

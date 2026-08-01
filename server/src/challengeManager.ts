@@ -35,7 +35,9 @@ const CHALLENGE_TEAM_POSITIONS: Record<TeamSide, Array<{ x: number; y: number }>
     ],
 };
 
-/** Mapas marcados como arena (`isArena: true`) en el editor, ordenados por id. */
+const FALLBACK_ARENA_MAP_IDS = [112, 159, 506];
+
+/** Mapas marcados como arena (`isArena: true`) en el editor, ordenados por id. Proporciona 3 opciones para el veto. */
 function getArenaMapIds(): number[] {
     const mapData = vars.mapData ?? {};
     const ids: number[] = [];
@@ -43,14 +45,21 @@ function getArenaMapIds(): number[] {
     for (const key of Object.keys(mapData)) {
         const mapId = Number(key);
 
-        if (Number.isInteger(mapId) && mapData[mapId]?.isArena === true) {
+        if (Number.isInteger(mapId) && mapId < 30_000 && mapData[mapId]?.isArena === true) {
             ids.push(mapId);
         }
     }
 
     ids.sort((left, right) => left - right);
 
-    return ids.length > 0 ? ids : [CHALLENGE_BASE_MAP_ID];
+    for (const fallbackId of FALLBACK_ARENA_MAP_IDS) {
+        if (ids.length >= 3) break;
+        if (!ids.includes(fallbackId)) {
+            ids.push(fallbackId);
+        }
+    }
+
+    return ids.slice(0, 3);
 }
 
 /** Spawns de equipo configurados en el editor para `mapId`, o el fallback fijo. */
@@ -153,13 +162,15 @@ type ChallengeVetoSession = {
     teamOneParticipants: RuntimeCharacter[];
     teamTwoParticipants: RuntimeCharacter[];
     mapPool: number[];
-    remainingMapIds: number[];
+    userVotes: Record<string, number>;
     bannedMapIds: ChallengeVetoBannedMap[];
-    sequence: ChallengeVetoStep[];
-    stepIndex: number;
     deadlineAt: number;
+    teleportAt: number | null;
+    selectedMapId: number | null;
     timerId: number | null;
+    transitioning: boolean;
     resolved: boolean;
+    tieCandidateMapIds?: number[];
 };
 
 type ChallengeVetoStatePayload = {
@@ -168,10 +179,17 @@ type ChallengeVetoStatePayload = {
     mapPool: number[];
     remainingMapIds: number[];
     bannedMapIds: ChallengeVetoBannedMap[];
+    userVotes: Record<string, number>;
+    votesByMap: Record<number, number>;
+    mapNames: Record<number, string>;
     totalSteps: number;
     stepIndex: number;
     currentTurnSide: TeamSide | null;
     deadlineAt: number;
+    teleportAt?: number | null;
+    transitioning?: boolean;
+    isTie?: boolean;
+    tieCandidateMapIds?: number[];
     resolved: boolean;
     cancelled?: boolean;
     reason?: string;
@@ -312,35 +330,34 @@ function buildEquipmentSnapshot(user: RuntimeCharacter): ParticipantEquipmentSna
 
 function restoreEquipment(user: RuntimeCharacter, snapshot: ParticipantEquipmentSnapshot) {
     const inventory = (user.inv ?? {}) as Record<string, { equipped?: number | boolean }>;
+    const game = getGame();
 
-    for (const [, item] of Object.entries(inventory)) {
-        if (item) {
-            item.equipped = 0;
+    const currentlyEquipped = Object.entries(inventory).filter(([, item]) => Boolean(item?.equipped));
+
+    if (currentlyEquipped.length === 0 && snapshot.equippedSlots.length > 0) {
+        for (const slot of snapshot.equippedSlots) {
+            if (inventory[slot]) {
+                inventory[slot].equipped = 1;
+            }
         }
+        user.idHead = snapshot.idHead || user.idHead;
+        user.idHelmet = snapshot.idHelmet || user.idHelmet;
+        user.idWeapon = snapshot.idWeapon || user.idWeapon;
+        user.idShield = snapshot.idShield || user.idShield;
+        user.idBody = snapshot.idBody || user.idBody;
+        user.idItemWeapon = snapshot.idItemWeapon || user.idItemWeapon;
+        user.idItemBody = snapshot.idItemBody || user.idItemBody;
+        user.idItemShield = snapshot.idItemShield || user.idItemShield;
+        user.idItemHelmet = snapshot.idItemHelmet || user.idItemHelmet;
     }
 
-    for (const slot of snapshot.equippedSlots) {
-        if (inventory[slot]) {
-            inventory[slot].equipped = 1;
-        }
+    if (!user.idBody || user.idBody === 0) {
+        user.idBody = snapshot.idBody || game.bodyNaked(user.id);
     }
 
-    user.idHead = snapshot.idHead;
-    user.idHelmet = snapshot.idHelmet;
-    user.idWeapon = snapshot.idWeapon;
-    user.idShield = snapshot.idShield;
-    user.idBody = snapshot.idBody;
-    user.idLastHead = snapshot.idLastHead;
-    user.idLastHelmet = snapshot.idLastHelmet;
-    user.idLastWeapon = snapshot.idLastWeapon;
-    user.idLastShield = snapshot.idLastShield;
-    user.idLastBody = snapshot.idLastBody;
-    user.idItemWeapon = snapshot.idItemWeapon;
-    user.idItemBody = snapshot.idItemBody;
-    user.idItemShield = snapshot.idItemShield;
-    user.idItemHelmet = snapshot.idItemHelmet;
-    user.idItemArrow = snapshot.idItemArrow;
-    user.idItemRing = snapshot.idItemRing;
+    if (!user.idHead || user.idHead === 0) {
+        user.idHead = snapshot.idHead || user.idLastHead || 1;
+    }
 }
 
 function restoreNavigatingState(user: RuntimeCharacter, snapshot: ParticipantEquipmentSnapshot) {
@@ -445,30 +462,41 @@ const challengeManager = {
     },
 
     createMatchInstanceMap(baseMapId: number = CHALLENGE_BASE_MAP_ID) {
-        const mapId = this.createInstanceMapId();
+        const DYNAMIC_INSTANCE_MAP_START = 30_000;
+        const DYNAMIC_INSTANCE_MAP_STRIDE = 50;
 
-        vars.mapa[mapId] = _.cloneDeep(vars.mapa[baseMapId]);
+        let slot = 0;
+        let mapId = DYNAMIC_INSTANCE_MAP_START + baseMapId * DYNAMIC_INSTANCE_MAP_STRIDE + slot;
+
+        while (vars.mapa[mapId] || vars.mapData[mapId]) {
+            slot += 1;
+            mapId = DYNAMIC_INSTANCE_MAP_START + baseMapId * DYNAMIC_INSTANCE_MAP_STRIDE + slot;
+        }
+
+        vars.mapa[mapId] = _.cloneDeep(vars.mapa[baseMapId] ?? {});
         vars.mapData[mapId] = [];
 
         for (let y = 1; y <= 100; y++) {
             vars.mapData[mapId][y] = [];
 
             for (let x = 1; x <= 100; x++) {
-                vars.mapData[mapId][y][x] = {
-                    id: 0,
-                };
+                const baseTile = vars.mapData[baseMapId]?.[y]?.[x];
+                vars.mapData[mapId][y][x] = baseTile ? _.cloneDeep(baseTile) : { id: 0 };
+                vars.mapData[mapId][y][x].id = 0;
             }
         }
 
-        vars.mapData[mapId].name = vars.mapData[baseMapId].name;
-        vars.mapData[mapId].musicNum = vars.mapData[baseMapId].musicNum;
-        vars.mapData[mapId].magiaSinEfecto = vars.mapData[baseMapId].magiaSinEfecto;
-        vars.mapData[mapId].noEncriptarMp = vars.mapData[baseMapId].noEncriptarMp;
-        vars.mapData[mapId].terreno = vars.mapData[baseMapId].terreno;
-        vars.mapData[mapId].zona = vars.mapData[baseMapId].zona;
-        vars.mapData[mapId].restringir = vars.mapData[baseMapId].restringir;
-        vars.mapData[mapId].backup = vars.mapData[baseMapId].backup;
-        vars.mapData[mapId].pk = vars.mapData[baseMapId].pk;
+        const baseMeta = vars.mapData[baseMapId] ?? {};
+        vars.mapData[mapId].name = baseMeta.name ?? `Arena ${baseMapId}`;
+        vars.mapData[mapId].musicNum = baseMeta.musicNum ?? 0;
+        vars.mapData[mapId].magiaSinEfecto = baseMeta.magiaSinEfecto;
+        vars.mapData[mapId].noEncriptarMp = baseMeta.noEncriptarMp;
+        vars.mapData[mapId].terreno = baseMeta.terreno;
+        vars.mapData[mapId].zona = baseMeta.zona;
+        vars.mapData[mapId].restringir = baseMeta.restringir;
+        vars.mapData[mapId].backup = baseMeta.backup;
+        vars.mapData[mapId].pk = baseMeta.pk;
+        vars.mapData[mapId].arenaSpawns = baseMeta.arenaSpawns;
 
         return mapId;
     },
@@ -952,6 +980,7 @@ const challengeManager = {
         });
         game.setSpellInvisibility(user.id, false);
         restoreEquipment(user, matchParticipant.equipment);
+        game.rebuildEquippedInventoryState(user.id);
         user.meditar = false;
         user.navegando = 0;
         user.hiddenSkill = false;
@@ -994,6 +1023,7 @@ const challengeManager = {
         game.setSpellInvisibility(user.id, false);
         restoreEquipment(user, matchParticipant.equipment);
         restoreNavigatingState(user, matchParticipant.equipment);
+        game.rebuildEquippedInventoryState(user.id);
         this.setParticipantLock(user, false);
         this.setShieldBlockedForRound(user, false);
         user.challengeMatchId = null;
@@ -1266,15 +1296,15 @@ const challengeManager = {
 
         this.sendMatchConsole(match, `[Retos] Comienza ${teamSize}vs${teamSize}. Primero en ganar 2 rondas.`);
         this.openVoiceRooms(match);
-        this.startRound(match);
+        this.startRound(match, 15);
 
         return matchId;
     },
 
     createVetoStepTimeoutTimer(vetoId: string) {
         return setTimeout(() => {
-            this.autoResolveVetoStep(vetoId);
-        }, CHALLENGE_VETO_STEP_TIMEOUT_MS) as unknown as number;
+            this.autoResolveVetoSession(vetoId);
+        }, 60_000) as unknown as number;
     },
 
     clearVetoTimer(session: ChallengeVetoSession) {
@@ -1285,19 +1315,52 @@ const challengeManager = {
     },
 
     buildVetoStatePayload(session: ChallengeVetoSession): ChallengeVetoStatePayload {
-        const currentStep = session.sequence[session.stepIndex] ?? null;
+        const votesByMap: Record<number, number> = {};
+        const mapNames: Record<number, string> = {};
+
+        for (const mapId of session.mapPool) {
+            votesByMap[mapId] = 0;
+            const customName = vars.mapData?.[mapId]?.name;
+            if (typeof customName === "string" && customName.trim().length > 0) {
+                mapNames[mapId] = customName.trim();
+            } else if (mapId === 112) {
+                mapNames[mapId] = "Arena de Duelos";
+            } else if (mapId === 159) {
+                mapNames[mapId] = "Isla de Entrenamiento";
+            } else if (mapId === 506) {
+                mapNames[mapId] = "Coliseo Real";
+            } else {
+                mapNames[mapId] = `Arena ${mapId}`;
+            }
+        }
+
+        for (const votedMapId of Object.values(session.userVotes)) {
+            if (typeof votesByMap[votedMapId] === "number") {
+                votesByMap[votedMapId] += 1;
+            }
+        }
 
         return {
             vetoId: session.id,
             teamSize: session.teamSize,
             mapPool: session.mapPool,
-            remainingMapIds: session.remainingMapIds,
+            remainingMapIds: session.mapPool.filter(
+                (id) => !session.bannedMapIds.some((b) => b.mapId === id),
+            ),
             bannedMapIds: session.bannedMapIds,
-            totalSteps: session.sequence.length,
-            stepIndex: session.stepIndex,
-            currentTurnSide: currentStep?.side ?? null,
+            userVotes: session.userVotes,
+            votesByMap,
+            mapNames,
+            totalSteps: session.mapPool.length - 1,
+            stepIndex: Object.keys(session.userVotes).length,
+            currentTurnSide: null,
             deadlineAt: session.deadlineAt,
+            teleportAt: session.teleportAt,
+            transitioning: session.transitioning,
+            isTie: session.tieCandidateMapIds ? session.tieCandidateMapIds.length > 1 : false,
+            tieCandidateMapIds: session.tieCandidateMapIds,
             resolved: session.resolved,
+            selectedMapId: session.selectedMapId ?? undefined,
         };
     },
 
@@ -1342,7 +1405,6 @@ const challengeManager = {
     createChallengeVetoSession(teamSize: TeamSize, teamOneUsers: RuntimeCharacter[], teamTwoUsers: RuntimeCharacter[]) {
         const vetoId = this.createId("veto");
         const arenaMapIds = getArenaMapIds();
-        const sequence = buildVetoSequence(arenaMapIds.length);
         const session: ChallengeVetoSession = {
             id: vetoId,
             createdAt: now(),
@@ -1350,19 +1412,19 @@ const challengeManager = {
             teamOneParticipants: teamOneUsers,
             teamTwoParticipants: teamTwoUsers,
             mapPool: arenaMapIds,
-            remainingMapIds: [...arenaMapIds],
+            userVotes: {},
             bannedMapIds: [],
-            sequence,
-            stepIndex: 0,
-            deadlineAt: now() + CHALLENGE_VETO_STEP_TIMEOUT_MS,
+            deadlineAt: now() + 60_000,
+            teleportAt: null,
+            selectedMapId: null,
             timerId: null,
+            transitioning: false,
             resolved: false,
         };
 
         this.vetoSessions[vetoId] = session;
 
-        const firstTurnTeamName = teamOneUsers.map((member) => member.nameCharacter).join(" y ");
-        this.sendVetoConsole(session, `[Retos] Veteo de mapas: le toca banear a ${firstTurnTeamName}.`);
+        this.sendVetoConsole(session, "[Retos] Selección de Mapa: Tienen 1 minuto para votar/banear mapas.");
         this.broadcastVetoState(session);
         session.timerId = this.createVetoStepTimeoutTimer(vetoId);
 
@@ -1370,71 +1432,15 @@ const challengeManager = {
     },
 
     getVetoParticipantSide(session: ChallengeVetoSession, user: RuntimeCharacter): TeamSide | null {
-        if (session.teamOneParticipants[0] && String(session.teamOneParticipants[0].id) === String(user.id)) {
+        if (session.teamOneParticipants.some((p) => String(p.id) === String(user.id))) {
             return 1;
         }
 
-        if (session.teamTwoParticipants[0] && String(session.teamTwoParticipants[0].id) === String(user.id)) {
+        if (session.teamTwoParticipants.some((p) => String(p.id) === String(user.id))) {
             return 2;
         }
 
         return null;
-    },
-
-    applyVetoBan(session: ChallengeVetoSession, mapId: number, side: TeamSide) {
-        if (!session.remainingMapIds.includes(mapId)) {
-            throw new Error("Ese mapa ya no está disponible para vetar.");
-        }
-
-        this.clearVetoTimer(session);
-
-        session.remainingMapIds = session.remainingMapIds.filter((id) => id !== mapId);
-        session.bannedMapIds.push({ mapId, side });
-        session.stepIndex += 1;
-
-        if (session.remainingMapIds.length <= 1 || session.stepIndex >= session.sequence.length) {
-            this.resolveVetoSession(session);
-            return;
-        }
-
-        session.deadlineAt = now() + CHALLENGE_VETO_STEP_TIMEOUT_MS;
-        this.broadcastVetoState(session);
-        session.timerId = this.createVetoStepTimeoutTimer(session.id);
-    },
-
-    resolveVetoSession(session: ChallengeVetoSession) {
-        session.resolved = true;
-        delete this.vetoSessions[session.id];
-
-        const selectedMapId = session.remainingMapIds[0] ?? session.mapPool[0] ?? CHALLENGE_BASE_MAP_ID;
-        const matchId = this.startMatchForTeams(
-            session.teamSize,
-            session.teamOneParticipants,
-            session.teamTwoParticipants,
-            selectedMapId,
-        );
-
-        this.broadcastVetoState(session, { resolved: true, selectedMapId, matchId });
-    },
-
-    autoResolveVetoStep(vetoId: string) {
-        const session = this.vetoSessions[vetoId];
-
-        if (!session || session.resolved) {
-            return;
-        }
-
-        const currentStep = session.sequence[session.stepIndex];
-
-        if (!currentStep || session.remainingMapIds.length === 0) {
-            return;
-        }
-
-        const randomIndex = Math.floor(Math.random() * session.remainingMapIds.length);
-        const mapId = session.remainingMapIds[randomIndex];
-
-        this.sendVetoConsole(session, "[Retos] Se agotó el tiempo: se baneó un mapa al azar.", "#d94125");
-        this.applyVetoBan(session, mapId, currentStep.side);
     },
 
     submitChallengeVetoBan(idUser: string | number, vetoId: string, mapId: number) {
@@ -1446,29 +1452,117 @@ const challengeManager = {
 
         const session = this.vetoSessions[vetoId];
 
-        if (!session || session.resolved) {
+        if (!session || session.resolved || session.transitioning) {
             throw new Error("El veteo de mapas ya no está disponible.");
         }
 
-        const currentStep = session.sequence[session.stepIndex];
+        const isParticipant = this.getVetoSessionParticipants(session).some(
+            (participant) => String(participant.id) === String(user.id),
+        );
 
-        if (!currentStep) {
-            throw new Error("El veteo de mapas ya terminó.");
+        if (!isParticipant) {
+            throw new Error("No estás participando en esta votación de mapas.");
         }
 
-        const participantSide = this.getVetoParticipantSide(session, user);
-
-        if (!participantSide) {
-            throw new Error("Solo el líder de cada equipo puede vetar mapas.");
+        if (!session.mapPool.includes(mapId)) {
+            throw new Error("Ese mapa no forma parte del pool de la arena.");
         }
 
-        if (participantSide !== currentStep.side) {
-            throw new Error("No es tu turno de vetar un mapa.");
-        }
+        session.userVotes[String(user.id)] = mapId;
+        this.broadcastVetoState(session);
 
-        this.applyVetoBan(session, mapId, currentStep.side);
+        const totalParticipants = session.teamOneParticipants.length + session.teamTwoParticipants.length;
+        const totalVotesCast = Object.keys(session.userVotes).length;
+
+        if (totalVotesCast >= totalParticipants) {
+            this.resolveVetoVoting(session);
+        }
 
         return { ok: true };
+    },
+
+    resolveVetoVoting(session: ChallengeVetoSession) {
+        if (session.transitioning || session.resolved) {
+            return;
+        }
+
+        this.clearVetoTimer(session);
+
+        const votesByMap: Record<number, number> = {};
+        for (const mapId of session.mapPool) {
+            votesByMap[mapId] = 0;
+        }
+        for (const votedMapId of Object.values(session.userVotes)) {
+            if (typeof votesByMap[votedMapId] === "number") {
+                votesByMap[votedMapId] += 1;
+            }
+        }
+
+        const minVotes = Math.min(...session.mapPool.map((id) => votesByMap[id] ?? 0));
+        const candidateWinners = session.mapPool.filter((id) => (votesByMap[id] ?? 0) === minVotes);
+        const isTie = candidateWinners.length > 1;
+
+        session.tieCandidateMapIds = candidateWinners;
+
+        const selectedMapId =
+            candidateWinners[Math.floor(Math.random() * candidateWinners.length)] ??
+            session.mapPool[0] ??
+            CHALLENGE_BASE_MAP_ID;
+
+        session.bannedMapIds = session.mapPool
+            .filter((id) => id !== selectedMapId)
+            .map((mapId, idx) => ({
+                mapId,
+                side: (idx % 2 === 0 ? 1 : 2) as TeamSide,
+            }));
+
+        this.startVetoTransition(session, selectedMapId, isTie);
+    },
+
+    autoResolveVetoSession(vetoId: string) {
+        const session = this.vetoSessions[vetoId];
+
+        if (!session || session.resolved || session.transitioning) {
+            return;
+        }
+
+        this.sendVetoConsole(
+            session,
+            "[Retos] Se agotó el tiempo de votación. Seleccionando mapa...",
+            "#d94125",
+        );
+        this.resolveVetoVoting(session);
+    },
+
+    startVetoTransition(session: ChallengeVetoSession, selectedMapId: number, isTie = false) {
+        session.transitioning = true;
+        session.selectedMapId = selectedMapId;
+        session.teleportAt = now() + 5_000;
+
+        const mapName =
+            this.buildVetoStatePayload(session).mapNames?.[selectedMapId] ?? `Mapa ${selectedMapId}`;
+        const tieSuffix = isTie ? " (Empate: Sorteado al azar)" : "";
+
+        this.sendVetoConsole(
+            session,
+            `[Retos] ¡Mapa elegido: ${mapName}${tieSuffix}! Entrando a la arena en 5 segundos...`,
+            "#00E676",
+        );
+
+        this.broadcastVetoState(session, { isTie });
+
+        session.timerId = setTimeout(() => {
+            session.resolved = true;
+            delete this.vetoSessions[session.id];
+            this.broadcastVetoState(session, { resolved: true, selectedMapId, isTie });
+
+            this.startMatchForTeams(
+                session.teamSize,
+                session.teamOneParticipants,
+                session.teamTwoParticipants,
+                selectedMapId,
+            );
+        }, 5_000) as unknown as number;
     },
 
     cancelVetoSessionForUser(user: RuntimeCharacter, reason: string) {

@@ -469,10 +469,17 @@ export interface ChallengeVetoState {
     mapPool: number[];
     remainingMapIds: number[];
     bannedMapIds: ChallengeVetoBannedMap[];
+    userVotes?: Record<string, number>;
+    votesByMap?: Record<number, number>;
+    mapNames?: Record<number, string>;
     totalSteps: number;
     stepIndex: number;
     currentTurnSide: 1 | 2 | null;
     deadlineAt: number;
+    teleportAt?: number | null;
+    transitioning?: boolean;
+    isTie?: boolean;
+    tieCandidateMapIds?: number[];
     resolved: boolean;
     cancelled?: boolean;
     reason?: string;

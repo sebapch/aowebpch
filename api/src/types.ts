@@ -577,6 +577,13 @@ export type ChallengeHistoryEntry = {
     startedAt: Date;
     finishedAt: Date;
     createdAt: Date;
+    ratingChanges?: Array<{
+        characterId: string;
+        before: number;
+        after: number;
+        delta: number;
+        won: boolean;
+    }>;
 };
 
 export type CharacterRatingRecord = {
