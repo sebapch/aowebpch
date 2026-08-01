@@ -15,6 +15,7 @@ import {
     LAYER_NAMES,
     MAX_ARENA_SPAWNS_PER_TEAM,
     TRIGGER_LABELS,
+    type ArenaSpawnConfig,
     type ExpandedTile,
     type MapMetadata,
     type MapSummary,
@@ -475,23 +476,44 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
     }, []);
 
     const handleAddArenaSpawn = useCallback(
-        (team: 1 | 2, point: { x: number; y: number }) => {
-            if (!model) return;
+        (team: 1 | 2, point: { x: number; y: number }): boolean => {
+            if (!model) return false;
 
-            const current = model.meta.arenaSpawns ?? { team1: [], team2: [] };
-            const key = team === 1 ? "team1" : "team2";
-            const existing = current[key];
+            const currentSpawns = model.meta.arenaSpawns;
+            const team1Points = currentSpawns?.team1 ?? [];
+            const team2Points = currentSpawns?.team2 ?? [];
+            const existing = team === 1 ? team1Points : team2Points;
 
-            if (existing.length >= MAX_ARENA_SPAWNS_PER_TEAM) {
-                return;
+            if (existing.some((p) => p.x === point.x && p.y === point.y)) {
+                return existing.length < MAX_ARENA_SPAWNS_PER_TEAM;
             }
 
-            model.setMeta({
+            if (existing.length >= MAX_ARENA_SPAWNS_PER_TEAM) {
+                return false;
+            }
+
+            const updatedTeamPoints = [...existing, point];
+            const updatedSpawns: ArenaSpawnConfig = {
+                team1: team === 1 ? updatedTeamPoints : team1Points,
+                team2: team === 2 ? updatedTeamPoints : team2Points,
+            };
+
+            const nextMeta = {
                 ...model.meta,
-                arenaSpawns: { ...current, [key]: [...existing, point] },
-            });
+                isArena: true,
+                arenaSpawns: updatedSpawns,
+            };
+
+            model.setMeta(nextMeta);
+
+            setMaps((prev) =>
+                prev.map((m) => (m.id === model.meta.id ? { ...m, isArena: true } : m)),
+            );
+
             canvasHandle?.markAllDirty();
             handleEdit();
+
+            return updatedTeamPoints.length < MAX_ARENA_SPAWNS_PER_TEAM;
         },
         [model, handleEdit, canvasHandle],
     );
@@ -501,8 +523,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
             setSelectedTile(targetTile);
 
             if (armedArenaTeam !== null) {
-                handleAddArenaSpawn(armedArenaTeam, targetTile);
-                setArmedArenaTeam(null);
+                const canContinue = handleAddArenaSpawn(armedArenaTeam, targetTile);
+                if (!canContinue) {
+                    setArmedArenaTeam(null);
+                }
                 return;
             }
 
@@ -558,7 +582,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 }
             }
         },
-        [movePending, model, commitEdits],
+        [armedArenaTeam, handleAddArenaSpawn, movePending, model, commitEdits],
     );
 
     const handleAddNpc = useCallback(
@@ -683,9 +707,17 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         (meta: MapMetadata) => {
             if (!model) return;
             model.setMeta(meta);
+            setMaps((prev) =>
+                prev.map((m) =>
+                    m.id === meta.id
+                        ? { ...m, name: meta.name, terreno: meta.terreno, zona: meta.zona, pk: meta.pk, isArena: meta.isArena === true }
+                        : m,
+                ),
+            );
+            canvasHandle?.markAllDirty();
             handleEdit();
         },
-        [model, handleEdit],
+        [model, handleEdit, canvasHandle],
     );
 
     // --- Operaciones sobre la seleccion rectangular ---------------------------
@@ -990,6 +1022,16 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
         return () => window.removeEventListener("keydown", handleKeyDown);
     }, [handleKeyDown]);
 
+    const sortedMaps = useMemo(() => {
+        return [...maps].sort((a, b) => {
+            const aActive = activeMapIds.includes(a.id);
+            const bActive = activeMapIds.includes(b.id);
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+            return a.id - b.id;
+        });
+    }, [maps, activeMapIds]);
+
     const currentSummary = maps.find((summary) => summary.id === mapId);
 
     // Recorre solo las bandas de los bordes; `revision` la recalcula al editar.
@@ -1009,10 +1051,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     <button
                         type="button"
                         onClick={() => {
-                            const idx = maps.findIndex((m) => m.id === mapId);
-                            if (idx > 0) requestMapChange(maps[idx - 1].id);
+                            const idx = sortedMaps.findIndex((m) => m.id === mapId);
+                            if (idx > 0) requestMapChange(sortedMaps[idx - 1].id);
                         }}
-                        disabled={maps.findIndex((m) => m.id === mapId) <= 0}
+                        disabled={sortedMaps.findIndex((m) => m.id === mapId) <= 0}
                         className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Mapa anterior en la lista"
                     >
@@ -1024,8 +1066,8 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                         value={mapId}
                         onChange={(event) => requestMapChange(Number(event.target.value))}
                     >
-                        {maps.length === 0 && <option value={mapId}>Mapa {mapId}</option>}
-                        {maps.map((summary) => {
+                        {sortedMaps.length === 0 && <option value={mapId}>Mapa {mapId}</option>}
+                        {sortedMaps.map((summary) => {
                             const isActive = activeMapIds.includes(summary.id);
                             return (
                                 <option key={summary.id} value={summary.id}>
@@ -1038,10 +1080,10 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     <button
                         type="button"
                         onClick={() => {
-                            const idx = maps.findIndex((m) => m.id === mapId);
-                            if (idx >= 0 && idx < maps.length - 1) requestMapChange(maps[idx + 1].id);
+                            const idx = sortedMaps.findIndex((m) => m.id === mapId);
+                            if (idx >= 0 && idx < sortedMaps.length - 1) requestMapChange(sortedMaps[idx + 1].id);
                         }}
-                        disabled={maps.findIndex((m) => m.id === mapId) >= maps.length - 1}
+                        disabled={sortedMaps.findIndex((m) => m.id === mapId) >= sortedMaps.length - 1}
                         className="rounded border border-slate-700 bg-slate-800 px-2 py-1 text-xs text-slate-300 hover:bg-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
                         title="Mapa siguiente en la lista"
                     >
@@ -1658,15 +1700,22 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                     {armedArenaTeam !== null && (
                         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-30 flex items-center gap-3 rounded-lg border border-amber-500/80 bg-slate-900/95 px-4 py-2 text-xs shadow-2xl backdrop-blur-xs">
                             <span className="font-semibold text-amber-300 flex items-center gap-1.5">
-                                <span className="animate-pulse">🏟️</span> Agregando spawn — Equipo {armedArenaTeam}
+                                <span className="animate-pulse">🏟️</span> Agregando spawns — Equipo {armedArenaTeam} ({(model?.meta.arenaSpawns?.[armedArenaTeam === 1 ? "team1" : "team2"]?.length ?? 0)}/4)
                             </span>
-                            <span className="text-slate-300 font-medium">Haz clic en el tile del mapa donde aparecera el equipo</span>
+                            <span className="text-slate-300 font-medium">Haz clic en los casilleros del mapa para colocar los puntos</span>
+                            <button
+                                type="button"
+                                onClick={() => setArenaPanelOpen(true)}
+                                className="rounded border border-amber-600/70 bg-amber-950/70 px-2 py-0.5 font-medium text-amber-200 hover:bg-amber-900 transition-colors"
+                            >
+                                Abrir panel
+                            </button>
                             <button
                                 type="button"
                                 onClick={() => setArmedArenaTeam(null)}
                                 className="rounded border border-slate-700 bg-slate-800 px-2 py-0.5 font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"
                             >
-                                Cancelar (Esc)
+                                Listo (Esc)
                             </button>
                         </div>
                     )}
@@ -1716,6 +1765,7 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                             paintToolMode={paintToolMode}
                             selection={selection}
                             history={history}
+                            isArmingSpawn={armedArenaTeam !== null}
                             onHoverTile={setHoverTile}
                             onPickTile={handlePickTile}
                             onPickGraphic={handlePickGraphic}
@@ -1813,13 +1863,16 @@ export function EditorShell({ initialMapId }: { initialMapId: number }) {
                 <ArenaPanel
                     meta={model.meta}
                     armedTeam={armedArenaTeam}
+                    maps={maps}
                     onChange={handleSetMeta}
                     onArmTeam={(team) => {
                         if (team !== null) {
                             setTool("select");
+                            setArenaPanelOpen(false);
                         }
                         setArmedArenaTeam(team);
                     }}
+                    onSelectMap={requestMapChange}
                     onClose={() => setArenaPanelOpen(false)}
                 />
             )}

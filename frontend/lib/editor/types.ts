@@ -136,6 +136,7 @@ export type MapSummary = {
     terreno: string;
     zona: string;
     pk: number;
+    isArena?: boolean;
 };
 
 export type EditorHealth = {

@@ -14,6 +14,7 @@ import type {
 } from "./types/runtime";
 import { getClientById } from "./runtimeRegistry";
 import * as safeZone from "./safeZone";
+import * as antiCheat from "./antiCheat";
 
 export {};
 const config = require("./config");
@@ -938,6 +939,7 @@ createDynamicScheduler(
             const user = (vars.personajes as RuntimeCharacters)[idUser] as ServerCharacter | undefined;
 
             if (user?.cerrado) {
+                antiCheat.clearCharacter(idUser);
                 delete vars.personajes[idUser];
             }
         }

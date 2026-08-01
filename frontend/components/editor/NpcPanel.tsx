@@ -175,8 +175,21 @@ export function NpcPanel({ npcIndex, onClose, onSaved }: Props) {
                 </header>
 
                 <div className="flex-1 overflow-y-auto px-4 py-3">
-                    {loading && <p className="text-sm text-slate-400">Cargando...</p>}
-                    {loadError && <p className="text-sm text-red-300">{loadError}</p>}
+                    {loadError && (
+                        <div className="space-y-3 p-2">
+                            <p className="text-sm text-red-400 font-medium">{loadError}</p>
+                            <p className="text-xs text-slate-400">
+                                No se pudo obtener la plantilla del NPC #{npcIndex}. Puedes cerrar esta ventana para continuar editando el mapa.
+                            </p>
+                            <button
+                                type="button"
+                                onClick={onClose}
+                                className="rounded bg-slate-800 border border-slate-700 px-3 py-1.5 text-xs text-slate-200 hover:bg-slate-700 transition-colors"
+                            >
+                                Cerrar panel
+                            </button>
+                        </div>
+                    )}
 
                     {fields && (
                         <div className="space-y-4">

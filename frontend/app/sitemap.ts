@@ -54,6 +54,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
             priority: 0.9,
         },
         {
+            url: absoluteUrl("/ranking"),
+            lastModified: now,
+            changeFrequency: "daily",
+            priority: 0.9,
+        },
+        {
             url: absoluteUrl("/login"),
             lastModified: now,
             changeFrequency: "monthly",

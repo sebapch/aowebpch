@@ -1,1 +1,52 @@
-{"id":45,"name":"Catacumbas Ullathorpe-Nix.","musicNum":9,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"BOSQUE","zona":"DUNGEON","restringir":"No","maxLevel":0,"backup":0,"pk":0}
+{
+    "id": 45,
+    "name": "Catacumbas Ullathorpe-Nix.",
+    "musicNum": 9,
+    "magiaSinEfecto": 0,
+    "noEncriptarMp": 0,
+    "terreno": "BOSQUE",
+    "zona": "DUNGEON",
+    "restringir": "No",
+    "maxLevel": 0,
+    "backup": 0,
+    "pk": 0,
+    "isArena": true,
+    "arenaSpawns": {
+        "team1": [
+            {
+                "x": 30,
+                "y": 42
+            },
+            {
+                "x": 31,
+                "y": 42
+            },
+            {
+                "x": 31,
+                "y": 43
+            },
+            {
+                "x": 30,
+                "y": 43
+            }
+        ],
+        "team2": [
+            {
+                "x": 86,
+                "y": 55
+            },
+            {
+                "x": 86,
+                "y": 56
+            },
+            {
+                "x": 87,
+                "y": 56
+            },
+            {
+                "x": 87,
+                "y": 55
+            }
+        ]
+    }
+}

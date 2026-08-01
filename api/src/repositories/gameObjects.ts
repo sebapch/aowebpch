@@ -169,7 +169,54 @@ export async function getGameObjectById(id: number) {
     [id],
   );
 
-  const row = result.rows[0];
+  let row = result.rows[0];
+
+  if (!row) {
+    const seedRows = loadSeedObjectsJson();
+    const foundSeed = seedRows.find((r) => r.id === id);
+    const objData: GameObjectRecordData = foundSeed
+      ? foundSeed.data
+      : {
+          id,
+          name: `Objeto #${id}`,
+          objType: 0,
+          grhIndex: 0,
+          valor: 0,
+        };
+
+    const checksum = computeChecksum(objData);
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      await client.query(
+        `
+          INSERT INTO game_objects (id, name, obj_type, data, checksum, version, updated_at)
+          VALUES ($1, $2, $3, $4::jsonb, $5, 0, NOW())
+          ON CONFLICT (id) DO NOTHING
+        `,
+        [id, objData.name, objData.objType ?? 0, JSON.stringify(objData), checksum],
+      );
+      const version = await insertRevision(client, id, checksum);
+      await client.query("UPDATE game_objects SET version = $2 WHERE id = $1", [id, version]);
+      await client.query("COMMIT");
+    } catch {
+      await client.query("ROLLBACK");
+    } finally {
+      client.release();
+    }
+
+    const reFetch = await pool.query<GameObjectRow>(
+      `
+          SELECT id, name, obj_type, data, checksum, version::text AS version, updated_at
+          FROM game_objects
+          WHERE id = $1
+          LIMIT 1
+        `,
+      [id],
+    );
+    row = reFetch.rows[0];
+  }
+
   if (!row) {
     throw new Error("Game object not found");
   }

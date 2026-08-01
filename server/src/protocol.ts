@@ -15,6 +15,7 @@ import type { LoginApi } from "./login";
 import type { PackageApi } from "./package";
 import type { SocketApi } from "./socket";
 import { getCharacterById, getClientById } from "./runtimeRegistry";
+import * as antiCheat from "./antiCheat";
 import { VOICE_SIGNAL_MAX_LENGTH } from "./voiceChat";
 
 const game = require("./game");
@@ -37,6 +38,12 @@ const challengeManager = require("./challengeManager");
 const { arenaMatchmakingManager } = require("./arenaMatchmakingManager");
 const LOGOUT_CANCELLED_MESSAGE = "[Servidor] La salida se canceló porque te moviste.";
 const MAX_PENDING_MOVE_QUEUE_LENGTH = 8;
+// Cantidad de acciones que se acumulan antes de contrastarlas contra la ventana
+// mínima plausible de `vars.timing.rateLimitWindows`.
+const WALK_BURST_SAMPLE_SIZE = 30;
+const MELEE_BURST_SAMPLE_SIZE = 10;
+const SPELL_BURST_SAMPLE_SIZE = 10;
+const RANGED_BURST_SAMPLE_SIZE = 10;
 const REVIVE_CAST_MS = 10000;
 const DRAGON_SLAYER_SWORD_ITEM_ID = 402;
 const REORDER_PACKET_COOLDOWN_MS = 100;
@@ -3120,12 +3127,22 @@ function position(ws: RuntimeClient) {
             return;
         }
 
-        if (user.walk.pasos >= 30) {
-            user.walk.pasos = 0;
-            user.walk.startTimer = +Date.now();
-        }
+        const walkBurst = antiCheat.evaluateBurst(
+            user.walk,
+            user.walk.pasos,
+            WALK_BURST_SAMPLE_SIZE,
+            vars.timing.rateLimitWindows.positionWindowMs,
+        );
 
-        user.walk.pasos++;
+        user.walk.pasos = walkBurst.count;
+
+        if (walkBurst.violation) {
+            antiCheat.recordViolation(
+                user,
+                "speedhack",
+                `${WALK_BURST_SAMPLE_SIZE} pasos en ${walkBurst.elapsedMs}ms`,
+            );
+        }
 
         if (!pkg.canReadBytes(5)) {
             return;
@@ -3371,14 +3388,26 @@ function attackMele(ws: RuntimeClient) {
             }
         }
 
-        if (user.hit.hits >= 10) {
-            user.hit.hits = 0;
-            user.hit.startTimer = +Date.now();
+        const now = Date.now();
+
+        const meleeBurst = antiCheat.evaluateBurst(
+            user.hit,
+            user.hit.hits,
+            MELEE_BURST_SAMPLE_SIZE,
+            vars.timing.rateLimitWindows.attackWindowMs,
+            now,
+        );
+
+        user.hit.hits = meleeBurst.count;
+
+        if (meleeBurst.violation) {
+            antiCheat.recordViolation(
+                user,
+                "meleeBurst",
+                `${MELEE_BURST_SAMPLE_SIZE} ataques en ${meleeBurst.elapsedMs}ms`,
+            );
         }
 
-        user.hit.hits++;
-
-        const now = Date.now();
         clearExpiredCombatCooldowns(user, now);
 
         if ((user.nextMeleeAt ?? 0) > now || (user.nextMeleeAfterSpellAt ?? 0) > now) {
@@ -3574,14 +3603,30 @@ function attackRange(ws: RuntimeClient) {
             return;
         }
 
-        if (user.spell.lanzados >= 10) {
-            user.spell.lanzados = 0;
-            user.spell.startTimer = +Date.now();
+        const now = Date.now();
+
+        if (!user.ranged) {
+            user.ranged = { lanzados: 0, tiempoTotal: 0, startTimer: 0 };
         }
 
-        user.spell.lanzados++;
+        const rangedBurst = antiCheat.evaluateBurst(
+            user.ranged,
+            user.ranged.lanzados,
+            RANGED_BURST_SAMPLE_SIZE,
+            vars.timing.rateLimitWindows.rangeAttackWindowMs,
+            now,
+        );
 
-        const now = Date.now();
+        user.ranged.lanzados = rangedBurst.count;
+
+        if (rangedBurst.violation) {
+            antiCheat.recordViolation(
+                user,
+                "rangedBurst",
+                `${RANGED_BURST_SAMPLE_SIZE} disparos en ${rangedBurst.elapsedMs}ms`,
+            );
+        }
+
         clearExpiredCombatCooldowns(user, now);
 
         if (
@@ -3613,6 +3658,16 @@ function attackRange(ws: RuntimeClient) {
         }
 
         if (pos.y < 1 || pos.y > 100) {
+            return;
+        }
+
+        if (!antiCheat.isWithinVisionRange(user, pos)) {
+            antiCheat.recordViolation(
+                user,
+                "rangedOutOfRange",
+                `objetivo (${pos.x},${pos.y}) desde (${user.pos.x},${user.pos.y}) en mapa ${user.map}`,
+                now,
+            );
             return;
         }
 
@@ -3770,14 +3825,26 @@ function attackSpell(ws: RuntimeClient) {
             return;
         }
 
-        if (user.spell.lanzados >= 10) {
-            user.spell.lanzados = 0;
-            user.spell.startTimer = +Date.now();
+        const now = Date.now();
+
+        const spellBurst = antiCheat.evaluateBurst(
+            user.spell,
+            user.spell.lanzados,
+            SPELL_BURST_SAMPLE_SIZE,
+            vars.timing.rateLimitWindows.attackSpellWindowMs,
+            now,
+        );
+
+        user.spell.lanzados = spellBurst.count;
+
+        if (spellBurst.violation) {
+            antiCheat.recordViolation(
+                user,
+                "spellBurst",
+                `${SPELL_BURST_SAMPLE_SIZE} hechizos en ${spellBurst.elapsedMs}ms`,
+            );
         }
 
-        user.spell.lanzados++;
-
-        const now = Date.now();
         clearExpiredCombatCooldowns(user, now);
 
         if ((user.nextSpellAt ?? 0) > now || (user.nextSpellAfterMeleeAt ?? 0) > now) {
@@ -3847,7 +3914,18 @@ function attackSpell(ws: RuntimeClient) {
         }
 
         if (isPartialInvisibilityRemoval) {
+            // Hechizo centrado en el lanzador: no consume `pos`.
             castPartialInvisibilityRemovalSpell(ws, user, datSpell);
+            return;
+        }
+
+        if (!antiCheat.isWithinVisionRange(user, pos)) {
+            antiCheat.recordViolation(
+                user,
+                "spellOutOfRange",
+                `hechizo ${idSpell} a (${pos.x},${pos.y}) desde (${user.pos.x},${user.pos.y}) en mapa ${user.map}`,
+                now,
+            );
             return;
         }
 

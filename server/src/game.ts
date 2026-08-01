@@ -46,8 +46,11 @@ import {
     hasOpenClientById,
 } from "./runtimeRegistry";
 import * as safeZone from "./safeZone";
+import * as antiCheat from "./antiCheat";
 
 export {};
+// Usos de ítem que se acumulan antes de contrastarlos contra `useItemWindowMs`.
+const USE_ITEM_BURST_SAMPLE_SIZE = 20;
 const funct = require("./functions");
 const socket = require("./socket") as SocketApi;
 const vars = require("./vars");
@@ -3967,12 +3970,23 @@ function Game(this: GameApi) {
             const user = vars.personajes[clientId] as GameCharacter;
             const now = Date.now();
 
-            if (user.useObj.usos >= 20) {
-                user.useObj.usos = 0;
-                user.useObj.startTimer = +Date.now();
-            }
+            const useItemBurst = antiCheat.evaluateBurst(
+                user.useObj,
+                user.useObj.usos,
+                USE_ITEM_BURST_SAMPLE_SIZE,
+                vars.timing.rateLimitWindows.useItemWindowMs,
+                now,
+            );
 
-            user.useObj.usos++;
+            user.useObj.usos = useItemBurst.count;
+
+            if (useItemBurst.violation) {
+                antiCheat.recordViolation(
+                    user,
+                    "useItemBurst",
+                    `${USE_ITEM_BURST_SAMPLE_SIZE} usos en ${useItemBurst.elapsedMs}ms`,
+                );
+            }
 
             const nextUseItemAt = user.nextUseItemAt ?? 0;
             const nextUseItemAfterMeleeAt = user.nextUseItemAfterMeleeAt ?? 0;

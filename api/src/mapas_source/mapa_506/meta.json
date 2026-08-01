@@ -1,1 +1,1 @@
-{"id":506,"name":"Mapa de Retos","musicNum":28,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"DESIERTO","zona":"DUNGEON","restringir":"","maxLevel":0,"backup":1,"pk":0}
+{"id":506,"name":"Mapa de Retos","musicNum":28,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"DESIERTO","zona":"DUNGEON","restringir":"","maxLevel":0,"backup":1,"pk":0,"isArena":true,"arenaSpawns":{"team1":[{"x":65,"y":63},{"x":66,"y":63},{"x":65,"y":64},{"x":66,"y":64}],"team2":[{"x":85,"y":79},{"x":84,"y":79},{"x":85,"y":78},{"x":84,"y":78}]}}

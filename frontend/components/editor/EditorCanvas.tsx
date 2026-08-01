@@ -33,6 +33,7 @@ type Props = {
     paintToolMode?: "brush" | "bucket";
     selection: TileRegion | null;
     history: History;
+    isArmingSpawn?: boolean;
     onHoverTile: (tile: { x: number; y: number } | null) => void;
     onPickTile: (tile: { x: number; y: number }) => void;
     onPickGraphic?: (grhId: number) => void;
@@ -77,6 +78,7 @@ export function EditorCanvas({
     brushTrigger,
     brushSize,
     paintToolMode,
+    isArmingSpawn,
     selection,
     history,
     onHoverTile,
@@ -103,6 +105,7 @@ export function EditorCanvas({
     const onZoomRef = useRef(onZoomChange);
     const onEditRef = useRef(onEdit);
     const toolRef = useRef(tool);
+    const isArmingSpawnRef = useRef(isArmingSpawn);
     const activeLayerRef = useRef(activeLayer);
     const paintModeRef = useRef(paintMode);
     const brushGraphicRef = useRef(brushGraphic);
@@ -120,6 +123,7 @@ export function EditorCanvas({
         onZoomRef.current = onZoomChange;
         onEditRef.current = onEdit;
         toolRef.current = tool;
+        isArmingSpawnRef.current = isArmingSpawn;
         activeLayerRef.current = activeLayer;
         paintModeRef.current = paintMode;
         brushGraphicRef.current = brushGraphic;
@@ -128,7 +132,7 @@ export function EditorCanvas({
         paintToolModeRef.current = paintToolMode ?? "brush";
         modelRef.current = model;
         historyRef.current = history;
-    }, [onHoverTile, onPickTile, onPickGraphic, onSelectRegion, onZoomChange, onEdit, tool, activeLayer, paintMode, brushGraphic, brushTrigger, brushSize, paintToolMode, model, history]);
+    }, [onHoverTile, onPickTile, onPickGraphic, onSelectRegion, onZoomChange, onEdit, tool, isArmingSpawn, activeLayer, paintMode, brushGraphic, brushTrigger, brushSize, paintToolMode, model, history]);
 
     useEffect(() => {
         sceneRef.current?.setSelection(selection);
@@ -582,6 +586,11 @@ export function EditorCanvas({
             const tile = scene.screenToTile(local.x, local.y);
 
             if (!tile) {
+                return;
+            }
+
+            if (isArmingSpawnRef.current) {
+                onPickRef.current(tile);
                 return;
             }
 

@@ -37,7 +37,13 @@ export async function getSocialLogoSrc(): Promise<string> {
     return logoPromise;
 }
 
-export function SocialCard({ eyebrow, title, accent }: SocialCardProps) {
+export function SocialCard({
+    eyebrow,
+    title,
+    description,
+    bullets,
+    accent,
+}: SocialCardProps) {
     return (
         <div
             style={{
@@ -131,7 +137,45 @@ export function SocialCard({ eyebrow, title, accent }: SocialCardProps) {
                             >
                                 {title}
                             </div>
+
+                            <div
+                                style={{
+                                    display: "flex",
+                                    marginTop: "20px",
+                                    fontSize: 28,
+                                    lineHeight: 1.35,
+                                    color: "#cbd5e1",
+                                }}
+                            >
+                                {description}
+                            </div>
                         </div>
+                    </div>
+
+                    <div
+                        style={{
+                            display: "flex",
+                            flexWrap: "wrap",
+                            gap: "12px",
+                        }}
+                    >
+                        {bullets.map((bullet) => (
+                            <div
+                                key={bullet}
+                                style={{
+                                    display: "flex",
+                                    alignItems: "center",
+                                    border: "1px solid #3d2719",
+                                    backgroundColor: "#0b0f19",
+                                    borderRadius: "12px",
+                                    padding: "10px 18px",
+                                    fontSize: 22,
+                                    color: "#e2e8f0",
+                                }}
+                            >
+                                {bullet}
+                            </div>
+                        ))}
                     </div>
                 </div>
             </div>

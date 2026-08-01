@@ -14,6 +14,7 @@ type Props = {
 
 export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMapId, onSelectMap }: Props) {
     const [search, setSearch] = useState("");
+    const [filterTab, setFilterTab] = useState<"all" | "arenas" | "server">("all");
     const [selectedIndex, setSelectedIndex] = useState(0);
     const inputRef = useRef<HTMLInputElement>(null);
     const listRef = useRef<HTMLDivElement>(null);
@@ -21,29 +22,51 @@ export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMap
     useEffect(() => {
         if (isOpen) {
             setSearch("");
+            setFilterTab("all");
             setSelectedIndex(0);
             setTimeout(() => inputRef.current?.focus(), 50);
         }
     }, [isOpen]);
 
+    const arenaCount = useMemo(() => maps.filter((m) => m.isArena).length, [maps]);
+    const serverCount = useMemo(() => maps.filter((m) => activeMapIds.includes(m.id)).length, [maps, activeMapIds]);
+
     const filteredMaps = useMemo(() => {
+        let list = maps;
+
+        if (filterTab === "arenas") {
+            list = list.filter((m) => m.isArena);
+        } else if (filterTab === "server") {
+            list = list.filter((m) => activeMapIds.includes(m.id));
+        }
+
         const query = search.trim().toLowerCase();
-        if (!query) return maps;
+        if (query) {
+            list = list.filter((map) => {
+                const isArenaQuery = query === "arena" || query === "arenas";
+                const arenaMatch = isArenaQuery ? map.isArena === true : false;
+                const idMatch = map.id.toString().includes(query);
+                const nameMatch = map.name ? map.name.toLowerCase().includes(query) : false;
+                const terrainMatch = map.terreno ? map.terreno.toLowerCase().includes(query) : false;
+                const zoneMatch = map.zona ? map.zona.toLowerCase().includes(query) : false;
 
-        return maps.filter((map) => {
-            const idMatch = map.id.toString().includes(query);
-            const nameMatch = map.name ? map.name.toLowerCase().includes(query) : false;
-            const terrainMatch = map.terreno ? map.terreno.toLowerCase().includes(query) : false;
-            const zoneMatch = map.zona ? map.zona.toLowerCase().includes(query) : false;
+                return arenaMatch || idMatch || nameMatch || terrainMatch || zoneMatch;
+            });
+        }
 
-            return idMatch || nameMatch || terrainMatch || zoneMatch;
+        return [...list].sort((a, b) => {
+            const aActive = activeMapIds.includes(a.id);
+            const bActive = activeMapIds.includes(b.id);
+            if (aActive && !bActive) return -1;
+            if (!aActive && bActive) return 1;
+            return a.id - b.id;
         });
-    }, [maps, search]);
+    }, [maps, activeMapIds, search, filterTab]);
 
-    // Resetea el índice seleccionado cuando cambia la búsqueda
+    // Resetea el índice seleccionado cuando cambia la búsqueda o tab
     useEffect(() => {
         setSelectedIndex(0);
-    }, [search]);
+    }, [search, filterTab]);
 
     // Scroll suave al elemento activo con teclado
     useEffect(() => {
@@ -86,13 +109,13 @@ export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMap
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Cabecera y Buscador */}
-                <div className="border-b border-slate-800 p-3">
+                <div className="border-b border-slate-800 p-3 space-y-2.5">
                     <div className="relative flex items-center">
                         <span className="absolute left-3 text-slate-400 text-sm">🔍</span>
                         <input
                             ref={inputRef}
                             type="text"
-                            placeholder="Buscar mapa por número o nombre (ej. 276, Ullathorpe, Bosque)..."
+                            placeholder="Buscar mapa por número, nombre o 'arena' (ej. 506, Retos, arena)..."
                             value={search}
                             onChange={(e) => setSearch(e.target.value)}
                             onKeyDown={handleKeyDown}
@@ -108,13 +131,47 @@ export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMap
                             </button>
                         )}
                     </div>
-                    <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400 px-1">
-                        <span>
-                            Navega con <kbd className="rounded bg-slate-800 px-1 py-0.5 text-slate-300">↑</kbd>{" "}
-                            <kbd className="rounded bg-slate-800 px-1 py-0.5 text-slate-300">↓</kbd> y selecciona con{" "}
-                            <kbd className="rounded bg-slate-800 px-1 py-0.5 text-slate-300">Enter</kbd>
+
+                    {/* Filtros rápidos por pestaña */}
+                    <div className="flex items-center justify-between text-xs">
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => setFilterTab("all")}
+                                className={`rounded px-2.5 py-1 font-medium transition-colors ${
+                                    filterTab === "all"
+                                        ? "bg-slate-700 text-slate-100 font-semibold"
+                                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                }`}
+                            >
+                                Todos ({maps.length})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFilterTab("arenas")}
+                                className={`rounded px-2.5 py-1 font-medium transition-colors flex items-center gap-1 ${
+                                    filterTab === "arenas"
+                                        ? "bg-amber-950 border border-amber-600/70 text-amber-300 font-semibold"
+                                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                }`}
+                            >
+                                🏟️ Arenas ({arenaCount})
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setFilterTab("server")}
+                                className={`rounded px-2.5 py-1 font-medium transition-colors flex items-center gap-1 ${
+                                    filterTab === "server"
+                                        ? "bg-emerald-950 border border-emerald-600/70 text-emerald-300 font-semibold"
+                                        : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                                }`}
+                            >
+                                🟢 Servidor ({serverCount})
+                            </button>
+                        </div>
+                        <span className="text-[11px] text-slate-400">
+                            {filteredMaps.length} resultado{filteredMaps.length === 1 ? "" : "s"}
                         </span>
-                        <span>{filteredMaps.length} mapas encontrados</span>
                     </div>
                 </div>
 
@@ -122,7 +179,7 @@ export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMap
                 <div ref={listRef} className="flex-1 overflow-y-auto p-2 divide-y divide-slate-800/40">
                     {filteredMaps.length === 0 ? (
                         <div className="py-8 text-center text-xs text-slate-500">
-                            No se encontraron mapas que coincidan con &quot;{search}&quot;.
+                            No se encontraron mapas que coincidan con la búsqueda.
                         </div>
                     ) : (
                         filteredMaps.map((map, index) => {
@@ -151,10 +208,10 @@ export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMap
                                             #{map.id}
                                         </span>
                                         <div className="min-w-0">
-                                            <div className="truncate text-xs font-semibold">
-                                                {map.name || "(Sin nombre)"}
+                                            <div className="truncate text-xs font-semibold flex items-center gap-1.5">
+                                                <span>{map.name || "(Sin nombre)"}</span>
                                                 {isCurrent && (
-                                                    <span className="ml-2 text-[10px] font-normal text-sky-400">
+                                                    <span className="text-[10px] font-normal text-sky-400">
                                                         (actual)
                                                     </span>
                                                 )}
@@ -172,6 +229,11 @@ export function MapSearchModal({ isOpen, onClose, maps, activeMapIds, currentMap
                                     </div>
 
                                     <div className="flex items-center gap-2 shrink-0">
+                                        {map.isArena && (
+                                            <span className="rounded border border-amber-500/80 bg-amber-950/80 px-2 py-0.5 text-[11px] font-semibold text-amber-300">
+                                                🏟️ Arena
+                                            </span>
+                                        )}
                                         <span
                                             className={`text-[11px] font-semibold px-2 py-0.5 rounded border ${
                                                 isActive

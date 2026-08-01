@@ -5,8 +5,9 @@ import {
     socialImageContentType,
     socialImageSize,
 } from "@/lib/social-card";
+import { siteTagline, siteTitle } from "@/lib/seo";
 
-export const alt = "AOWeb";
+export const alt = siteTitle;
 export const size = socialImageSize;
 export const contentType = socialImageContentType;
 
@@ -15,15 +16,15 @@ export default async function OpenGraphImage() {
 
     return new ImageResponse(
         <SocialCard
-            eyebrow="AOWeb"
-            title="AOWeb"
-            description="Beta activa con roadmap abierto, updates frecuentes y una experiencia web pensada para jugar fluido."
+            eyebrow={siteTagline}
+            title="CSAO2"
+            description="Argentum Online sin descargar nada. Abris el navegador y jugas."
             bullets={[
-                "MMORPG clasico 100% web",
-                "Changelog y roadmap publicos",
-                "Seguimiento y mejoras continuas",
+                "Retos por equipos con veto de mapas",
+                "Ranking Elo",
+                "Voz por equipo",
             ]}
-            accent="#67e8f9"
+            accent="#d4a359"
             logoSrc={logoSrc}
         />,
         size,

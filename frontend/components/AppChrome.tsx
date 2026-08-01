@@ -102,11 +102,20 @@ export default function AppChrome({ children }: AppChromeProps) {
 
                     <div className="flex items-center gap-3">
                         <Link
-                            href={session ? "/characters" : "/login"}
+                            href={session ? "/characters" : "/register"}
                             className="hidden sm:inline-flex items-center game-btn-bronze px-4 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider shadow-md"
                         >
-                            ¡Jugar CSAO2!
+                            {session ? "Jugar" : "Jugar gratis"}
                         </Link>
+
+                        {session && Boolean(session.characters?.some((c) => c.isAdministrator) || session.account?.email?.toLowerCase() === "admin@local.com") && (
+                            <Link
+                                href="/editor"
+                                className="hidden sm:inline-flex items-center rounded-lg border border-amber-600/40 bg-amber-950/30 px-3 py-1.5 text-xs font-bold uppercase tracking-wider text-amber-300 transition hover:bg-amber-900/40 hover:text-amber-100"
+                            >
+                                Editor
+                            </Link>
+                        )}
 
                         {session ? (
                             <div className="flex items-center gap-2">

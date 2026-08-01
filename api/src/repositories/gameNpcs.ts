@@ -404,7 +404,67 @@ export async function getGameNpcById(id: number) {
         [id],
     );
 
-    const row = result.rows[0];
+    let row = result.rows[0];
+
+    if (!row) {
+        const seedRows = loadSeedNpcsJson();
+        const foundSeed = seedRows.find((r) => r.id === id);
+        const npcData: GameNpcRecordData = foundSeed
+            ? foundSeed.data
+            : {
+                  id,
+                  name: `NPC #${id}`,
+                  npcType: 0,
+                  idHead: 0,
+                  idBody: 0,
+                  movement: 0,
+              };
+
+        const checksum = computeChecksum(npcData);
+        const client = await pool.connect();
+        try {
+            await client.query("BEGIN");
+            await client.query(
+                `
+          INSERT INTO game_npcs (id, name, npc_type, id_head, id_body, movement, data, checksum, version, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7::jsonb, $8, 0, NOW())
+          ON CONFLICT (id) DO NOTHING
+        `,
+                [
+                    id,
+                    npcData.name,
+                    npcData.npcType ?? 0,
+                    npcData.idHead ?? 0,
+                    npcData.idBody ?? 0,
+                    npcData.movement ?? 0,
+                    JSON.stringify(npcData),
+                    checksum,
+                ],
+            );
+            const version = await insertRevision(client, id, checksum);
+            await client.query(
+                "UPDATE game_npcs SET version = $2 WHERE id = $1",
+                [id, version],
+            );
+            await client.query("COMMIT");
+        } catch {
+            await client.query("ROLLBACK");
+        } finally {
+            client.release();
+        }
+
+        const reFetch = await pool.query<GameNpcRow>(
+            `
+          SELECT id, name, npc_type, id_head, id_body, movement, data, checksum, version::text AS version, updated_at
+          FROM game_npcs
+          WHERE id = $1
+          LIMIT 1
+        `,
+            [id],
+        );
+        row = reFetch.rows[0];
+    }
+
     if (!row) {
         throw new Error("Game npc not found");
     }

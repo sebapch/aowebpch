@@ -12,17 +12,23 @@ const normalizedSiteUrl = rawSiteUrl.startsWith("http")
 
 export const siteUrl = normalizedSiteUrl.replace(/\/+$/, "");
 export const siteName = "CSAO2";
-export const siteTitle = "CSAO2 - Counter-Strike Argentum Online 2";
+export const siteTagline = "Argentum Online Competitivo";
+export const siteTitle = "CSAO2 - Argentum Online competitivo en el navegador";
 export const siteDescription =
-    "CSAO2: El shooter táctico 2D en tiempo real para navegador. Batallas 5v5, bombas C4, armas y clasificación competitiva.";
+    "Jugá Argentum Online sin descargar ni instalar nada. Retos por equipos con veto de mapas, ranking Elo y voz por equipo, directo desde el navegador.";
+
+// El grueso del trafico busca "argentum online", no la marca: CSAO2 no tiene
+// volumen propio todavia. Las keywords de marca van ultimas, a proposito.
 export const siteKeywords = [
+    "argentum online",
+    "jugar argentum online",
+    "argentum online sin descargar",
+    "argentum online en el navegador",
+    "argentum online web",
+    "servidor argentum online",
+    "argentum online competitivo",
+    "ao web",
     "CSAO2",
-    "CSAO 2",
-    "Counter Strike Argentum Online",
-    "CS2D web",
-    "shooter 2D web",
-    "Argentum Online Counter Strike",
-    "CSAO2 beta",
 ];
 
 export function absoluteUrl(path = "/"): string {

@@ -700,6 +700,12 @@ function Login(this: LoginApi) {
                     startTimer: 0,
                 };
 
+                personaje.ranged = {
+                    lanzados: 0,
+                    tiempoTotal: 0,
+                    startTimer: 0,
+                };
+
                 personaje.hit = {
                     hits: 0,
                     tiempoTotal: 0,
@@ -1125,6 +1131,7 @@ function Login(this: LoginApi) {
             color: getFactionColor("none") ?? "#3333ff",
             clan: "",
             spell: { lanzados: 0, tiempoTotal: 0, startTimer: 0 },
+            ranged: { lanzados: 0, tiempoTotal: 0, startTimer: 0 },
             hit: { hits: 0, tiempoTotal: 0, startTimer: 0 },
             walk: { pasos: 0, tiempoTotal: 0, startTimer: 0 },
             useObj: { startTimer: 0, usos: 0, tiempoTotal: 0, adv: 0 },

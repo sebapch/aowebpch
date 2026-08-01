@@ -121,6 +121,7 @@ export type MapSummary = {
     terreno: string;
     zona: string;
     pk: number;
+    isArena?: boolean;
 };
 
 export const MAPS_SOURCE_DIR = path.resolve(__dirname, "../mapas_source");
@@ -607,6 +608,7 @@ export function listMapSummaries(sourceDir: string = MAPS_SOURCE_DIR): MapSummar
             terreno: String(meta.terreno ?? ""),
             zona: String(meta.zona ?? ""),
             pk: toFiniteNumber(meta.pk) ?? 0,
+            isArena: meta.isArena === true,
         });
     }
 

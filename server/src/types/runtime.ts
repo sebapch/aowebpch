@@ -339,6 +339,7 @@ export type RuntimeCharacter = {
     craftingTarget?: CraftingTargetState;
     useObj?: UseItemTracker;
     spell?: SpellTracker;
+    ranged?: SpellTracker;
     hit?: HitTracker;
     walk?: WalkTracker;
     inv?: InventoryRecord | Array<SerializedInventoryItem>;

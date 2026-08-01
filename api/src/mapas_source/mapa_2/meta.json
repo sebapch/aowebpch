@@ -1,1 +1,52 @@
-{"id":2,"name":"Bosque sur de Ullathorpe","musicNum":3,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"BOSQUE","zona":"CAMPO","restringir":"No","maxLevel":0,"backup":1,"pk":0}
+{
+    "id": 2,
+    "name": "Bosque sur de Ullathorpe",
+    "musicNum": 3,
+    "magiaSinEfecto": 0,
+    "noEncriptarMp": 0,
+    "terreno": "BOSQUE",
+    "zona": "CAMPO",
+    "restringir": "No",
+    "maxLevel": 0,
+    "backup": 1,
+    "pk": 0,
+    "isArena": true,
+    "arenaSpawns": {
+        "team1": [
+            {
+                "x": 13,
+                "y": 29
+            },
+            {
+                "x": 14,
+                "y": 29
+            },
+            {
+                "x": 13,
+                "y": 30
+            },
+            {
+                "x": 14,
+                "y": 30
+            }
+        ],
+        "team2": [
+            {
+                "x": 31,
+                "y": 49
+            },
+            {
+                "x": 30,
+                "y": 49
+            },
+            {
+                "x": 30,
+                "y": 48
+            },
+            {
+                "x": 31,
+                "y": 48
+            }
+        ]
+    }
+}
