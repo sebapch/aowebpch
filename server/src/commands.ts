@@ -433,7 +433,7 @@ function makeCitizen(user: CommandCharacter, ws: RuntimeClient) {
     user.criminal = 0;
     user.faction = "none";
     user.color = user.privileges === 1 || user.privileges === 2 ? "#419900" : "#3333ff";
-    user.seguroActivado = true;
+    user.seguroActivado = false;
 
     const leavePartyResult = game.leaveParty(user.id);
 
@@ -1738,8 +1738,8 @@ function spawnNpcNextToAdmin(
     npc.npcType = Number.parseInt(String(datNpc.npcType ?? 0), 10);
     npc.exp = datNpc.exp ?? 0;
     npc.gold = datNpc.gold ?? 0;
-    npc.hp = datNpc.hp ?? datNpc.maxHp ?? 1;
-    npc.maxHp = datNpc.maxHp ?? datNpc.hp ?? 1;
+    npc.maxHp = datNpc.maxHp && datNpc.maxHp > 0 ? datNpc.maxHp : datNpc.hp && datNpc.hp > 0 ? datNpc.hp : 1;
+    npc.hp = datNpc.hp && datNpc.hp > 0 ? datNpc.hp : npc.maxHp;
     npc.minHit = datNpc.minHit ?? 0;
     npc.maxHit = datNpc.maxHit ?? 0;
     npc.def = datNpc.def ?? 0;
@@ -2375,6 +2375,20 @@ const command: CommandApi = {
                         break;
                     }
 
+                    const CLAN_FOUNDATION_GEM_ITEM_ID = 1066;
+                    let gemSlot: string | null = null;
+                    for (const [slot, item] of Object.entries(user.inv ?? {})) {
+                        if (item && item.idItem === CLAN_FOUNDATION_GEM_ITEM_ID && item.cant >= 1) {
+                            gemSlot = slot;
+                            break;
+                        }
+                    }
+
+                    if (!gemSlot) {
+                        handleProtocol.console("Necesitas 1 Gema de Fundación en tu inventario para fundar un clan.", "white", 0, 0, ws as CommandClient);
+                        break;
+                    }
+
                     const result = (await funct.fetchUrl("/internal/clans", {
                         method: "POST",
                         body: JSON.stringify({
@@ -2388,6 +2402,7 @@ const command: CommandApi = {
                         },
                     })) as { gold: number };
 
+                    game.quitarUserInvItem(user.id, gemSlot, 1);
                     user.gold = balance.clampGold(result.gold);
                     handleProtocol.actGold(user.gold, ws as CommandClient);
                     await refreshOnlineCharacterClanStateByPersistedId(user._id);
@@ -2813,81 +2828,10 @@ const command: CommandApi = {
                 }
 
                 case "/enlistar": {
-                    const nearbyFaction = resolveFactionNpc(user);
-
-                    if (nearbyFaction === "none") {
-                        handleProtocol.console(
-                            "Debes estar cerca del NPC faccionario correspondiente para enlistarte.",
-                            "white",
-                            0,
-                            0,
-                            ws as CommandClient,
-                        );
-                        break;
-                    }
-
-                    const factionConfig = getFactionConfig(nearbyFaction);
-                    const firstRank = factionConfig?.ranks[0];
-
-                    if (!factionConfig || !firstRank) {
-                        handleProtocol.console("La faccion no esta configurada.", "white", 0, 0, ws as CommandClient);
-                        break;
-                    }
-
-                    const currentFaction = normalizeFaction(user.faction);
-
-                    if (currentFaction === nearbyFaction) {
-                        handleProtocol.console(
-                            `Ya perteneces a ${getFactionDisplayName(nearbyFaction)}.`,
-                            "white",
-                            0,
-                            0,
-                            ws as CommandClient,
-                        );
-                        break;
-                    }
-
-                    if (nearbyFaction === "armada" && user.criminal) {
-                        handleProtocol.console(
-                            "Debes ser ciudadano para enlistarte en la Armada.",
-                            "white",
-                            0,
-                            0,
-                            ws as CommandClient,
-                        );
-                        break;
-                    }
-
-                    if (nearbyFaction === "caos" && !user.criminal) {
-                        handleProtocol.console(
-                            "Debes ser criminal para enlistarte en el Caos.",
-                            "white",
-                            0,
-                            0,
-                            ws as CommandClient,
-                        );
-                        break;
-                    }
-
-                    const score = game.getFactionScore(clientId, nearbyFaction);
-
-                    if (Number(user.level ?? 0) < firstRank.minLevel || score < firstRank.minScore) {
-                        handleProtocol.console(
-                            `Necesitas nivel ${firstRank.minLevel} y ${firstRank.minScore} puntos de faccion para enlistarte en ${getFactionDisplayName(nearbyFaction)}.`,
-                            "white",
-                            1,
-                            0,
-                            ws as CommandClient,
-                        );
-                        break;
-                    }
-
-                    game.setCharacterFaction(clientId, nearbyFaction);
-                    await game.persistCharacterSnapshot(user, { connected: true });
                     handleProtocol.console(
-                        `Te enlistaste en ${getFactionDisplayName(nearbyFaction)}.`,
-                        getFactionColor(nearbyFaction) ?? "white",
-                        1,
+                        "El sistema de facciones está desactivado. Todos los jugadores son neutros y se diferencian por equipos en las arenas.",
+                        "white",
+                        0,
                         0,
                         ws as CommandClient,
                     );

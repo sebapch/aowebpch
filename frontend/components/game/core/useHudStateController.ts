@@ -69,17 +69,6 @@ export function useHudStateController({
 }: UseHudStateControllerOptions) {
     const updateSeguroIndicators = useCallback(
         (hud: PlayerHudState | null) => {
-            if (seguroTextRef.current) {
-                const combatSeguroActive = Boolean(hud?.seguroActivado);
-                const nextSeguroText = `Seguro: ${combatSeguroActive ? "ON" : "OFF"}`;
-                const nextSeguroStyle = getHudStatusTextStyle(
-                    combatSeguroActive ? 0x34c759 : 0xff3b30,
-                );
-
-                setTextIfChanged(seguroTextRef.current, nextSeguroText);
-                setStyleIfChanged(seguroTextRef.current, nextSeguroStyle);
-            }
-
             if (clanSeguroTextRef.current) {
                 const hasClan = Boolean(hud?.clan);
                 const clanSeguroActive = Boolean(hud?.seguroClanActivado);
@@ -98,7 +87,7 @@ export function useHudStateController({
                 );
             }
         },
-        [clanSeguroTextRef, seguroTextRef],
+        [clanSeguroTextRef],
     );
 
     const refreshVisibleClanTagStyles = useCallback(

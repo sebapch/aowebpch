@@ -463,7 +463,16 @@ function getNpc(idNpc: EntityId) {
 }
 
 function getObject(idItem: number) {
-    return vars.datObj[idItem] as DataObject;
+    return (
+        (vars.datObj[idItem] as DataObject) ??
+        ({
+            id: idItem,
+            name: `Objeto #${idItem}`,
+            grhIndex: 0,
+            valor: 0,
+            objType: 0,
+        } as DataObject)
+    );
 }
 
 function getSpell(idSpell: number) {

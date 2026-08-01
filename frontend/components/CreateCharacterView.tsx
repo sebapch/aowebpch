@@ -144,8 +144,15 @@ export default function CreateCharacterView() {
     );
 
     useEffect(() => {
-        setSelectedHeadIndex(0);
-    }, [selectedRace, selectedGender]);
+        if (availableHeadIds.length > 0) {
+            const randomIndex = Math.floor(
+                Math.random() * availableHeadIds.length,
+            );
+            setSelectedHeadIndex(randomIndex);
+        } else {
+            setSelectedHeadIndex(0);
+        }
+    }, [selectedRace, selectedGender, availableHeadIds.length]);
 
     useEffect(() => {
         let cancelled = false;

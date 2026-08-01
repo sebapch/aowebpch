@@ -161,22 +161,6 @@ export function useKeyboardGameplay({
                 return;
             }
 
-            if (isHotkeyMatch(e, settings.toggleSeguro) && !e.repeat) {
-                const socket = websocketRef.current;
-                if (!socket || socket.readyState !== WebSocket.OPEN) {
-                    return;
-                }
-
-                socket.send(createChangeSeguroPacket());
-                recordClientGameAction("toggle_seguro", {
-                    key: e.key,
-                    code: e.code,
-                });
-
-                e.preventDefault();
-                return;
-            }
-
             if (isHotkeyMatch(e, settings.toggleClanSeguro) && !e.repeat) {
                 const socket = websocketRef.current;
                 if (!socket || socket.readyState !== WebSocket.OPEN) {

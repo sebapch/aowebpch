@@ -1899,8 +1899,8 @@ function Npcs(this: NpcsApi) {
             npc.npcType = Number.parseInt(String(datNpc.npcType ?? 0), 10);
             npc.exp = datNpc.exp ?? 0;
             npc.gold = datNpc.gold ?? 0;
-            npc.hp = datNpc.hp ?? datNpc.maxHp ?? 1;
-            npc.maxHp = datNpc.maxHp ?? datNpc.hp ?? 1;
+            npc.maxHp = datNpc.maxHp && datNpc.maxHp > 0 ? datNpc.maxHp : datNpc.hp && datNpc.hp > 0 ? datNpc.hp : 1;
+            npc.hp = datNpc.hp && datNpc.hp > 0 ? datNpc.hp : npc.maxHp;
             npc.minHit = datNpc.minHit ?? 0;
             npc.maxHit = datNpc.maxHit ?? 0;
             npc.def = datNpc.def ?? 0;

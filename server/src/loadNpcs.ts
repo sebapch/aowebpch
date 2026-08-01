@@ -115,8 +115,8 @@ class LoadNpcs {
         tmpNPC.npcType = parseInt(datNpc.npcType);
         tmpNPC.exp = datNpc.exp;
         if (datNpc.gold) tmpNPC.gold = datNpc.gold;
-        tmpNPC.hp = datNpc.hp;
-        tmpNPC.maxHp = datNpc.maxHp;
+        tmpNPC.maxHp = datNpc.maxHp && datNpc.maxHp > 0 ? datNpc.maxHp : datNpc.hp && datNpc.hp > 0 ? datNpc.hp : 1;
+        tmpNPC.hp = datNpc.hp && datNpc.hp > 0 ? datNpc.hp : tmpNPC.maxHp;
         tmpNPC.minHit = datNpc.minHit;
         tmpNPC.maxHit = datNpc.maxHit;
         tmpNPC.def = datNpc.def;

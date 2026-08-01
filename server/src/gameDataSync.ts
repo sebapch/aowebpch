@@ -252,8 +252,25 @@ function patchLiveNpc(npc: Record<string, unknown>, data: DataNpc): void {
     npc.npcType = data.npcType;
     npc.aguaValida = data.aguaValida ?? 0;
     npc.tierraInvalida = data.tierraInvalida ?? 0;
-    npc.maxHp = data.maxHp ?? 0;
-    npc.hp = data.maxHp ?? data.hp ?? 0;
+
+    const nextMaxHp =
+        typeof data.maxHp === "number" && data.maxHp > 0
+            ? data.maxHp
+            : typeof data.hp === "number" && data.hp > 0
+              ? data.hp
+              : typeof npc.maxHp === "number" && npc.maxHp > 0
+                ? npc.maxHp
+                : 1;
+
+    const nextHp =
+        typeof data.hp === "number" && data.hp > 0
+            ? data.hp
+            : typeof npc.hp === "number" && npc.hp > 0
+              ? npc.hp
+              : nextMaxHp;
+
+    npc.maxHp = nextMaxHp;
+    npc.hp = nextHp;
     npc.minHit = data.minHit ?? 0;
     npc.maxHit = data.maxHit ?? 0;
     npc.def = data.def ?? 0;
@@ -270,6 +287,16 @@ function patchLiveNpc(npc: Record<string, unknown>, data: DataNpc): void {
     npc.desc = data.desc ?? "";
     npc.exp = data.exp ?? 0;
     npc.gold = data.gold ?? 0;
+
+    if (Array.isArray(data.spells)) {
+        npc.spells = data.spells
+            .filter((spell: any) => Number(spell?.idSpell ?? 0) > 0)
+            .map((spell: any) => ({
+                idSpell: Number(spell.idSpell),
+                cooldownSeconds: Math.max(0, Number(spell.cooldownSeconds ?? 0)),
+                lastUsedAt: 0,
+            }));
+    }
 
     const map = Number(npc.map ?? 0);
     const pos = npc.pos as { x?: number; y?: number } | undefined;

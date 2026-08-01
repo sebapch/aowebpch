@@ -11,6 +11,7 @@ import {
     GENDER_ID_MAP,
     getAllowedAppearance,
     getBaseStats,
+    getRandomHeadId,
     isValidHeadId,
     MAX_LEVEL,
     RACE_ID_MAP,
@@ -151,7 +152,7 @@ const createCharacterSchema = z
         class: z.enum(CHARACTER_CLASSES),
         race: z.enum(CHARACTER_RACES),
         gender: z.enum(CHARACTER_GENDERS),
-        headId: z.coerce.number().int().positive(),
+        headId: z.coerce.number().int().positive().optional(),
     })
     .strict();
 
@@ -667,10 +668,9 @@ export async function createCharacterForSession(
     const baseStats = getBaseStats(parsed.class, parsed.race);
     const starterLoadout = getStarterLoadout(parsed.class, parsed.race);
 
-    if (!isValidHeadId(parsed.race, parsed.gender, parsed.headId)) {
-        throw new Error(
-            "La cabeza seleccionada no corresponde a la raza y genero elegidos",
-        );
+    let selectedHeadId = parsed.headId;
+    if (!selectedHeadId || !isValidHeadId(parsed.race, parsed.gender, selectedHeadId)) {
+        selectedHeadId = getRandomHeadId(parsed.race, parsed.gender);
     }
 
     const client = await pool.connect();
@@ -798,7 +798,7 @@ export async function createCharacterForSession(
                 session.account_id,
                 characterName,
                 idClase,
-                parsed.headId,
+                selectedHeadId,
                 appearance.bodyId,
                 baseStats.hp,
                 baseStats.mana,

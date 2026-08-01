@@ -3288,6 +3288,8 @@ function HomeContent() {
                                     characterStatsSnapshot={
                                         characterStatsSnapshot
                                     }
+                                    characterClassName={selectedCharacter?.className}
+                                    characterRaceName={selectedCharacter?.raceName}
                                     panelHeight={`${CANVAS_BASE_HEIGHT}px`}
                                     portalTarget={gameShellElement}
                                     selectedSpellSlot={selectedSpellSlot}

@@ -503,6 +503,8 @@ export interface PlayerHudState {
     dead?: boolean;
     deadWorldActive?: boolean;
     color?: string;
+    criminal?: boolean;
+    faction?: "none" | "armada" | "caos";
     inmovilizado?: boolean;
     paralizado?: boolean;
     zonaSegura?: number;

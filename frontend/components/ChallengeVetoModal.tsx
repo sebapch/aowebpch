@@ -198,9 +198,17 @@ export default function ChallengeVetoModal({
     const totalExpectedVoters = (vetoState.teamSize ?? 2) * 2;
     const banThreshold = Math.ceil(totalExpectedVoters / 2); // 2 votes in 2v2
 
+    const modalMaxWidth = mapPool.length > 3 ? "max-w-4xl" : "max-w-2xl";
+    const gridCols =
+        mapPool.length <= 2
+            ? "grid-cols-1 sm:grid-cols-2"
+            : mapPool.length === 3
+            ? "grid-cols-1 sm:grid-cols-3"
+            : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
+
     return (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm">
-            <div className="w-full max-w-2xl rounded-[20px] border border-white/10 bg-stone-950/96 text-stone-100 shadow-2xl">
+            <div className={`w-full ${modalMaxWidth} rounded-[20px] border border-white/10 bg-stone-950/96 text-stone-100 shadow-2xl transition-all`}>
                 <div className="border-b border-white/10 px-5 py-3.5">
                     <div className="flex items-center justify-between">
                         <div>
@@ -224,7 +232,7 @@ export default function ChallengeVetoModal({
                 </div>
 
                 <div className="space-y-4 p-5">
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <div className={`grid gap-4 ${gridCols}`}>
                         {mapPool.map((mapId) => {
                             const mapName = mapNames[mapId] ?? `Mapa ${mapId}`;
                             const isBanned = vetoState.bannedMapIds?.some((b) => b.mapId === mapId);

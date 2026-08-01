@@ -37,7 +37,7 @@ const CHALLENGE_TEAM_POSITIONS: Record<TeamSide, Array<{ x: number; y: number }>
 
 const FALLBACK_ARENA_MAP_IDS = [112, 159, 506];
 
-/** Mapas marcados como arena (`isArena: true`) en el editor, ordenados por id. Proporciona 3 opciones para el veto. */
+/** Mapas marcados como arena (`isArena: true`) en el editor, ordenados por id. Pool sin límite fijo. */
 function getArenaMapIds(): number[] {
     const mapData = vars.mapData ?? {};
     const ids: number[] = [];
@@ -52,14 +52,15 @@ function getArenaMapIds(): number[] {
 
     ids.sort((left, right) => left - right);
 
-    for (const fallbackId of FALLBACK_ARENA_MAP_IDS) {
-        if (ids.length >= 3) break;
-        if (!ids.includes(fallbackId)) {
-            ids.push(fallbackId);
+    if (ids.length === 0) {
+        for (const fallbackId of FALLBACK_ARENA_MAP_IDS) {
+            if (!ids.includes(fallbackId)) {
+                ids.push(fallbackId);
+            }
         }
     }
 
-    return ids.slice(0, 3);
+    return ids;
 }
 
 /** Spawns de equipo configurados en el editor para `mapId`, o el fallback fijo. */
@@ -1654,13 +1655,15 @@ const challengeManager = {
 
     createMatchmaking2v2Match(teamOneUsers: RuntimeCharacter[], teamTwoUsers: RuntimeCharacter[]) {
         const matchId = this.createId("matchmaking");
+        const arenaMapIds = getArenaMapIds();
+        const baseMapId = arenaMapIds[Math.floor(Math.random() * arenaMapIds.length)] ?? CHALLENGE_BASE_MAP_ID;
         const match: ActiveMatch = {
             id: matchId,
             createdAt: now(),
             teamSize: 2,
             targetScore: 1,
-            instanceMapId: this.createMatchInstanceMap(getArenaMapIds()[0] ?? CHALLENGE_BASE_MAP_ID),
-            baseMapId: getArenaMapIds()[0] ?? CHALLENGE_BASE_MAP_ID,
+            instanceMapId: this.createMatchInstanceMap(baseMapId),
+            baseMapId,
             teams: {
                 1: {
                     side: 1,
@@ -1695,14 +1698,9 @@ const challengeManager = {
     },
 
     /**
-     * En los 2v2 cada equipo se pinta de un color: el 1 como ciudadano y el 2 como criminal.
-     * En 1v1 no hace falta porque no hay aliados que confundir.
+     * En las arenas/retos cada equipo se pinta de un color para diferenciarlos (Equipo 1 Azul, Equipo 2 Rojo).
      */
     applyTeamColor(match: ActiveMatch, user: RuntimeCharacter, side: TeamSide) {
-        if (match.teamSize !== 2) {
-            return;
-        }
-
         getGame().setChallengeTeamColor(user.id, side);
     },
 

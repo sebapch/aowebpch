@@ -301,3 +301,13 @@ export function isValidHeadId(
     const appearance = getAllowedAppearance(raceKey, genderKey);
     return headId >= appearance.startHeadId && headId <= appearance.endHeadId;
 }
+
+export function getRandomHeadId(
+    raceKey: RaceKey,
+    genderKey: GenderKey,
+): number {
+    const appearance = getAllowedAppearance(raceKey, genderKey);
+    const min = appearance.startHeadId;
+    const max = appearance.endHeadId;
+    return Math.floor(Math.random() * (max - min + 1)) + min;
+}

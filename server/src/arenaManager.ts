@@ -159,8 +159,8 @@ const arenaManager = {
 
             if (datNpc.gold) tmpNpc.gold = datNpc.gold;
 
-            tmpNpc.hp = datNpc.hp;
-            tmpNpc.maxHp = datNpc.maxHp;
+            tmpNpc.maxHp = datNpc.maxHp && datNpc.maxHp > 0 ? datNpc.maxHp : datNpc.hp && datNpc.hp > 0 ? datNpc.hp : 1;
+            tmpNpc.hp = datNpc.hp && datNpc.hp > 0 ? datNpc.hp : tmpNpc.maxHp;
             tmpNpc.minHit = datNpc.minHit;
             tmpNpc.maxHit = datNpc.maxHit;
             tmpNpc.def = datNpc.def;

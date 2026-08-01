@@ -670,7 +670,7 @@ function Login(this: LoginApi) {
                     : Math.min(Math.max(personaje.hp ?? normalizedMaxHp, 0), normalizedMaxHp);
                 personaje.mana = Math.min(Math.max(personaje.mana ?? normalizedMaxMana, 0), normalizedMaxMana);
 
-                personaje.seguroActivado = true;
+                personaje.seguroActivado = false;
                 personaje.seguroClanActivado = Boolean(personaje.clanId);
                 personaje.partyId = null;
                 personaje.partyLeaderId = null;
@@ -857,8 +857,7 @@ function Login(this: LoginApi) {
                     personajeWS.color = "#419900";
                     personajeWS.clan = "<AOWeb Staff>";
                 } else {
-                    personajeWS.color =
-                        getFactionColor(personajeWS.faction) ?? (personajeWS.criminal ? "red" : "#3333ff");
+                    personajeWS.color = "#808080";
                 }
 
                 socket.withFlushGroup(ws, () => {
@@ -1111,7 +1110,7 @@ function Login(this: LoginApi) {
             hiddenSkillCooldownUntil: 0,
             bkAttrFuerza: baseAttrFuerza,
             bkAttrAgilidad: baseAttrAgilidad,
-            seguroActivado: true,
+            seguroActivado: false,
             seguroClanActivado: false,
             partyId: null,
             partyLeaderId: null,
@@ -1128,7 +1127,7 @@ function Login(this: LoginApi) {
             fxId: 0,
             frameFxCounter: 0,
             zonaSegura: 0,
-            color: getFactionColor("none") ?? "#3333ff",
+            color: "#808080",
             clan: "",
             spell: { lanzados: 0, tiempoTotal: 0, startTimer: 0 },
             ranged: { lanzados: 0, tiempoTotal: 0, startTimer: 0 },

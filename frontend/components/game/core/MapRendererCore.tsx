@@ -285,8 +285,7 @@ type PendingTileState = {
 const FPS_TEXT_OFFSET_X = 10;
 const FPS_TEXT_OFFSET_Y = 8;
 const PING_TEXT_OFFSET_Y = 22;
-const SEGURO_TEXT_OFFSET_Y = 36;
-const CLAN_SEGURO_TEXT_OFFSET_Y = 50;
+const CLAN_SEGURO_TEXT_OFFSET_Y = 36;
 const DEBUG_COMBAT_TEXT_OFFSET_Y = 50;
 const PROJECTILE_BASE_ANGLE_RADIANS = -Math.PI / 4;
 const PROJECTILE_MIN_DURATION_MS = 90;
@@ -1471,7 +1470,6 @@ export default function MapRenderer({
         const app = engine?.app;
         const fpsText = (engine as any)?.fpsText as Text | undefined;
         const pingText = pingTextRef.current;
-        const seguroText = seguroTextRef.current;
         const clanSeguroText = clanSeguroTextRef.current;
 
         if (!engine || !app) return;
@@ -1484,10 +1482,6 @@ export default function MapRenderer({
         if (pingText) {
             pingText.x = FPS_TEXT_OFFSET_X;
             pingText.y = PING_TEXT_OFFSET_Y;
-        }
-        if (seguroText) {
-            seguroText.x = FPS_TEXT_OFFSET_X;
-            seguroText.y = SEGURO_TEXT_OFFSET_Y;
         }
         if (clanSeguroText) {
             clanSeguroText.x = FPS_TEXT_OFFSET_X;

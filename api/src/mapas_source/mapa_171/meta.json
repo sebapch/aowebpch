@@ -1,1 +1,52 @@
-{"id":171,"name":"Ciudad Abandonada.","musicNum":78,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"BOSQUE","zona":"CIUDAD","restringir":"No","maxLevel":0,"backup":1,"pk":0}
+{
+    "id": 171,
+    "name": "Ciudad Abandonada.",
+    "musicNum": 78,
+    "magiaSinEfecto": 0,
+    "noEncriptarMp": 0,
+    "terreno": "BOSQUE",
+    "zona": "CIUDAD",
+    "restringir": "No",
+    "maxLevel": 0,
+    "backup": 1,
+    "pk": 0,
+    "isArena": true,
+    "arenaSpawns": {
+        "team1": [
+            {
+                "x": 50,
+                "y": 46
+            },
+            {
+                "x": 50,
+                "y": 47
+            },
+            {
+                "x": 51,
+                "y": 46
+            },
+            {
+                "x": 51,
+                "y": 47
+            }
+        ],
+        "team2": [
+            {
+                "x": 67,
+                "y": 59
+            },
+            {
+                "x": 67,
+                "y": 58
+            },
+            {
+                "x": 66,
+                "y": 58
+            },
+            {
+                "x": 66,
+                "y": 59
+            }
+        ]
+    }
+}

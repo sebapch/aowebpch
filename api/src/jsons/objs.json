@@ -36765,5 +36765,13 @@
             "y": 51,
             "map": 197
         }
+    },
+    "1066": {
+        "name": "Gema de Fundación",
+        "valor": 100000,
+        "objType": 29,
+        "grhIndex": 701,
+        "agarrable": 1,
+        "noSeCae": 1
     }
 }

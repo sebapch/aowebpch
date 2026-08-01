@@ -2135,21 +2135,7 @@ function changeSeguro(ws: RuntimeClient) {
         return;
     }
 
-    const isDisablingSeguro = Boolean(user.seguroActivado);
-
-    if (isDisablingSeguro && user.clanId && user.clanAlignment === "citizen" && !user.criminal) {
-        handleProtocol.console(
-            "No puedes desactivar el seguro perteneciendo a un clan de ciudadanos.",
-            "white",
-            0,
-            0,
-            ws,
-        );
-        syncOwnCharacterState(ws, user);
-        return;
-    }
-
-    user.seguroActivado = !user.seguroActivado;
+    user.seguroActivado = false;
     syncOwnCharacterState(ws, user);
 }
 
@@ -2643,15 +2629,9 @@ function eventClick(ws: RuntimeClient) {
                         factionScore,
                     );
                     const factionRankTitle = getFactionRankTitle(faction, factionRank) ?? "Sin rango";
-                    let color = getFactionColor(faction) ?? "#3333ff";
-
-                    if (faction !== "none") {
-                        msg += ` - ${getFactionDisplayName(faction)} [${factionRankTitle}]`;
-                    } else if (selectedCharacter.criminal) {
-                        msg += " - Criminal";
-                        color = "red";
-                    } else {
-                        msg += " - Ciudadano";
+                    let color = "#808080";
+                    if (selectedCharacter.privileges === 1 || selectedCharacter.privileges === 2) {
+                        color = "#419900";
                     }
 
                     if (user.privileges == 1) {

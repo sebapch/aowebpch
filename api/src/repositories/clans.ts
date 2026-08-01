@@ -19,7 +19,7 @@ import {
     sanitizeName,
 } from "../lib/text";
 
-const CLAN_CREATION_COST = 1_500_000;
+const CLAN_CREATION_COST = 0;
 const CLAN_CREATION_LEVEL_REQUIRED = 30;
 const CLAN_NAME_MAX_LENGTH = 18;
 const CLAN_MAX_MEMBERS = 50;
@@ -124,8 +124,8 @@ function validateClanName(name: string): string {
 
     const spaceCount = (normalizedSpacing.match(/ /g) ?? []).length;
 
-    if (spaceCount > 1) {
-        throw new Error("El nombre del clan solo puede contener un espacio");
+    if (spaceCount > 2) {
+        throw new Error("El nombre del clan solo puede contener hasta dos espacios");
     }
 
     if (!isValidDisplayName(normalizedSpacing)) {
@@ -142,11 +142,10 @@ function isAlignmentCompatible(
     criminal: boolean,
     faction: CharacterFaction,
 ): boolean {
-    if (alignment === "citizen") {
-        return faction === "armada" || (!criminal && faction === "none");
-    }
-
-    return faction === "caos" || (criminal && faction === "none");
+    void alignment;
+    void criminal;
+    void faction;
+    return true;
 }
 
 function getClanAlignmentFromCharacter(character: {

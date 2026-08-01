@@ -24,26 +24,12 @@ function getCharacterAppearance(character: AuthSession["characters"][number]) {
     };
 }
 
-function getCharacterNamePresentation(
-    character: AuthSession["characters"][number],
-) {
+function getCharacterNamePresentation(character: AuthSession["characters"][number]) {
     if (character.isAdministrator) {
         return { label: "Administrador", color: "#419900" };
     }
 
-    if (character.faction === "armada") {
-        return { label: "Armada", color: "#00AFFF" };
-    }
-
-    if (character.faction === "caos") {
-        return { label: "Caos", color: "#9B0000" };
-    }
-
-    if (character.criminal) {
-        return { label: "Criminal", color: "red" };
-    }
-
-    return { label: "Ciudadano", color: "#3333ff" };
+    return { label: "Jugador", color: "#808080" };
 }
 
 export default function CharactersPage() {

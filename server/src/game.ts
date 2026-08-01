@@ -2463,12 +2463,11 @@ const NPC_TARGET_LOCK_MS = vars.npcAi.targetLockMs as number;
 const characterPersistenceQueue = new Map<string, Promise<void>>();
 const sharedVaultPersistenceQueue = new Map<string, Promise<void>>();
 const sharedVaultSessions = new Map<string, SharedVaultSession>();
-const CITIZEN_COLOR = "#3333ff";
-const CRIMINAL_COLOR = "red";
+const DEFAULT_PLAYER_COLOR = "#808080";
 const STAFF_COLOR = "#419900";
 const CHALLENGE_TEAM_COLORS: Record<1 | 2, string> = {
-    1: CITIZEN_COLOR,
-    2: CRIMINAL_COLOR,
+    1: "#3333ff",
+    2: "#ef4444",
 };
 const MARKET_DEFAULT_LISTING_HOURS = 24;
 const MARKET_MAX_LISTING_HOURS = 72;
@@ -2711,13 +2710,7 @@ function getDefaultCharacterColor(
         return STAFF_COLOR;
     }
 
-    const factionColor = getFactionColor(normalizeFaction(user.faction));
-
-    if (factionColor) {
-        return factionColor;
-    }
-
-    return user.criminal ? CRIMINAL_COLOR : CITIZEN_COLOR;
+    return DEFAULT_PLAYER_COLOR;
 }
 
 function getFactionScoreValue(user: GameCharacter, faction: CharacterFaction): number {
@@ -8506,98 +8499,8 @@ function Game(this: GameApi) {
      * @return {[type]}        [description]
      */
     this.tirarItemsUser = async function (idUser: EntityId) {
-        try {
-            const user = vars.personajes[idUser] as GameCharacter | undefined;
-            const reservedDropPositions = new Set<string>();
-            const initialDropRadius = 3;
-            const maxExpandedDropRadius = 5;
-            let droppedItemsCount = 0;
-
-            if (
-                !user ||
-                user.pvpChar ||
-                user.arenaRoomId ||
-                user.challengeMatchId ||
-                vars.mapData[user.map]?.isArena === true ||
-                (typeof user.map === "number" && user.map >= 1000)
-            ) {
-                return;
-            }
-
-            for (let idPos in user.inv) {
-                const item = user.inv[idPos];
-
-                if (!item) {
-                    continue;
-                }
-
-                const idItem = item.idItem;
-                const datObj = vars.datObj[idItem];
-
-                if (!datObj) {
-                    continue;
-                }
-
-                if (!datObj.newbie && !datObj.noSeCae) {
-                    const cant = item.cant;
-                    let tmpPos: Position | undefined;
-
-                    for (let radius = initialDropRadius; !tmpPos && radius <= maxExpandedDropRadius; radius++) {
-                        tmpPos = game.findDropPosition(user.map, user.pos, idUser, {
-                            maxRadius: radius,
-                            excludedPositions: reservedDropPositions,
-                        });
-
-                        if (!tmpPos) {
-                            tmpPos = game.findDropPosition(user.map, user.pos, idUser, {
-                                maxRadius: radius,
-                                allowWater: true,
-                                excludedPositions: reservedDropPositions,
-                            });
-                        }
-
-                        if (!tmpPos) {
-                            tmpPos = game.findDropPosition(user.map, user.pos, idUser, {
-                                maxRadius: radius,
-                                allowReplacingDroppedFloorItem: true,
-                                excludedPositions: reservedDropPositions,
-                            });
-                        }
-
-                        if (!tmpPos) {
-                            tmpPos = game.findDropPosition(user.map, user.pos, idUser, {
-                                maxRadius: radius,
-                                allowWater: true,
-                                allowReplacingDroppedFloorItem: true,
-                                excludedPositions: reservedDropPositions,
-                            });
-                        }
-                    }
-
-                    if (!tmpPos) {
-                        console.log("<<<>>> NO HAY LUGAR EN EL PISO MAPA:" + user.map);
-                        return;
-                    }
-
-                    reservedDropPositions.add(getFloorItemRegistryKey(user.map, tmpPos));
-
-                    game.quitarUserInvItem(idUser, idPos, cant);
-
-                    game.placeDroppedFloorItem(user.map, tmpPos, idItem, cant);
-                    game.renderDroppedFloorItem(user.map, tmpPos, idItem);
-                    droppedItemsCount++;
-
-                    if (droppedItemsCount % DROP_RENDER_BATCH_SIZE === 0) {
-                        await waitForNextEventLoopTurn();
-                    }
-                }
-            }
-
-            await persistCharacterItems(user);
-        } catch (err) {
-            funct.dumpError(err);
-            return;
-        }
+        // Los items no se caen al morir
+        return;
     };
 
     /**

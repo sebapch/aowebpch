@@ -56,6 +56,8 @@ type InventoryFloatingPanelProps = {
     mapName?: string;
     connected?: boolean;
     characterStatsSnapshot?: CharacterStatsSnapshot | null;
+    characterClassName?: string | null;
+    characterRaceName?: string | null;
     panelHeight?: number | string;
     portalTarget?: HTMLElement | null;
     selectedSpellSlot: number | null;
@@ -184,9 +186,17 @@ const classLabels: Record<number, string> = {
     9: "Cazador",
 };
 
+const raceLabels: Record<number, string> = {
+    1: "Humano",
+    2: "Elfo",
+    3: "Elfo Drow",
+    4: "Enano",
+    5: "Gnomo",
+};
+
 const clanNamePattern = /^[A-Za-z ]+$/;
 const CLAN_CREATION_LEVEL_REQUIRED = 30;
-const CLAN_CREATION_COST = 1_500_000;
+const CLAN_CREATION_COST = 0;
 
 type HotkeySection = {
     title: string;
@@ -235,12 +245,6 @@ const HOTKEY_SECTIONS: HotkeySection[] = [
                 action: "toggleWorldMap",
                 label: "Abrir / cerrar mapa",
                 description: "Alterna el mapa del mundo.",
-                slots: 1,
-            },
-            {
-                action: "toggleSeguro",
-                label: "Activar / desactivar seguro",
-                description: "Alterna el modo seguro del personaje.",
                 slots: 1,
             },
             {
@@ -711,6 +715,8 @@ export default function InventoryFloatingPanel({
     hud,
     mapName,
     characterStatsSnapshot,
+    characterClassName,
+    characterRaceName,
     panelHeight,
     portalTarget,
     selectedSpellSlot,
@@ -801,6 +807,8 @@ export default function InventoryFloatingPanel({
     const [clanDeleteSubmitting, setClanDeleteSubmitting] =
         React.useState(false);
     const [isClanDeleteDialogOpen, setIsClanDeleteDialogOpen] =
+        React.useState(false);
+    const [isClanCreateConfirmOpen, setIsClanCreateConfirmOpen] =
         React.useState(false);
     const [clanDeleteConfirmationText, setClanDeleteConfirmationText] =
         React.useState("");
@@ -1180,21 +1188,6 @@ export default function InventoryFloatingPanel({
             );
         }
 
-        const isCitizenCompatible =
-            currentFaction === "armada" ||
-            (!isCurrentCharacterCriminal && currentFaction === "none");
-        const isCriminalCompatible =
-            currentFaction === "caos" ||
-            (isCurrentCharacterCriminal && currentFaction === "none");
-
-        if (detailClan.alignment === "citizen" && !isCitizenCompatible) {
-            issues.push("Tu faccion no puede ingresar a un clan ciudadano.");
-        }
-
-        if (detailClan.alignment === "criminal" && !isCriminalCompatible) {
-            issues.push("Tu faccion no puede ingresar a un clan criminal.");
-        }
-
         return issues;
     }, [
         currentClan,
@@ -1272,8 +1265,8 @@ export default function InventoryFloatingPanel({
 
         const spaceCount = (normalizedName.match(/ /g) ?? []).length;
 
-        if (spaceCount > 1) {
-            return "El nombre del clan solo puede contener un espacio.";
+        if (spaceCount > 2) {
+            return "El nombre del clan solo puede contener hasta dos espacios.";
         }
 
         if (!clanNamePattern.test(normalizedName)) {
@@ -1287,6 +1280,10 @@ export default function InventoryFloatingPanel({
         onSendCommand?.(command);
         scheduleClanRefresh();
     }
+
+    const hasFoundationGem = React.useMemo(() => {
+        return items.some((item) => item.idItem === 1066 && item.amount >= 1);
+    }, [items]);
 
     function handleCreateClan() {
         const name = clanCreateName.replace(/\s+/g, " ").trim();
@@ -1307,8 +1304,8 @@ export default function InventoryFloatingPanel({
             return;
         }
 
-        if (currentGold < CLAN_CREATION_COST) {
-            setClanError("Necesitas 1.500.000 de oro para crear un clan.");
+        if (!hasFoundationGem) {
+            setClanError("Necesitas 1 Gema de Fundación en tu inventario para fundar un clan.");
             return;
         }
 
@@ -1318,6 +1315,13 @@ export default function InventoryFloatingPanel({
         }
 
         setClanError(null);
+        setIsClanCreateConfirmOpen(true);
+    }
+
+    function confirmCreateClan() {
+        const name = clanCreateName.replace(/\s+/g, " ").trim();
+        const minLevel = Number.parseInt(clanCreateMinLevel, 10);
+        setIsClanCreateConfirmOpen(false);
         setClanCreateName(name);
         sendClanCommand(`/clancrear ${name}|${minLevel}`);
     }
@@ -2316,13 +2320,17 @@ export default function InventoryFloatingPanel({
                 >
                     <div className="flex h-full flex-col gap-2 text-stone-100">
                         <section className="rounded-[22px] border border-[#6f5734] bg-[radial-gradient(circle_at_top,rgba(120,86,44,0.35),rgba(21,14,10,0.96)_60%)] p-3 shadow-[inset_0_1px_0_rgba(255,223,175,0.1)]">
-                            <div className="flex items-start gap-2.5">
-                                <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-amber-200/20 bg-black/25 text-base font-bold text-amber-100 shadow-[inset_0_1px_0_rgba(255,255,255,0.08)]">
-                                    {hud?.level ?? "-"}
-                                </div>
+                            <div className="flex items-center gap-2.5">
                                 <div className="min-w-0 flex-1">
                                     <p className="text-[9px] uppercase tracking-[0.3em] text-amber-200/70">
-                                        Personaje
+                                        {(() => {
+                                            const className = characterClassName || (hud?.idClase ? classLabels[hud.idClase] : null);
+                                            const raceName = characterRaceName || null;
+                                            if (className && raceName) {
+                                                return `${className} ${raceName}`;
+                                            }
+                                            return className || "Personaje";
+                                        })()}
                                     </p>
                                     <h3 className="truncate text-[24px] font-semibold leading-none text-[#efe2c5]">
                                         {hud?.nameCharacter || "Aventurero"}
@@ -2866,8 +2874,8 @@ export default function InventoryFloatingPanel({
                                     </button>
                                     <div className="mt-1 text-center text-[10px] text-amber-100/85">
                                         {hud
-                                            ? `Mapa ${hud.map} (${hud.pos.x}, ${hud.pos.y})`
-                                            : "Mapa - (-, -)"}
+                                            ? `(${hud.pos.x}, ${hud.pos.y})`
+                                            : "(-, -)"}
                                     </div>
                                 </div>
                             </div>
@@ -3622,9 +3630,29 @@ export default function InventoryFloatingPanel({
                             {clanView === "create" && !currentClan ? (
                                 <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
                                     <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                        Crear clan
+                                        Fundar nuevo clan
                                     </p>
-                                    <div className="mt-3 grid gap-3 sm:grid-cols-2">
+
+                                    <div className="mt-3 rounded-[14px] border border-white/10 bg-black/30 p-3 space-y-2 text-xs">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-stone-300">💎 Gema de Fundación (1x inventario):</span>
+                                            {hasFoundationGem ? (
+                                                <span className="font-semibold text-emerald-400">✓ Posees la gema</span>
+                                            ) : (
+                                                <span className="font-semibold text-rose-400">✗ No la posees</span>
+                                            )}
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-stone-300">🏆 Nivel mínimo (30):</span>
+                                            {(hud?.level ?? 0) >= CLAN_CREATION_LEVEL_REQUIRED ? (
+                                                <span className="font-semibold text-emerald-400">✓ Nivel {hud?.level}</span>
+                                            ) : (
+                                                <span className="font-semibold text-rose-400">✗ Nivel {hud?.level ?? 0}/30</span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
                                         <label className="sm:col-span-2">
                                             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
                                                 Nombre del clan
@@ -3642,13 +3670,14 @@ export default function InventoryFloatingPanel({
                                                 className="w-full rounded-2xl border border-stone-700 bg-stone-950/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
                                             />
                                         </label>
-                                        <label>
+                                        <label className="sm:col-span-2">
                                             <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
-                                                Nivel minimo
+                                                Nivel mínimo para ingresar
                                             </span>
                                             <input
                                                 type="number"
                                                 min={1}
+                                                max={45}
                                                 value={clanCreateMinLevel}
                                                 onChange={(event) =>
                                                     setClanCreateMinLevel(
@@ -3660,16 +3689,12 @@ export default function InventoryFloatingPanel({
                                             />
                                         </label>
                                     </div>
-                                    <p className="mt-3 text-xs text-stone-400">
-                                        Para crear un clan debes ser nivel 30 y
-                                        pagar 1.500.000 de oro.
-                                    </p>
                                     <button
                                         type="button"
                                         onClick={handleCreateClan}
                                         className="mt-4 w-full rounded-2xl bg-amber-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
                                     >
-                                        Crear clan
+                                        Fundar Clan
                                     </button>
                                 </section>
                             ) : null}
@@ -4173,6 +4198,55 @@ export default function InventoryFloatingPanel({
                                             {clanDeleteSubmitting
                                                 ? "Borrando..."
                                                 : "Confirmar borrado"}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+
+                        {isClanCreateConfirmOpen ? (
+                            <div
+                                className="fixed inset-0 z-[85] flex items-center justify-center bg-black/55 px-4 backdrop-blur-[3px]"
+                                onClick={() => setIsClanCreateConfirmOpen(false)}
+                            >
+                                <div
+                                    className="w-full max-w-md rounded-[28px] border border-amber-400/20 bg-[linear-gradient(180deg,rgba(24,20,12,0.97),rgba(14,10,6,0.98))] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.6)]"
+                                    onClick={(event) => event.stopPropagation()}
+                                >
+                                    <div className="flex items-start gap-4">
+                                        <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">
+                                            <Shield className="h-5 w-5" />
+                                        </div>
+                                        <div>
+                                            <p className="text-lg font-semibold text-white">
+                                                Confirmar Fundación de Clan
+                                            </p>
+                                            <p className="mt-2 text-sm leading-6 text-stone-300">
+                                                ¿Estás seguro de que deseas fundar el clan{" "}
+                                                <span className="font-semibold text-amber-300">
+                                                    &lt;{clanCreateName.trim()}&gt;
+                                                </span>?
+                                            </p>
+                                            <div className="mt-3 space-y-1 text-xs text-stone-400">
+                                                <p>• Se consumirá <span className="text-emerald-400 font-semibold">1x Gema de Fundación</span>.</p>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="mt-6 flex justify-end gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={() => setIsClanCreateConfirmOpen(false)}
+                                            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-white/20 hover:bg-white/10"
+                                        >
+                                            Cancelar
+                                        </button>
+                                        <button
+                                            type="button"
+                                            onClick={confirmCreateClan}
+                                            className="rounded-full border border-amber-400/35 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-400 hover:bg-amber-500/30"
+                                        >
+                                            Confirmar Fundación
                                         </button>
                                     </div>
                                 </div>

@@ -796,23 +796,13 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                 pingText.zIndex = 1000;
                 app.stage.addChild(pingText);
 
-                const seguroText = new Text({
-                    text: "",
-                    style: getHudStatusTextStyle(0xff3b30),
-                });
-                seguroText.resolution = 1;
-                seguroText.x = 10;
-                seguroText.y = 36;
-                seguroText.zIndex = 1000;
-                app.stage.addChild(seguroText);
-
                 const clanSeguroText = new Text({
                     text: "",
                     style: getHudStatusTextStyle(0xff3b30),
                 });
                 clanSeguroText.resolution = 1;
                 clanSeguroText.x = 10;
-                clanSeguroText.y = 50;
+                clanSeguroText.y = 36;
                 clanSeguroText.zIndex = 1000;
                 app.stage.addChild(clanSeguroText);
 
@@ -834,7 +824,7 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
 
                 (engine as any).fpsText = fpsText;
                 options.pingTextRef.current = pingText;
-                options.seguroTextRef.current = seguroText;
+                options.seguroTextRef.current = null;
                 options.clanSeguroTextRef.current = clanSeguroText;
                 options.updateSeguroIndicators(options.playerHudRef.current);
                 options.debugCombatTextRef.current = debugCombatText;

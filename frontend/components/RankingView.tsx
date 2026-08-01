@@ -113,15 +113,8 @@ function getCharacterMeta(character: CharacterVisualMeta) {
 }
 
 function getCharacterNameColor(character: CharacterVisualMeta) {
-    if (character.faction === "armada") {
-        return factionColors.armada;
-    }
-
-    if (character.faction === "caos") {
-        return factionColors.caos;
-    }
-
-    return character.criminal ? "red" : "#3333ff";
+    void character;
+    return "#808080";
 }
 
 function getClanTag(character: CharacterVisualMeta) {
