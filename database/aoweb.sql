@@ -578,6 +578,21 @@ CREATE TABLE public.market_listings (
 
 
 --
+-- Name: auth_attempts; Type: TABLE; Schema: public; Owner: -
+--
+
+CREATE TABLE public.auth_attempts (
+    id uuid DEFAULT gen_random_uuid() NOT NULL,
+    kind text NOT NULL,
+    identifier_hash text,
+    requested_ip text,
+    succeeded boolean DEFAULT false NOT NULL,
+    created_at timestamp with time zone DEFAULT now() NOT NULL,
+    CONSTRAINT auth_attempts_kind_check CHECK ((kind = ANY (ARRAY['login'::text, 'register'::text])))
+);
+
+
+--
 -- Name: password_reset_requests; Type: TABLE; Schema: public; Owner: -
 --
 
@@ -920,6 +935,14 @@ ALTER TABLE ONLY public.market_listings
 
 
 --
+-- Name: auth_attempts auth_attempts_pkey; Type: CONSTRAINT; Schema: public; Owner: -
+--
+
+ALTER TABLE ONLY public.auth_attempts
+    ADD CONSTRAINT auth_attempts_pkey PRIMARY KEY (id);
+
+
+--
 -- Name: password_reset_requests password_reset_requests_pkey; Type: CONSTRAINT; Schema: public; Owner: -
 --
 
@@ -1237,6 +1260,27 @@ CREATE INDEX idx_market_listings_seller_status ON public.market_listings USING b
 --
 
 CREATE INDEX idx_market_listings_status_price_created ON public.market_listings USING btree (status, price, created_at);
+
+
+--
+-- Name: idx_auth_attempts_identifier; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_auth_attempts_identifier ON public.auth_attempts USING btree (kind, identifier_hash, created_at DESC);
+
+
+--
+-- Name: idx_auth_attempts_ip; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_auth_attempts_ip ON public.auth_attempts USING btree (kind, requested_ip, created_at DESC);
+
+
+--
+-- Name: idx_auth_attempts_created_at; Type: INDEX; Schema: public; Owner: -
+--
+
+CREATE INDEX idx_auth_attempts_created_at ON public.auth_attempts USING btree (created_at);
 
 
 --

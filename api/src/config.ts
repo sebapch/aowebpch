@@ -12,6 +12,11 @@ type Config = {
   tokenAuth: string;
   nodeEnv: string;
   corsOrigin: string;
+  trustProxy: string;
+  authRateLimitEnabled: boolean;
+  loginMaxFailuresPerIdentifier: number;
+  loginMaxFailuresPerIp: number;
+  registerMaxPerIp: number;
   siteUrl: string;
   sesRegion: string | null;
   sesAccessKeyId: string | null;
@@ -88,6 +93,19 @@ const config: Config = {
   tokenAuth: getRequiredEnv("TOKEN_AUTH"),
   nodeEnv: process.env.NODE_ENV ?? "development",
   corsOrigin: process.env.CORS_ORIGIN?.trim() || "*",
+  // Solo aceptamos X-Forwarded-For de pares en loopback o redes privadas (el
+  // proxy de Next y el game server). Desde una IP publica el header se ignora,
+  // asi no se pueden esquivar bans ni limites por IP falseandolo.
+  trustProxy: process.env.TRUST_PROXY?.trim() || "loopback, uniquelocal",
+  // Apagar solo en entornos de test: la suite de integracion crea decenas de
+  // cuentas desde la misma IP.
+  authRateLimitEnabled: process.env.AUTH_RATE_LIMIT_DISABLED !== "true",
+  loginMaxFailuresPerIdentifier: getOptionalNumberEnv(
+    "AUTH_LOGIN_MAX_FAILURES_PER_IDENTIFIER",
+    10,
+  ),
+  loginMaxFailuresPerIp: getOptionalNumberEnv("AUTH_LOGIN_MAX_FAILURES_PER_IP", 30),
+  registerMaxPerIp: getOptionalNumberEnv("AUTH_REGISTER_MAX_PER_IP", 20),
   siteUrl: (process.env.SITE_URL?.trim() || "https://aoweb.app").replace(/\/+$/, ""),
   sesRegion: process.env.SES_REGION?.trim() || null,
   sesAccessKeyId: process.env.SES_ACCESS_KEY_ID?.trim() || null,

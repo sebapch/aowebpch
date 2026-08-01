@@ -66,17 +66,25 @@ export async function requireEditorAdmin(): Promise<AdminCheck> {
         };
     }
 
-    const characterName =
-        session.characters?.find((character) => character.isAdministrator)?.name ??
-        session.characters?.[0]?.name ??
-        session.account?.name ??
-        "Usuario";
+    const administrator = session.characters?.find(
+        (character) => character.isAdministrator,
+    );
+
+    if (!administrator) {
+        return {
+            ok: false,
+            response: NextResponse.json(
+                { error: "No tienes permisos de administrador." },
+                { status: 403 },
+            ),
+        };
+    }
 
     return {
         ok: true,
         admin: {
             accountName: session.account?.name ?? "",
-            characterName,
+            characterName: administrator.name,
         },
     };
 }

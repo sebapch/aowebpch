@@ -45,6 +45,9 @@ const PASSWORD_RESET_EMAIL_WINDOW_MS = 1000 * 60 * 60;
 const PASSWORD_RESET_EMAIL_MAX_PER_WINDOW = 3;
 const PASSWORD_RESET_IP_WINDOW_MS = 1000 * 60 * 60;
 const PASSWORD_RESET_IP_MAX_PER_WINDOW = 10;
+const LOGIN_ATTEMPT_WINDOW_MS = 1000 * 60 * 15;
+const REGISTER_WINDOW_MS = 1000 * 60 * 60;
+const AUTH_ATTEMPT_RETENTION_MS = 1000 * 60 * 60 * 24;
 
 const resetRequestMessage = {
     message:
@@ -259,6 +262,163 @@ function normalizeEmail(email: string): string {
 
 function getPasswordResetUrl(token: string): string {
     return `${config.siteUrl}/reset-password/${encodeURIComponent(token)}`;
+}
+
+export class RateLimitError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = "RateLimitError";
+    }
+}
+
+/**
+ * Borra intentos viejos de vez en cuando (1 de cada 50 escrituras) para que la
+ * tabla no crezca sin limite. No hace falta que sea exacto ni transaccional.
+ */
+function pruneAuthAttemptsOccasionally(): void {
+    if (Math.random() >= 0.02) {
+        return;
+    }
+
+    void pool
+        .query(
+            `DELETE FROM auth_attempts WHERE created_at < NOW() - ($1 * INTERVAL '1 millisecond')`,
+            [AUTH_ATTEMPT_RETENTION_MS],
+        )
+        .catch((error: unknown) => {
+            console.warn("[API][auth] No se pudieron purgar intentos viejos:", error);
+        });
+}
+
+async function countRecentAuthAttempts(options: {
+    kind: "login" | "register";
+    identifierHash?: string | null;
+    ip?: string | null;
+    windowMs: number;
+    onlyFailures: boolean;
+}): Promise<number> {
+    const conditions = ["kind = $1", "created_at > NOW() - ($2 * INTERVAL '1 millisecond')"];
+    const params: unknown[] = [options.kind, options.windowMs];
+
+    if (options.identifierHash) {
+        params.push(options.identifierHash);
+        conditions.push(`identifier_hash = $${params.length}`);
+    }
+
+    if (options.ip) {
+        params.push(options.ip);
+        conditions.push(`requested_ip = $${params.length}`);
+    }
+
+    if (options.onlyFailures) {
+        conditions.push("succeeded = FALSE");
+    }
+
+    try {
+        const result = await pool.query<{ count: string }>(
+            `SELECT COUNT(*)::text AS count FROM auth_attempts WHERE ${conditions.join(" AND ")}`,
+            params,
+        );
+
+        return Number(result.rows[0]?.count ?? 0);
+    } catch (error) {
+        // Fail-open a proposito: si la tabla no existe todavia (migracion sin
+        // correr) preferimos servir los logins a dejar a todos afuera. Queda
+        // ruidoso en el log para que se note.
+        console.warn(
+            "[API][auth] No se pudo consultar auth_attempts, limite no aplicado:",
+            error,
+        );
+        return 0;
+    }
+}
+
+async function recordAuthAttempt(options: {
+    kind: "login" | "register";
+    identifierHash?: string | null;
+    ip?: string | null;
+    succeeded: boolean;
+}): Promise<void> {
+    try {
+        await pool.query(
+            `
+      INSERT INTO auth_attempts (kind, identifier_hash, requested_ip, succeeded)
+      VALUES ($1, $2, $3, $4)
+    `,
+            [
+                options.kind,
+                options.identifierHash ?? null,
+                options.ip ?? null,
+                options.succeeded,
+            ],
+        );
+    } catch (error) {
+        // Registrar el intento no debe romper el login: si la tabla todavia no
+        // existe (migracion pendiente) seguimos sirviendo, solo sin limite.
+        console.warn("[API][auth] No se pudo registrar el intento:", error);
+        return;
+    }
+
+    pruneAuthAttemptsOccasionally();
+}
+
+/**
+ * Frena fuerza bruta contra una cuenta puntual y credential stuffing desde una
+ * misma IP. Solo cuentan los intentos fallidos: un login exitoso no gasta cupo.
+ */
+async function enforceLoginRateLimit(
+    identifierHash: string,
+    ip: string | null,
+): Promise<void> {
+    if (!config.authRateLimitEnabled) {
+        return;
+    }
+
+    const [identifierFailures, ipFailures] = await Promise.all([
+        countRecentAuthAttempts({
+            kind: "login",
+            identifierHash,
+            windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+            onlyFailures: true,
+        }),
+        ip
+            ? countRecentAuthAttempts({
+                  kind: "login",
+                  ip,
+                  windowMs: LOGIN_ATTEMPT_WINDOW_MS,
+                  onlyFailures: true,
+              })
+            : Promise.resolve(0),
+    ]);
+
+    if (
+        identifierFailures >= config.loginMaxFailuresPerIdentifier ||
+        ipFailures >= config.loginMaxFailuresPerIp
+    ) {
+        throw new RateLimitError(
+            "Demasiados intentos fallidos. Espera unos minutos antes de volver a intentar.",
+        );
+    }
+}
+
+/** Limita altas de cuenta por IP para evitar spam de registro. */
+async function enforceRegisterRateLimit(ip: string | null): Promise<void> {
+    if (!ip || !config.authRateLimitEnabled) {
+        return;
+    }
+
+    const registrations = await countRecentAuthAttempts({
+        kind: "register",
+        ip,
+        windowMs: REGISTER_WINDOW_MS,
+        onlyFailures: false,
+    });
+
+    if (registrations >= config.registerMaxPerIp) {
+        throw new RateLimitError(
+            "Demasiadas cuentas creadas desde esta conexion. Intenta mas tarde.",
+        );
+    }
 }
 
 function getPasswordResetTokenRecord(
@@ -713,11 +873,20 @@ export async function createCharacterForSession(
     return getPublicSessionByToken(token);
 }
 
-export async function loginAccount(payload: unknown): Promise<AuthResponse> {
+export async function loginAccount(
+    payload: unknown,
+    rawIp?: string | null,
+): Promise<AuthResponse> {
     const { identifier, password } = loginSchema.parse(payload);
     const normalizedIdentifier = normalizeEmail(identifier);
     const sanitizedIdentifier = sanitizeName(identifier);
+    const ip = normalizeIp(rawIp);
 
+    // Buscamos la cuenta antes de aplicar el limite: la clave del contador es
+    // el id de cuenta, no el texto tipeado. Si contaramos por identificador,
+    // alternando "pepe", "pepe@mail.com" o "pépe" (todos resuelven a la misma
+    // cuenta) se multiplicaria el cupo. Ademas asi no gastamos bcrypt cuando
+    // el intento ya esta limitado.
     const result = await pool.query<AccountRecord>(
         `
       SELECT *
@@ -729,12 +898,22 @@ export async function loginAccount(payload: unknown): Promise<AuthResponse> {
     );
 
     const account = result.rows[0];
+    const identifierHash = hashOpaqueToken(
+        account ? `account:${account.id}` : `identifier:${sanitizedIdentifier}`,
+    );
 
-    if (!account?.password) {
-        throw new Error("Credenciales invalidas");
-    }
+    await enforceLoginRateLimit(identifierHash, ip);
 
-    const isValid = await verifyPassword(password, account.password);
+    const isValid = account?.password
+        ? await verifyPassword(password, account.password)
+        : false;
+
+    await recordAuthAttempt({
+        kind: "login",
+        identifierHash,
+        ip,
+        succeeded: isValid,
+    });
 
     if (!isValid) {
         throw new Error("Credenciales invalidas");
@@ -743,7 +922,14 @@ export async function loginAccount(payload: unknown): Promise<AuthResponse> {
     return buildAuthResponse(account);
 }
 
-export async function registerAccount(payload: unknown): Promise<AuthResponse> {
+export async function registerAccount(
+    payload: unknown,
+    rawIp?: string | null,
+): Promise<AuthResponse> {
+    const ip = normalizeIp(rawIp);
+
+    await enforceRegisterRateLimit(ip);
+
     const { name, email, password } = registerSchema.parse(payload);
     const nameSanitized = sanitizeName(name);
     const normalizedEmail = email && email.trim().length > 0
@@ -776,6 +962,8 @@ export async function registerAccount(payload: unknown): Promise<AuthResponse> {
     );
 
     const account = accountResult.rows[0];
+
+    await recordAuthAttempt({ kind: "register", ip, succeeded: true });
 
     return buildAuthResponse(account);
 }

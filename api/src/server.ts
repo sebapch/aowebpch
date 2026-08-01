@@ -1,6 +1,7 @@
 import express from "express";
 import config from "./config";
 import pool from "./db";
+import { safeEquals } from "./lib/safeCompare";
 import { requireAuth } from "./middleware/auth";
 import {
     confirmPasswordReset,
@@ -12,6 +13,7 @@ import {
     getPublicSessionByToken,
     loginAccount,
     logoutSession,
+    RateLimitError,
     registerAccount,
     requestPasswordReset,
     selectSessionCharacter,
@@ -121,6 +123,7 @@ import { createChallengeHistory } from "./repositories/challenges";
 import { listRatingRanking } from "./repositories/ratings";
 
 const app = express();
+app.set("trust proxy", config.trustProxy);
 const SLOW_REQUEST_LOG_THRESHOLD_MS = 2000;
 const SLOW_CHARACTER_SAVE_LOG_THRESHOLD_MS = 1000;
 
@@ -157,17 +160,13 @@ function getGameDataAdminProxyHeader(request: express.Request): string {
     return request.header("x-game-data-admin-token")?.trim() || "";
 }
 
+/**
+ * IP real del cliente. `request.ip` respeta el `trust proxy` configurado: si el
+ * par no es un proxy de confianza, express ignora `X-Forwarded-For` y devuelve
+ * la IP del socket.
+ */
 function getRequestIp(request: express.Request): string | null {
-    const forwardedFor = request
-        .header("x-forwarded-for")
-        ?.split(",")[0]
-        ?.trim();
-
-    if (forwardedFor) {
-        return forwardedFor;
-    }
-
-    return request.socket.remoteAddress?.trim() || null;
+    return request.ip?.trim() || request.socket.remoteAddress?.trim() || null;
 }
 
 async function getAuthorizedSession(request: express.Request) {
@@ -186,14 +185,49 @@ async function getAuthorizedSession(request: express.Request) {
     return { token, session };
 }
 
+/**
+ * Puerta de los endpoints `/admin/game-data/*`: no alcanza con estar logueado
+ * ni con ser administrador de personaje. La cuenta tiene que ser la cuenta
+ * admin de datos de juego configurada, y la peticion tiene que venir por el
+ * proxy del frontend (que agrega `x-game-data-admin-token`).
+ */
 async function requireAdminEmailSession(
     request: express.Request,
     response: express.Response,
 ): Promise<ReturnType<typeof getAuthorizedSession> | null> {
     const authorized = await getAuthorizedSession(request);
 
+    // 403 tambien sin sesion: estos endpoints no distinguen entre "no estas
+    // logueado" y "no sos el admin", asi no se pueden sondear desde afuera.
     if (!authorized) {
-        response.status(401).json({ error: "Unauthorized" });
+        response.status(403).json({ error: "Forbidden" });
+        return null;
+    }
+
+    if (!config.gameDataAdminAccountId && !config.gameDataAdminEmail) {
+        console.warn(
+            "[API][game-data] Rechazado: GAME_DATA_ADMIN_ACCOUNT_ID/GAME_DATA_ADMIN_EMAIL no estan configurados.",
+        );
+        response.status(403).json({ error: "Forbidden" });
+        return null;
+    }
+
+    if (!isAuthorizedGameDataAdmin(authorized.session)) {
+        response.status(403).json({ error: "Forbidden" });
+        return null;
+    }
+
+    if (
+        config.gameDataAdminProxyToken &&
+        !safeEquals(
+            getGameDataAdminProxyHeader(request),
+            config.gameDataAdminProxyToken,
+        )
+    ) {
+        console.warn(
+            "[API][game-data] Cuenta admin correcta pero x-game-data-admin-token no coincide: revisa que GAME_DATA_ADMIN_PROXY_TOKEN tenga el mismo valor en la api y en el frontend.",
+        );
+        response.status(403).json({ error: "Forbidden" });
         return null;
     }
 
@@ -261,20 +295,37 @@ app.use((request, response, next) => {
     next();
 });
 
+/**
+ * `CORS_ORIGIN` acepta una lista separada por comas. En produccion no se
+ * refleja un `Origin` arbitrario: si no hay lista configurada no mandamos el
+ * header y el navegador bloquea el cross-origin.
+ */
+const allowedCorsOrigins = config.corsOrigin
+    .split(",")
+    .map((value) => value.trim())
+    .filter(Boolean);
+const allowAnyCorsOrigin =
+    allowedCorsOrigins.includes("*") && config.nodeEnv !== "production";
+
+if (allowedCorsOrigins.includes("*") && config.nodeEnv === "production") {
+    console.warn(
+        "[API] CORS_ORIGIN no esta configurado en produccion: se rechazan las peticiones cross-origin.",
+    );
+}
+
 app.use((request, response, next) => {
     const origin = request.headers.origin;
 
-    if (config.corsOrigin === "*" && origin) {
+    if (origin && (allowAnyCorsOrigin || allowedCorsOrigins.includes(origin))) {
         response.header("Access-Control-Allow-Origin", origin);
-    } else if (config.corsOrigin !== "*") {
-        response.header("Access-Control-Allow-Origin", config.corsOrigin);
+        response.header("Vary", "Origin");
     }
 
     response.header(
         "Access-Control-Allow-Headers",
         "Content-Type, Authorization",
     );
-    response.header("Access-Control-Allow-Methods", "GET,POST,PUT,OPTIONS");
+    response.header("Access-Control-Allow-Methods", "GET,POST,PUT,DELETE,OPTIONS");
 
     if (request.method === "OPTIONS") {
         response.sendStatus(204);
@@ -1163,24 +1214,37 @@ app.put(
 
 app.post("/auth/register", async (request, response) => {
     try {
-        const result = await registerAccount(request.body);
+        const result = await registerAccount(
+            request.body,
+            getRequestIp(request),
+        );
         response.status(201).json(result);
     } catch (error) {
         const message =
             error instanceof Error ? error.message : "Unexpected error";
-        const status = message.includes("Ya existe") ? 409 : 400;
+        const status =
+            error instanceof RateLimitError
+                ? 429
+                : message.includes("Ya existe")
+                  ? 409
+                  : 400;
         response.status(status).json({ error: message });
     }
 });
 
 app.post("/auth/login", async (request, response) => {
     try {
-        const result = await loginAccount(request.body);
+        const result = await loginAccount(request.body, getRequestIp(request));
         response.json(result);
     } catch (error) {
         const message =
             error instanceof Error ? error.message : "Unexpected error";
-        const status = message === "Credenciales invalidas" ? 401 : 400;
+        const status =
+            error instanceof RateLimitError
+                ? 429
+                : message === "Credenciales invalidas"
+                  ? 401
+                  : 400;
         response.status(status).json({ error: message });
     }
 });

@@ -368,6 +368,18 @@ CREATE TABLE IF NOT EXISTS password_reset_requests (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Intentos de login y altas de cuenta, para frenar fuerza bruta y spam de
+-- registro. `identifier_hash` es el sha256 del usuario/email normalizado: no
+-- guardamos el identificador en claro.
+CREATE TABLE IF NOT EXISTS auth_attempts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    kind TEXT NOT NULL CHECK (kind IN ('login', 'register')),
+    identifier_hash TEXT,
+    requested_ip TEXT,
+    succeeded BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 CREATE TABLE IF NOT EXISTS game_tickets (
     ticket TEXT PRIMARY KEY,
     auth_token TEXT NOT NULL REFERENCES auth_sessions(token) ON DELETE CASCADE,
@@ -574,6 +586,9 @@ CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_account_id ON password_rese
 CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_expires_at ON password_reset_tokens(expires_at);
 CREATE INDEX IF NOT EXISTS idx_password_reset_requests_email_hash_created_at ON password_reset_requests(email_hash, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_password_reset_requests_ip_created_at ON password_reset_requests(requested_ip, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_identifier ON auth_attempts(kind, identifier_hash, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_ip ON auth_attempts(kind, requested_ip, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_auth_attempts_created_at ON auth_attempts(created_at);
 CREATE INDEX IF NOT EXISTS idx_game_tickets_auth_token ON game_tickets(auth_token);
 CREATE INDEX IF NOT EXISTS idx_game_tickets_expires_at ON game_tickets(expires_at);
 CREATE INDEX IF NOT EXISTS idx_game_tickets_arena_room_id ON game_tickets(arena_room_id);

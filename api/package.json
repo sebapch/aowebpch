@@ -34,7 +34,7 @@
     "dependencies": {
         "@aws-sdk/client-sesv2": "^3.1048.0",
         "bcryptjs": "^3.0.2",
-        "express": "^5.1.0",
+        "express": "^5.2.1",
         "pg": "^8.16.3",
         "zod": "^4.1.11"
     },
@@ -45,5 +45,11 @@
         "tsx": "^4.22.1",
         "typescript": "^6.0.3",
         "vitest": "^4.1.6"
+    },
+    "pnpm": {
+        "overrides": {
+            "qs": ">=6.15.2",
+            "body-parser": ">=2.3.0"
+        }
     }
 }

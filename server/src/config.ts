@@ -15,6 +15,12 @@ type RuntimeConfig = {
     editorEnabled: boolean;
     /** Permite que el editor escriba a disco con NODE_ENV=production. */
     editorAllowProduction: boolean;
+    /**
+     * IPs de proxies de confianza (separadas por coma). Solo desde esos pares
+     * se aceptan los headers `X-Real-IP`/`CF-Connecting-IP`/`X-Forwarded-For`.
+     * Vacio: se confia en loopback y redes privadas.
+     */
+    trustedProxyIps: string[];
 };
 
 const projectRoot = path.resolve(__dirname, "..");
@@ -75,6 +81,10 @@ const config: RuntimeConfig = {
         ? process.env.EDITOR_ENABLED === "true"
         : (process.env.NODE_ENV ?? "development") !== "production",
     editorAllowProduction: process.env.EDITOR_ALLOW_PRODUCTION === "true",
+    trustedProxyIps: (process.env.TRUSTED_PROXY_IPS ?? "")
+        .split(",")
+        .map((value) => value.trim().toLowerCase())
+        .filter(Boolean),
 };
 
 export = config;

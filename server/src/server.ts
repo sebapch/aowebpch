@@ -20,6 +20,7 @@ const config = require("./config");
 const LOGOUT_CLOSING_MESSAGE = "[Servidor] Cerrando sesión...";
 const UNSAFE_LOGOUT_DELAY_MS = 10000;
 const RECENT_PACKET_INTERVAL_LIMIT = 300;
+const MAX_WS_PAYLOAD_BYTES = 256 * 1024;
 const RECENT_PACKET_PPS_WINDOW_MS = 5000;
 const RECENT_PACKET_PPS_WINDOW_60S_MS = 60000;
 const JAIL_TICK_MS = 60000;
@@ -138,7 +139,53 @@ function handleSocketClosed(ws: RuntimeClient) {
     }
 }
 
+function normalizePeerIp(ip: string | undefined): string {
+    const value = String(ip ?? "").trim().toLowerCase();
+    return value.startsWith("::ffff:") ? value.slice(7) : value;
+}
+
+/**
+ * Un par es de confianza si esta explicitamente en `TRUSTED_PROXY_IPS`, o si
+ * viene de loopback o de una red privada (nginx, docker, el propio Next).
+ * Desde una IP publica el cliente habla directo con nosotros: ahi los headers
+ * de IP los controla el, asi que se ignoran.
+ */
+function isTrustedProxyPeer(peerIp: string | undefined): boolean {
+    const ip = normalizePeerIp(peerIp);
+
+    if (!ip) {
+        return false;
+    }
+
+    if (config.trustedProxyIps.includes(ip)) {
+        return true;
+    }
+
+    if (config.trustedProxyIps.length > 0) {
+        // Lista explicita configurada: no adivinamos nada mas.
+        return false;
+    }
+
+    if (ip === "127.0.0.1" || ip === "::1") {
+        return true;
+    }
+
+    if (ip.startsWith("10.") || ip.startsWith("192.168.") || ip.startsWith("fc") || ip.startsWith("fd")) {
+        return true;
+    }
+
+    const private172 = /^172\.(1[6-9]|2\d|3[01])\./.test(ip);
+
+    return private172;
+}
+
 function getConnectionIp(request: RuntimeConnectionRequest, ws: RuntimeClient): string | undefined {
+    const socketIp = request.socket?.remoteAddress ?? ws._socket?.remoteAddress;
+
+    if (!isTrustedProxyPeer(socketIp)) {
+        return socketIp;
+    }
+
     const realIp = request.headers?.["x-real-ip"];
     const realIpValue = Array.isArray(realIp) ? realIp[0] : realIp;
 
@@ -161,7 +208,7 @@ function getConnectionIp(request: RuntimeConnectionRequest, ws: RuntimeClient): 
         return forwardedIp;
     }
 
-    return request.socket?.remoteAddress ?? ws._socket?.remoteAddress;
+    return socketIp;
 }
 
 const http = require("http");
@@ -171,6 +218,11 @@ const httpServer = http.createServer(handleHttpRequest);
 httpServer.listen(config.port);
 wsServer = new WebSocketServer({
     server: httpServer,
+    // Sin esto `ws` acepta frames de hasta 100 MiB: un cliente conectado podia
+    // forzar reservas de memoria enormes. Los paquetes del juego son de unos
+    // pocos KB (el mas grande es el payload JSON de voz), asi que 256 KiB deja
+    // margen de sobra y corta el abuso.
+    maxPayload: MAX_WS_PAYLOAD_BYTES,
 }) as WSServer;
 
 const loadMaps = require("./loadMaps");

@@ -48,9 +48,10 @@ test("character_save patches top-level fields and nested items", async () => {
         owner.id,
         owner.email,
     );
-    assert.equal(homeState.homeMap, 1);
-    assert.equal(homeState.homeX, 54);
-    assert.equal(homeState.homeY, 60);
+    // Hogar por defecto de un personaje nuevo: el mapa inicial es el 276.
+    assert.equal(homeState.homeMap, 276);
+    assert.equal(homeState.homeX, 50);
+    assert.equal(homeState.homeY, 50);
 });
 
 test("character_save patches custom home coordinates", async () => {

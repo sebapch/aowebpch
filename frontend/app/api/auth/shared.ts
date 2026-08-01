@@ -119,6 +119,22 @@ function shouldUseSecureCookies(request: CookieRequest): boolean {
     return new URL(request.url).protocol === "https:";
 }
 
+/**
+ * IP del cliente para que la api pueda aplicar limites por origen. Sin esto la
+ * api veria siempre la IP del servidor de Next y un solo atacante consumiria
+ * el cupo de todos.
+ */
+export function getClientIp(request: CookieRequest): string {
+    const headers = request.headers;
+
+    return (
+        headers.get("cf-connecting-ip")?.trim() ||
+        headers.get("x-real-ip")?.trim() ||
+        headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+        ""
+    );
+}
+
 export async function forwardAuthRequest(
     path: string,
     body: unknown,
@@ -128,6 +144,7 @@ export async function forwardAuthRequest(
         method: "POST",
         headers: {
             "Content-Type": "application/json",
+            "x-forwarded-for": getClientIp(request),
         },
         body: JSON.stringify(body),
         cache: "no-store",
