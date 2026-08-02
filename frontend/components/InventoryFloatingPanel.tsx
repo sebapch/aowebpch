@@ -1999,7 +1999,7 @@ export default function InventoryFloatingPanel({
                             </div>
 
                             <div className="pointer-events-none absolute bottom-3 right-3 text-[10px] uppercase tracking-[0.16em] text-stone-500">
-                                v0.0.75
+                                v0.1
                             </div>
                         </section>
                     </div>
