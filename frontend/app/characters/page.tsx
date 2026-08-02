@@ -1,6 +1,6 @@
 "use client";
 
-import { Trash2 } from "lucide-react";
+import { Trash2, MessageCircle } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
@@ -150,6 +150,15 @@ export default function CharactersPage() {
                             Selección de Personaje
                         </h1>
                     </div>
+                    <a
+                        href="https://discord.gg/GdxdT4tKf"
+                        target="_blank"
+                        rel="noreferrer"
+                        className="flex items-center gap-2 game-btn-bronze px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider shadow-md hover:bg-[#6e4624] transition"
+                    >
+                        <MessageCircle className="h-4 w-4" />
+                        Discord
+                    </a>
                 </div>
 
                 {activeSession ? (

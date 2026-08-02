@@ -124,7 +124,7 @@ const RETOS_ERROR_MESSAGES = new Set([
     "El retador ya no está disponible.",
     "No puedes aceptar tu propio reto.",
 ]);
-const CONSOLE_DISCORD_URL = "https://discord.gg/sf8rWAvgxs";
+const CONSOLE_DISCORD_URL = "https://discord.gg/GdxdT4tKf";
 const CONSOLE_FEEDBACK_FORM_URL = "https://forms.gle/Df2cmGExTBjjJhAR8";
 const WELCOME_CONSOLE_MESSAGES = {
     discord:
