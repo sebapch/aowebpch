@@ -11,8 +11,12 @@ import {
     type MultiVoiceState,
 } from "../../../lib/multiPeerVoice";
 
-/** Debe coincidir con `VOICE_PROXIMITY_RANGE` en `server/src/proximityVoice.ts`. */
-export const VOICE_PROXIMITY_RANGE = 7;
+/**
+ * Debe coincidir con `VOICE_PROXIMITY_RANGE` en `server/src/proximityVoice.ts`.
+ * Apenas más que `VIEWPORT_TILE_RADIUS` (10): quien está en el borde de la
+ * pantalla todavía se escucha, muy bajito, y recién ahí se apaga del todo.
+ */
+export const VOICE_PROXIMITY_RANGE = 11;
 
 type UseProximityVoiceChatOptions = {
     websocketRef: RefObject<WebSocket | null>;

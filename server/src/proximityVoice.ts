@@ -14,10 +14,12 @@ const vars = require("./vars");
 
 /**
  * Radio en tiles dentro del cual dos jugadores unidos al canal arman una
- * conexión P2P de voz. Menor al de visión (±15, `vars.areaVisionRangeX/Y`)
- * para que sólo se escuche gente relativamente cerca.
+ * conexión P2P de voz. Apenas más que lo que el jugador ve en pantalla
+ * (`VIEWPORT_TILE_RADIUS` = 10 en el cliente), así que la voz se apaga justo
+ * pasando el borde de la pantalla en vez de cortar a alguien todavía visible.
+ * Entra holgado en el barrido de `loopAreaPos` (±15, `vars.areaVisionRangeX`).
  */
-const VOICE_PROXIMITY_RANGE = 7;
+const VOICE_PROXIMITY_RANGE = 11;
 
 /**
  * Tope de conexiones simultáneas por jugador: en una plaza llena sólo nos

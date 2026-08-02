@@ -1,1 +1,53 @@
-{"id":1,"name":"Ciudad de Ullathorpe","musicNum":4,"magiaSinEfecto":0,"noEncriptarMp":0,"terreno":"BOSQUE","zona":"CIUDAD","restringir":"No","maxLevel":0,"backup":1,"pk":1}
+{
+    "id": 1,
+    "name": "Ciudad de Ullathorpe",
+    "musicNum": 4,
+    "magiaSinEfecto": 0,
+    "noEncriptarMp": 0,
+    "terreno": "BOSQUE",
+    "zona": "CIUDAD",
+    "restringir": "No",
+    "maxLevel": 0,
+    "backup": 1,
+    "pk": 1,
+    "isArena": true,
+    "voiceChatEnabled": false,
+    "arenaSpawns": {
+        "team1": [
+            {
+                "x": 50,
+                "y": 36
+            },
+            {
+                "x": 50,
+                "y": 37
+            },
+            {
+                "x": 51,
+                "y": 36
+            },
+            {
+                "x": 51,
+                "y": 37
+            }
+        ],
+        "team2": [
+            {
+                "x": 71,
+                "y": 57
+            },
+            {
+                "x": 71,
+                "y": 56
+            },
+            {
+                "x": 70,
+                "y": 57
+            },
+            {
+                "x": 70,
+                "y": 56
+            }
+        ]
+    }
+}

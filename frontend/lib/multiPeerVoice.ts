@@ -109,14 +109,11 @@ type PeerLink = {
     hasRemoteDescription: boolean;
     pendingCandidates: RTCIceCandidateInit[];
 
-    sourceNode: MediaStreamAudioSourceNode | null;
-    gainNode: GainNode | null;
-    analyser: AnalyserNode | null;
-    analyserBuffer: Uint8Array<ArrayBuffer> | null;
     /**
-     * Sink mudo obligatorio: Chrome no hace fluir un MediaStream remoto de
-     * WebRTC por Web Audio si el stream no está además atado a un elemento
-     * multimedia. El volumen real sale por el GainNode, no por acá.
+     * Reproductor del audio remoto. Es un elemento multimedia y no un grafo de
+     * Web Audio a propósito: `srcObject` reemplaza en vez de acumular (un
+     * `ontrack` repetido no puede duplicar la voz) y Chrome sólo alimenta su
+     * cancelador de eco con lo que sale por elementos multimedia.
      */
     audioSink: HTMLAudioElement | null;
 
@@ -141,7 +138,6 @@ export class MultiPeerVoiceChat {
 
     private links = new Map<string, PeerLink>();
     private localStream: MediaStream | null = null;
-    private audioContext: AudioContext | null = null;
     private speakingIntervalId: ReturnType<typeof setInterval> | null = null;
     /** Rango máximo usado para traducir distancia -> volumen (sólo relevante en proximidad). */
     private maxDistanceRange = 0;
@@ -196,10 +192,6 @@ export class MultiPeerVoiceChat {
                 isPeerReady: false,
                 hasRemoteDescription: false,
                 pendingCandidates: [],
-                sourceNode: null,
-                gainNode: null,
-                analyser: null,
-                analyserBuffer: null,
                 audioSink: null,
                 connected: false,
                 speaking: false,
@@ -248,21 +240,20 @@ export class MultiPeerVoiceChat {
     }
 
     private applyGain(link: PeerLink): void {
-        if (!link.gainNode) {
+        if (!link.audioSink) {
             return;
         }
 
-        if (link.muted) {
-            link.gainNode.gain.value = 0;
-            return;
-        }
+        link.audioSink.muted = link.muted;
 
-        if (link.distance === null || this.maxDistanceRange <= 0) {
-            link.gainNode.gain.value = 1;
-            return;
-        }
+        // Sin distancia (voz de equipo) el volumen es siempre pleno.
+        const gain =
+            link.distance === null || this.maxDistanceRange <= 0
+                ? 1
+                : computeProximityGain(link.distance, this.maxDistanceRange);
 
-        link.gainNode.gain.value = computeProximityGain(link.distance, this.maxDistanceRange);
+        // `volume` tira excepción fuera de 0..1.
+        link.audioSink.volume = Math.min(1, Math.max(0, gain));
     }
 
     async join(): Promise<void> {
@@ -296,11 +287,6 @@ export class MultiPeerVoiceChat {
         // Push to talk: el micrófono arranca cerrado y sólo se abre con la tecla.
         this.setTrackEnabled(false);
 
-        // Unirse siempre nace de un click, el unico momento en que el
-        // navegador deja arrancar el AudioContext sin quedar suspendido.
-        this.getAudioContext();
-        void this.resumeAudioContext();
-
         this.patchState({ status: "joined", joined: true, error: null });
 
         for (const link of this.links.values()) {
@@ -323,6 +309,7 @@ export class MultiPeerVoiceChat {
 
         this.localStream?.getTracks().forEach((track) => track.stop());
         this.localStream = null;
+        this.stopSpeakingLoop();
 
         this.patchState({
             status: "idle",
@@ -364,11 +351,6 @@ export class MultiPeerVoiceChat {
         this.localStream = null;
         this.stopSpeakingLoop();
 
-        if (this.audioContext) {
-            void this.audioContext.close().catch(() => undefined);
-            this.audioContext = null;
-        }
-
         this.state = { ...INITIAL_MULTI_VOICE_STATE };
     }
 
@@ -376,28 +358,6 @@ export class MultiPeerVoiceChat {
         this.localStream?.getAudioTracks().forEach((track) => {
             track.enabled = enabled;
         });
-    }
-
-    private getAudioContext(): AudioContext | null {
-        if (this.audioContext) {
-            return this.audioContext;
-        }
-
-        const AudioContextCtor =
-            window.AudioContext ??
-            (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-
-        if (!AudioContextCtor) {
-            return null;
-        }
-
-        try {
-            this.audioContext = new AudioContextCtor();
-        } catch {
-            this.audioContext = null;
-        }
-
-        return this.audioContext;
     }
 
     private createPeerConnection(link: PeerLink): void {
@@ -441,57 +401,26 @@ export class MultiPeerVoiceChat {
         link.connection = connection;
     }
 
+    /**
+     * Idempotente: un `ontrack` repetido (típico tras una renegociación)
+     * reemplaza el stream del mismo elemento en vez de sumar una segunda
+     * salida, que es lo que hacía sonar la voz duplicada.
+     */
     private attachRemoteStream(link: PeerLink, stream: MediaStream): void {
-        const context = this.getAudioContext();
-
-        if (!context) {
-            return;
-        }
-
-        // Chrome descarta el audio de un stream remoto que sólo pasa por Web
-        // Audio: hay que atarlo tambien a un elemento multimedia para que el
-        // pipeline arranque. Va en mute porque el volumen real (atenuado por
-        // distancia) sale por el GainNode.
         if (!link.audioSink) {
             const sink = document.createElement("audio");
             sink.autoplay = true;
-            sink.muted = true;
             link.audioSink = sink;
         }
 
-        link.audioSink.srcObject = stream;
+        if (link.audioSink.srcObject !== stream) {
+            link.audioSink.srcObject = stream;
+        }
+
+        this.applyGain(link);
         void link.audioSink.play().catch(() => undefined);
 
-        try {
-            const source = context.createMediaStreamSource(stream);
-            const gainNode = context.createGain();
-            const analyser = context.createAnalyser();
-            analyser.fftSize = 512;
-
-            source.connect(gainNode);
-            gainNode.connect(context.destination);
-            source.connect(analyser);
-
-            link.sourceNode = source;
-            link.gainNode = gainNode;
-            link.analyser = analyser;
-            link.analyserBuffer = new Uint8Array(new ArrayBuffer(analyser.fftSize));
-            this.applyGain(link);
-        } catch {
-            return;
-        }
-
-        void this.resumeAudioContext();
         this.ensureSpeakingLoop();
-    }
-
-    /** El navegador arranca el AudioContext suspendido hasta que hay un gesto del usuario. */
-    private async resumeAudioContext(): Promise<void> {
-        const context = this.audioContext;
-
-        if (context && context.state === "suspended") {
-            await context.resume().catch(() => undefined);
-        }
     }
 
     private ensureSpeakingLoop(): void {
@@ -503,23 +432,7 @@ export class MultiPeerVoiceChat {
             let changed = false;
 
             for (const link of this.links.values()) {
-                const { analyser, analyserBuffer } = link;
-
-                if (!analyser || !analyserBuffer) {
-                    continue;
-                }
-
-                analyser.getByteTimeDomainData(analyserBuffer);
-
-                let sumOfSquares = 0;
-
-                for (const sample of analyserBuffer) {
-                    const normalized = sample / 128 - 1;
-                    sumOfSquares += normalized * normalized;
-                }
-
-                const level = Math.sqrt(sumOfSquares / analyserBuffer.length);
-                const isSpeaking = level > SPEAKING_LEVEL_THRESHOLD;
+                const isSpeaking = this.readRemoteAudioLevel(link) > SPEAKING_LEVEL_THRESHOLD;
 
                 if (isSpeaking !== link.speaking) {
                     link.speaking = isSpeaking;
@@ -531,6 +444,33 @@ export class MultiPeerVoiceChat {
                 this.emitPeers();
             }
         }, SPEAKING_SAMPLE_INTERVAL_MS);
+    }
+
+    /**
+     * Nivel de audio (0..1) que reporta WebRTC para el peer. Evita tener que
+     * pasar el stream por Web Audio sólo para dibujar el indicador de "está
+     * hablando". Si el navegador no lo implementa, el indicador queda apagado.
+     */
+    private readRemoteAudioLevel(link: PeerLink): number {
+        const connection = link.connection;
+
+        if (!connection || link.muted) {
+            return 0;
+        }
+
+        let level = 0;
+
+        for (const receiver of connection.getReceivers()) {
+            if (receiver.track?.kind !== "audio" || typeof receiver.getSynchronizationSources !== "function") {
+                continue;
+            }
+
+            for (const source of receiver.getSynchronizationSources()) {
+                level = Math.max(level, source.audioLevel ?? 0);
+            }
+        }
+
+        return level;
     }
 
     private stopSpeakingLoop(): void {
@@ -655,23 +595,6 @@ export class MultiPeerVoiceChat {
     }
 
     private closePeerConnection(link: PeerLink): void {
-        if (link.sourceNode) {
-            link.sourceNode.disconnect();
-            link.sourceNode = null;
-        }
-
-        if (link.gainNode) {
-            link.gainNode.disconnect();
-            link.gainNode = null;
-        }
-
-        if (link.analyser) {
-            link.analyser.disconnect();
-            link.analyser = null;
-        }
-
-        link.analyserBuffer = null;
-
         if (link.audioSink) {
             link.audioSink.pause();
             link.audioSink.srcObject = null;
