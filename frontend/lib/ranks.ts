@@ -23,7 +23,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         key: "bronce",
         name: "Bronce",
         minElo: 0,
-        maxElo: 1299,
+        maxElo: 1249,
         badgeColor: "from-[#8C5338] via-[#B86F45] to-[#6E3C23]",
         borderColor: "border-[#b86f45]/60",
         textColor: "text-[#e8b598]",
@@ -33,8 +33,8 @@ export const RANK_TIERS: RankTierInfo[] = [
     {
         key: "plata",
         name: "Plata",
-        minElo: 1300,
-        maxElo: 1399,
+        minElo: 1250,
+        maxElo: 1299,
         badgeColor: "from-[#71717A] via-[#A1A1AA] to-[#52525B]",
         borderColor: "border-zinc-400/60",
         textColor: "text-zinc-200",
@@ -44,8 +44,8 @@ export const RANK_TIERS: RankTierInfo[] = [
     {
         key: "oro",
         name: "Oro",
-        minElo: 1400,
-        maxElo: 1499,
+        minElo: 1300,
+        maxElo: 1349,
         badgeColor: "from-[#B45309] via-[#F59E0B] to-[#78350F]",
         borderColor: "border-amber-400/70",
         textColor: "text-amber-200",
@@ -55,8 +55,8 @@ export const RANK_TIERS: RankTierInfo[] = [
     {
         key: "platino",
         name: "Platino",
-        minElo: 1500,
-        maxElo: 1599,
+        minElo: 1350,
+        maxElo: 1399,
         badgeColor: "from-[#0369A1] via-[#38BDF8] to-[#075985]",
         borderColor: "border-sky-400/70",
         textColor: "text-sky-200",
@@ -66,8 +66,8 @@ export const RANK_TIERS: RankTierInfo[] = [
     {
         key: "diamante",
         name: "Diamante",
-        minElo: 1600,
-        maxElo: 1699,
+        minElo: 1400,
+        maxElo: 1449,
         badgeColor: "from-[#6D28D9] via-[#A855F7] to-[#4C1D95]",
         borderColor: "border-purple-400/70",
         textColor: "text-purple-200",
@@ -77,7 +77,7 @@ export const RANK_TIERS: RankTierInfo[] = [
     {
         key: "maestro",
         name: "Maestro",
-        minElo: 1700,
+        minElo: 1450,
         maxElo: Infinity,
         badgeColor: "from-[#BE123C] via-[#F43F5E] to-[#881337]",
         borderColor: "border-rose-400/80",
@@ -110,9 +110,9 @@ export function getRankDetails(elo: number = 1200): RankDetails {
         ) ?? RANK_TIERS[0];
 
     let nextTierElo: number | null = tier.maxElo + 1;
-    let effectiveMin = tier.key === "bronce" ? 1200 : tier.minElo;
+    let effectiveMin = tier.minElo;
     let eloInTier = Math.max(0, safeElo - effectiveMin);
-    let tierRange = tier.key === "bronce" ? 100 : tier.maxElo - tier.minElo + 1;
+    let tierRange = tier.maxElo - tier.minElo + 1;
     let progressPercent = 0;
 
     if (tier.key === "maestro") {
