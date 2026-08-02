@@ -221,11 +221,6 @@ export default function CharactersPage() {
                                             }`}
                                         >
                                             <div className="flex justify-center relative">
-                                                <div className="absolute top-1 left-1 z-10">
-                                                    <span className="game-badge-circle h-6 w-6 text-[10px]">
-                                                        {character.level}
-                                                    </span>
-                                                </div>
                                                 {appearance.bodyId > 0 &&
                                                 appearance.headId > 0 ? (
                                                     <CharacterSpritePreview
@@ -277,9 +272,6 @@ export default function CharactersPage() {
                                                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                                                         {character.className}{" "}
                                                         {character.raceName}
-                                                    </p>
-                                                    <p className="text-[10px] font-bold uppercase tracking-wider text-[#d4a359]">
-                                                        Nivel {character.level}
                                                     </p>
                                                 </div>
 
