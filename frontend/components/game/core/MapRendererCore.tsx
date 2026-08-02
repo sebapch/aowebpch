@@ -39,7 +39,6 @@ import {
     DEFAULT_RUNTIME_TIMING,
     type RuntimeTimingConfig,
 } from "../../../lib/runtime-config";
-import type { StoredMacro } from "../../../lib/character-settings";
 import { GameSoundManager, type SoundPosition } from "../../../lib/sound";
 import { DebugCombatOverlay } from "../overlays/DebugCombatOverlay";
 import { LoadingOverlay } from "../overlays/LoadingOverlay";
@@ -210,7 +209,6 @@ interface MapRendererProps {
     } | null;
     runtimeTiming?: RuntimeTimingConfig;
     hotkeySettings?: HotkeySettings;
-    macros?: Array<StoredMacro | null>;
     soundVolume?: number;
     onMapChange?: (mapNumber: number) => void;
     onStatusChange?: (status: RendererStatus) => void;
@@ -705,7 +703,6 @@ export default function MapRenderer({
     proximityVoiceActionRequest,
     runtimeTiming = DEFAULT_RUNTIME_TIMING,
     hotkeySettings = DEFAULT_HOTKEY_SETTINGS,
-    macros = [],
     soundVolume = 1,
     onMapChange,
     onStatusChange,
@@ -779,7 +776,6 @@ export default function MapRenderer({
     const movementInputResumeTimeoutRef = useRef<number | null>(null);
     const isMapChangeTransitionRef = useRef(false);
     const hotkeySettingsRef = useRef(hotkeySettings);
-    const macroKeyCodesRef = useRef<Set<string>>(new Set());
     const blockedKeyboardCodesRef = useRef<Map<string, number>>(new Map());
     const blockedKeyboardKeysRef = useRef<Map<string, number>>(new Map());
     const movementKeyMapRef = useRef<Map<string, number>>(new Map());
@@ -938,12 +934,6 @@ export default function MapRenderer({
         hotkeySettingsRef.current = hotkeySettings;
     }, [hotkeySettings]);
 
-    useEffect(() => {
-        macroKeyCodesRef.current = new Set(
-            macros.map((macro) => macro?.keyCode?.trim() ?? "").filter(Boolean),
-        );
-    }, [macros]);
-
     const resolveBlockedGameplayKeyboardReason = React.useCallback(
         (
             event: KeyboardEvent,
@@ -959,17 +949,10 @@ export default function MapRenderer({
                         ),
                 ),
             );
-            const matchesMacro = Array.from(macroKeyCodesRef.current).some(
-                (code) =>
-                    code === event.code ||
-                    getKeyboardKeyCandidatesFromCode(code).includes(
-                        normalizedEventKey,
-                    ),
-            );
             const matchesInternalHotkey =
                 event.code === "KeyL" || normalizedEventKey === "l";
 
-            if (!matchesHotkey && !matchesMacro && !matchesInternalHotkey) {
+            if (!matchesHotkey && !matchesInternalHotkey) {
                 return null;
             }
 
@@ -1134,7 +1117,6 @@ export default function MapRenderer({
         connectionSessionKey: connection?.sessionKey,
         getBlockedKeyboardSequenceUntil,
         resolveBlockedGameplayKeyboardReason,
-        macroKeyCodesRef,
         blockedKeyboardCodesRef,
         blockedKeyboardKeysRef,
     });

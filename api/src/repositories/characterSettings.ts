@@ -19,28 +19,15 @@ const HOTKEY_ACTIONS = [
   "dropItem",
 ] as const;
 
-const MACRO_SLOTS = 8;
-const MAX_LABEL_LENGTH = 70;
 const MAX_KEYCODE_LENGTH = 70;
 
 type HotkeyAction = (typeof HOTKEY_ACTIONS)[number];
 
 export type HotkeySettings = Record<HotkeyAction, string[]>;
 
-export type StoredMacro = {
-  keyCode: string;
-  targetType: "item" | "spell" | "command";
-  label: string;
-  targetSlot?: number;
-  targetId?: number;
-  command?: string;
-  grhIndex?: number;
-};
-
 export type CharacterSettingsResponse = {
   characterId: string;
   hotkeys: HotkeySettings;
-  macros: Array<StoredMacro | null>;
 };
 
 const DEFAULT_HOTKEY_SETTINGS: HotkeySettings = {
@@ -61,41 +48,8 @@ const DEFAULT_HOTKEY_SETTINGS: HotkeySettings = {
 };
 
 const hotkeyCodeSchema = z.string().trim().min(1).max(MAX_KEYCODE_LENGTH);
-const macroLabelSchema = z.string().trim().min(1).max(MAX_LABEL_LENGTH);
 
 const hotkeyCodesSchema = z.array(hotkeyCodeSchema).max(2);
-const macroCommandSchema = z
-  .string()
-  .trim()
-  .regex(/^\/?[a-zA-Z]{1,15}$/, "El comando del macro solo admite letras de la A a la Z y hasta 15 caracteres")
-  .transform((value) => {
-    const normalized = value.startsWith("/") ? value.slice(1) : value;
-    return `/${normalized.toLowerCase()}`;
-  });
-
-const storedMacroSchema = z.discriminatedUnion("targetType", [
-  z.object({
-    keyCode: hotkeyCodeSchema,
-    targetType: z.literal("item"),
-    label: macroLabelSchema,
-    targetSlot: z.number().int(),
-    targetId: z.number().int(),
-    grhIndex: z.number().int().optional(),
-  }),
-  z.object({
-    keyCode: hotkeyCodeSchema,
-    targetType: z.literal("spell"),
-    label: macroLabelSchema,
-    targetSlot: z.number().int(),
-    targetId: z.number().int(),
-  }),
-  z.object({
-    keyCode: hotkeyCodeSchema,
-    targetType: z.literal("command"),
-    label: macroLabelSchema,
-    command: macroCommandSchema,
-  }),
-]);
 
 const hotkeySettingsSchema = z.object(
   Object.fromEntries(
@@ -105,7 +59,6 @@ const hotkeySettingsSchema = z.object(
 
 const characterSettingsSchema = z.object({
   hotkeys: hotkeySettingsSchema,
-  macros: z.array(storedMacroSchema.nullable()).length(MACRO_SLOTS),
 });
 
 function cloneDefaultHotkeySettings(): HotkeySettings {
@@ -144,17 +97,6 @@ function normalizeHotkeySettings(value: unknown): HotkeySettings {
   }
 
   return normalized;
-}
-
-function normalizeMacros(value: unknown): Array<StoredMacro | null> {
-  if (!Array.isArray(value)) {
-    return Array.from({ length: MACRO_SLOTS }, () => null);
-  }
-
-  return Array.from({ length: MACRO_SLOTS }, (_unused, index) => {
-    const parsed = storedMacroSchema.nullable().safeParse(value[index] ?? null);
-    return parsed.success ? parsed.data : null;
-  });
 }
 
 async function getSessionWithSelectedCharacter(token: string): Promise<AuthSessionRecord | null> {
@@ -217,10 +159,9 @@ export async function getCharacterSettingsBySessionToken(
 
   const settingsResult = await pool.query<{
     hotkeys: unknown;
-    macros: unknown;
   }>(
     `
-      SELECT hotkeys, macros
+      SELECT hotkeys
       FROM character_settings
       WHERE character_id = $1
       LIMIT 1
@@ -233,7 +174,6 @@ export async function getCharacterSettingsBySessionToken(
   return {
     characterId: session.selected_character_id,
     hotkeys: normalizeHotkeySettings(row?.hotkeys),
-    macros: normalizeMacros(row?.macros),
   };
 }
 
@@ -260,23 +200,17 @@ export async function saveCharacterSettingsBySessionToken(
 
   await pool.query(
     `
-      INSERT INTO character_settings (character_id, hotkeys, macros)
-      VALUES ($1, $2::jsonb, $3::jsonb)
+      INSERT INTO character_settings (character_id, hotkeys)
+      VALUES ($1, $2::jsonb)
       ON CONFLICT (character_id)
       DO UPDATE SET hotkeys = EXCLUDED.hotkeys,
-                    macros = EXCLUDED.macros,
                     updated_at = NOW()
     `,
-    [
-      session.selected_character_id,
-      JSON.stringify(parsed.hotkeys),
-      JSON.stringify(parsed.macros),
-    ],
+    [session.selected_character_id, JSON.stringify(parsed.hotkeys)],
   );
 
   return {
     characterId: session.selected_character_id,
     hotkeys: normalizeHotkeySettings(parsed.hotkeys),
-    macros: normalizeMacros(parsed.macros),
   };
 }

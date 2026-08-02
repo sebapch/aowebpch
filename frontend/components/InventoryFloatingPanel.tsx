@@ -3,12 +3,14 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import React from "react";
 import { createPortal } from "react-dom";
 import { formatNumber } from "../lib/number-format";
 import {
     ChevronDown,
     ChevronUp,
+    Repeat,
     Settings,
     Settings2,
     Volume2,
@@ -19,8 +21,6 @@ import {
     Users,
     UserRoundX,
     Shield,
-    Trash2,
-    MoreHorizontal,
 } from "lucide-react";
 import { EloRankBadgeCard } from "./game/EloRankBadgeCard";
 import type {
@@ -51,6 +51,10 @@ import {
     detectHardwareAccelerationDiagnostics,
     type BrowserHardwareAccelerationHelp,
 } from "../lib/hardware-acceleration";
+import { classLabels } from "../lib/character-labels";
+import { ClanMemberActionMenu } from "./clan/ClanMemberActionMenu";
+import { ClanPanel } from "./clan/ClanPanel";
+import { useClanPanel } from "./clan/useClanPanel";
 
 type InventoryFloatingPanelProps = {
     hud: PlayerHudState | null;
@@ -78,6 +82,11 @@ type InventoryFloatingPanelProps = {
     onDropRequest?: (slot: number, amount: number) => void;
     onSendCommand?: (message: string) => void;
     selectedCharacterId?: string | null;
+    switchCharacterHref?: string;
+    switchCharacterLabel?: string;
+    onSwitchCharacterClick?: (
+        event: React.MouseEvent<HTMLAnchorElement>,
+    ) => void;
 };
 
 type HardwareAccelerationWarning = {
@@ -85,58 +94,7 @@ type HardwareAccelerationWarning = {
     help: BrowserHardwareAccelerationHelp;
 };
 
-type ClanAlignment = "citizen" | "criminal";
-
 const MAX_LEVEL = 50;
-
-type ClanSummary = {
-    id: string;
-    name: string;
-    alignment: ClanAlignment;
-    minJoinLevel: number;
-    memberCount: number;
-    leaderName: string;
-};
-
-type ClanMember = {
-    characterId: string;
-    name: string;
-    classId: number;
-    level: number;
-    criminal: boolean;
-    online: boolean | null;
-    role: "leader" | "co_leader" | "member";
-};
-
-type ClanRequest = {
-    id: string;
-    characterId: string;
-    name: string;
-    classId: number;
-    level: number;
-    criminal: boolean;
-    online: boolean;
-    message: string;
-    createdAt: string;
-};
-
-type ClanDetails = {
-    id: string;
-    name: string;
-    alignment: ClanAlignment;
-    minJoinLevel: number;
-    leaderCharacterId: string;
-    leaderName: string;
-    memberCount: number;
-    members: ClanMember[];
-    requests: ClanRequest[];
-};
-
-type ClanOverview = {
-    currentClan: ClanDetails | null;
-    clans: ClanSummary[];
-    pendingRequestClanId: string | null;
-};
 
 function detectHardwareAccelerationWarning(): HardwareAccelerationWarning | null {
     const diagnostics = detectHardwareAccelerationDiagnostics();
@@ -152,52 +110,6 @@ function detectHardwareAccelerationWarning(): HardwareAccelerationWarning | null
         help: diagnostics.browserHelp,
     };
 }
-
-function inferFactionFromHud(
-    hud: PlayerHudState | null,
-    snapshot?: CharacterStatsSnapshot | null,
-): "none" | "armada" | "caos" {
-    if (snapshot?.factions.activeFaction) {
-        return snapshot.factions.activeFaction;
-    }
-
-    const normalizedColor = String(hud?.color ?? "")
-        .trim()
-        .toLowerCase();
-
-    if (normalizedColor === "#00afff") {
-        return "armada";
-    }
-
-    if (normalizedColor === "#9b0000") {
-        return "caos";
-    }
-
-    return "none";
-}
-
-const classLabels: Record<number, string> = {
-    1: "Mago",
-    2: "Clerigo",
-    3: "Guerrero",
-    4: "Asesino",
-    6: "Bardo",
-    7: "Druida",
-    8: "Paladin",
-    9: "Cazador",
-};
-
-const raceLabels: Record<number, string> = {
-    1: "Humano",
-    2: "Elfo",
-    3: "Elfo Drow",
-    4: "Enano",
-    5: "Gnomo",
-};
-
-const clanNamePattern = /^[A-Za-z ]+$/;
-const CLAN_CREATION_LEVEL_REQUIRED = 30;
-const CLAN_CREATION_COST = 0;
 
 type HotkeySection = {
     title: string;
@@ -313,7 +225,6 @@ const HOTKEY_SECTIONS: HotkeySection[] = [
 ];
 
 const MIN_SLOTS = 21;
-const HOVER_DELAY_MS = 450;
 const DOUBLE_ACTIVATE_WINDOW_MS = 240;
 const MINIMAP_PREVIEW_SIZE = 92;
 const DYNAMIC_INSTANCE_MAP_START = 30_000;
@@ -737,6 +648,9 @@ export default function InventoryFloatingPanel({
     onDropRequest,
     onSendCommand,
     selectedCharacterId,
+    switchCharacterHref,
+    switchCharacterLabel,
+    onSwitchCharacterClick,
 }: InventoryFloatingPanelProps) {
     const items = React.useMemo(() => hud?.inventory ?? [], [hud?.inventory]);
     const spells = React.useMemo(() => hud?.spells ?? [], [hud?.spells]);
@@ -760,59 +674,18 @@ export default function InventoryFloatingPanel({
         string,
         SpellData
     > | null>(null);
-    const [hoveredItem, setHoveredItem] = React.useState<InventoryItem | null>(
-        null,
-    );
     const [draggedInventoryItem, setDraggedInventoryItem] =
         React.useState<InventoryItem | null>(null);
     const [dragPointer, setDragPointer] = React.useState({ x: 0, y: 0 });
     const [isSpellInfoOpen, setIsSpellInfoOpen] = React.useState(false);
     const [isPartyModalOpen, setIsPartyModalOpen] = React.useState(false);
-    const [isClanModalOpen, setIsClanModalOpen] = React.useState(false);
-    const [clanOverview, setClanOverview] = React.useState<ClanOverview | null>(
-        null,
-    );
-    const [clanView, setClanView] = React.useState<
-        "list" | "detail" | "manage" | "create"
-    >("list");
-    const [clanLoading, setClanLoading] = React.useState(false);
-    const [clanError, setClanError] = React.useState<string | null>(null);
-    const [selectedClanId, setSelectedClanId] = React.useState<string | null>(
-        null,
-    );
-    const [selectedClanDetails, setSelectedClanDetails] =
-        React.useState<ClanDetails | null>(null);
-    const [clanCreateName, setClanCreateName] = React.useState("");
-    const [clanCreateMinLevel, setClanCreateMinLevel] = React.useState("1");
-    const [clanRequestMessage, setClanRequestMessage] = React.useState("");
-    const [clanRequestSubmitting, setClanRequestSubmitting] =
-        React.useState(false);
-    const [clanReviewActionId, setClanReviewActionId] = React.useState<
-        string | null
-    >(null);
-    const [clanKickActionId, setClanKickActionId] = React.useState<
-        string | null
-    >(null);
-    const [clanMemberActionMenu, setClanMemberActionMenu] = React.useState<{
-        characterId: string;
-        memberName: string;
-        left: number;
-        top: number;
-    } | null>(null);
-    const [clanRoleActionId, setClanRoleActionId] = React.useState<
-        string | null
-    >(null);
-    const [clanLeadershipTransferActionId, setClanLeadershipTransferActionId] =
-        React.useState<string | null>(null);
-    const [clanLeaveSubmitting, setClanLeaveSubmitting] = React.useState(false);
-    const [clanDeleteSubmitting, setClanDeleteSubmitting] =
-        React.useState(false);
-    const [isClanDeleteDialogOpen, setIsClanDeleteDialogOpen] =
-        React.useState(false);
-    const [isClanCreateConfirmOpen, setIsClanCreateConfirmOpen] =
-        React.useState(false);
-    const [clanDeleteConfirmationText, setClanDeleteConfirmationText] =
-        React.useState("");
+    const clan = useClanPanel({
+        hud,
+        inventory: items,
+        characterStatsSnapshot,
+        selectedCharacterId,
+        onSendCommand,
+    });
     const panelRef = React.useRef<HTMLDivElement | null>(null);
 
     const getPanelScale = React.useCallback(() => {
@@ -856,70 +729,6 @@ export default function InventoryFloatingPanel({
 
         return () => window.clearInterval(interval);
     }, []);
-
-    const refreshClanOverview = React.useCallback(async () => {
-        if (!selectedCharacterId) {
-            setClanOverview(null);
-            setClanError(null);
-            return;
-        }
-
-        setClanLoading(true);
-        setClanError(null);
-
-        try {
-            const response = await fetch("/api/clans", {
-                cache: "no-store",
-            });
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    typeof result?.error === "string"
-                        ? result.error
-                        : "No se pudieron cargar los clanes.",
-                );
-            }
-
-            const nextOverview = result as ClanOverview;
-            setClanOverview(nextOverview);
-            setSelectedClanId((current) => {
-                if (
-                    current &&
-                    nextOverview.clans.some((clan) => clan.id === current)
-                ) {
-                    return current;
-                }
-
-                return nextOverview.clans[0]?.id ?? null;
-            });
-        } catch (error) {
-            setClanOverview(null);
-            setSelectedClanId(null);
-            setSelectedClanDetails(null);
-            setClanError(
-                error instanceof Error
-                    ? error.message
-                    : "No se pudieron cargar los clanes.",
-            );
-        } finally {
-            setClanLoading(false);
-        }
-    }, [selectedCharacterId]);
-
-    React.useEffect(() => {
-        if (!isClanModalOpen) {
-            return;
-        }
-
-        void refreshClanOverview();
-    }, [isClanModalOpen, refreshClanOverview]);
-
-    const scheduleClanRefresh = React.useCallback(() => {
-        window.setTimeout(() => {
-            void refreshClanOverview();
-        }, 700);
-    }, [refreshClanOverview]);
 
     const buffCountdown = React.useMemo(
         () => ({
@@ -969,7 +778,6 @@ export default function InventoryFloatingPanel({
         slotIndex: number;
     } | null>(null);
     const [isSpellListDragging, setIsSpellListDragging] = React.useState(false);
-    const hoverTimerRef = React.useRef<number | null>(null);
     const spellListRef = React.useRef<HTMLDivElement | null>(null);
     const spellListScrollTopRef = React.useRef(0);
     const heldUseItemTimerRef = React.useRef<number | null>(null);
@@ -1168,355 +976,6 @@ export default function InventoryFloatingPanel({
         ? `${Math.round(expPercent)}% (${formatNumber(hud.exp || 0)} / ${formatNumber(hud.expNextLevel || 0)})`
         : "-";
     const isMaxLevelCharacter = (hud?.level ?? 0) >= MAX_LEVEL;
-    const currentClan = clanOverview?.currentClan ?? null;
-    const detailClan =
-        selectedClanDetails ??
-        (selectedClanId === currentClan?.id ? currentClan : null);
-    const currentLevel = hud?.level ?? 0;
-    const isCurrentCharacterCriminal =
-        String(hud?.color ?? "").toLowerCase() === "red";
-    const currentFaction = inferFactionFromHud(hud, characterStatsSnapshot);
-    const missingClanJoinRequirements = React.useMemo(() => {
-        if (!detailClan || currentClan) {
-            return [] as string[];
-        }
-
-        const issues: string[] = [];
-
-        if (currentLevel < detailClan.minJoinLevel) {
-            issues.push(
-                `Necesitas nivel ${detailClan.minJoinLevel} para postularte a este clan.`,
-            );
-        }
-
-        return issues;
-    }, [
-        currentClan,
-        currentFaction,
-        currentLevel,
-        detailClan,
-        isCurrentCharacterCriminal,
-    ]);
-    const canRequestJoinSelectedClan = missingClanJoinRequirements.length === 0;
-    const hasPendingRequestToSelectedClan = Boolean(
-        !currentClan &&
-        detailClan &&
-        clanOverview?.pendingRequestClanId === detailClan.id,
-    );
-    const isClanLeader = currentClan?.members.some(
-        (member) =>
-            member.role === "leader" &&
-            member.characterId === selectedCharacterId,
-    );
-    const isClanCoLeader = currentClan?.members.some(
-        (member) =>
-            member.role === "co_leader" &&
-            member.characterId === selectedCharacterId,
-    );
-    const canReviewClanRequests = Boolean(isClanLeader || isClanCoLeader);
-    const clanMemberActionTarget = clanMemberActionMenu
-        ? (currentClan?.members.find(
-              (member) =>
-                  member.characterId === clanMemberActionMenu.characterId,
-          ) ?? null)
-        : null;
-
-    React.useEffect(() => {
-        if (!isClanModalOpen) {
-            return;
-        }
-
-        setClanView(currentClan ? "manage" : "list");
-    }, [currentClan, isClanModalOpen]);
-
-    function formatClanAlignment(alignment: ClanAlignment) {
-        switch (alignment) {
-            case "citizen":
-                return "Ciudadano";
-            case "criminal":
-                return "Criminal";
-        }
-    }
-
-    function formatClassName(classId: number) {
-        return classLabels[classId] ?? `Clase ${classId}`;
-    }
-
-    function formatClanRole(role: ClanMember["role"]) {
-        switch (role) {
-            case "leader":
-                return "Lider";
-            case "co_leader":
-                return "Co-lider";
-            default:
-                return "Miembro";
-        }
-    }
-
-    function validateClanName(rawName: string) {
-        const normalizedName = rawName.replace(/\s+/g, " ").trim();
-
-        if (normalizedName.length < 3) {
-            return "El nombre del clan debe tener al menos 3 caracteres.";
-        }
-
-        if (normalizedName.length > 18) {
-            return "El nombre del clan no puede superar 18 caracteres.";
-        }
-
-        const spaceCount = (normalizedName.match(/ /g) ?? []).length;
-
-        if (spaceCount > 2) {
-            return "El nombre del clan solo puede contener hasta dos espacios.";
-        }
-
-        if (!clanNamePattern.test(normalizedName)) {
-            return "El nombre del clan solo puede contener letras y espacios.";
-        }
-
-        return null;
-    }
-
-    function sendClanCommand(command: string) {
-        onSendCommand?.(command);
-        scheduleClanRefresh();
-    }
-
-    const hasFoundationGem = React.useMemo(() => {
-        return items.some((item) => item.idItem === 1066 && item.amount >= 1);
-    }, [items]);
-
-    function handleCreateClan() {
-        const name = clanCreateName.replace(/\s+/g, " ").trim();
-        const minLevel = Number.parseInt(clanCreateMinLevel, 10);
-        const nameError = validateClanName(clanCreateName);
-        const currentGold = hud?.gold ?? 0;
-        const currentLevel = hud?.level ?? 0;
-
-        if (nameError) {
-            setClanError(nameError);
-            return;
-        }
-
-        if (currentLevel < CLAN_CREATION_LEVEL_REQUIRED) {
-            setClanError(
-                `Necesitas nivel ${CLAN_CREATION_LEVEL_REQUIRED} para crear un clan.`,
-            );
-            return;
-        }
-
-        if (!hasFoundationGem) {
-            setClanError("Necesitas 1 Gema de Fundación en tu inventario para fundar un clan.");
-            return;
-        }
-
-        if (!name || !Number.isInteger(minLevel) || minLevel < 1) {
-            setClanError("Completa nombre y nivel minimo validos.");
-            return;
-        }
-
-        setClanError(null);
-        setIsClanCreateConfirmOpen(true);
-    }
-
-    function confirmCreateClan() {
-        const name = clanCreateName.replace(/\s+/g, " ").trim();
-        const minLevel = Number.parseInt(clanCreateMinLevel, 10);
-        setIsClanCreateConfirmOpen(false);
-        setClanCreateName(name);
-        sendClanCommand(`/clancrear ${name}|${minLevel}`);
-    }
-
-    async function handleRequestJoin() {
-        if (!detailClan) {
-            setClanError("Selecciona un clan primero.");
-            return;
-        }
-
-        if (
-            hasPendingRequestToSelectedClan ||
-            clanRequestSubmitting ||
-            !canRequestJoinSelectedClan
-        ) {
-            return;
-        }
-
-        setClanRequestSubmitting(true);
-        setClanError(null);
-
-        try {
-            sendClanCommand(
-                `/clanpostular ${detailClan.id}|${clanRequestMessage.trim()}`,
-            );
-            setClanRequestMessage("");
-            setClanOverview((current) =>
-                current
-                    ? {
-                          ...current,
-                          pendingRequestClanId: detailClan.id,
-                      }
-                    : current,
-            );
-        } finally {
-            window.setTimeout(() => setClanRequestSubmitting(false), 700);
-        }
-    }
-
-    function handleClanReviewAction(
-        requestId: string,
-        action: "accept" | "reject",
-    ) {
-        if (clanReviewActionId) {
-            return;
-        }
-
-        setClanReviewActionId(requestId);
-        setClanError(null);
-        sendClanCommand(
-            action === "accept"
-                ? `/clanaceptar ${requestId}`
-                : `/clanrechazar ${requestId}`,
-        );
-        window.setTimeout(() => setClanReviewActionId(null), 700);
-    }
-
-    function handleClanKick(characterId: string, memberName?: string) {
-        if (clanKickActionId) {
-            return;
-        }
-
-        const confirmed = window.confirm(
-            memberName
-                ? `¿Seguro que quieres echar a ${memberName} del clan?`
-                : "¿Seguro que quieres echar a este miembro del clan?",
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setClanKickActionId(characterId);
-        setClanMemberActionMenu(null);
-        setClanError(null);
-        sendClanCommand(`/clanexpulsar ${characterId}`);
-        window.setTimeout(() => setClanKickActionId(null), 700);
-    }
-
-    function handleLeaveClan() {
-        if (clanLeaveSubmitting) {
-            return;
-        }
-
-        setClanLeaveSubmitting(true);
-        setClanError(null);
-        sendClanCommand("/clansalir");
-        window.setTimeout(() => setClanLeaveSubmitting(false), 700);
-    }
-
-    function handleClanRoleChange(
-        characterId: string,
-        role: "co_leader" | "member",
-    ) {
-        if (clanRoleActionId) {
-            return;
-        }
-
-        setClanRoleActionId(characterId);
-        setClanMemberActionMenu(null);
-        setClanError(null);
-        sendClanCommand(`/clancolider ${characterId}|${role}`);
-        window.setTimeout(() => setClanRoleActionId(null), 700);
-    }
-
-    function handleDeleteClan() {
-        if (
-            clanDeleteSubmitting ||
-            clanDeleteConfirmationText.trim() !== "BORRAR"
-        ) {
-            return;
-        }
-
-        setIsClanDeleteDialogOpen(false);
-        setClanDeleteConfirmationText("");
-        setClanDeleteSubmitting(true);
-        setClanError(null);
-        sendClanCommand("/claneliminar confirmar");
-        window.setTimeout(() => setClanDeleteSubmitting(false), 700);
-    }
-
-    function closeClanDeleteDialog() {
-        setIsClanDeleteDialogOpen(false);
-        setClanDeleteConfirmationText("");
-    }
-
-    function closeClanModal() {
-        setIsClanModalOpen(false);
-        closeClanDeleteDialog();
-    }
-
-    function handleTransferClanLeadership(
-        characterId: string,
-        memberName?: string,
-    ) {
-        if (clanLeadershipTransferActionId) {
-            return;
-        }
-
-        const confirmed = window.confirm(
-            memberName
-                ? `¿Seguro que quieres transferir el liderazgo del clan a ${memberName}? Dejarás de ser el lider.`
-                : "¿Seguro que quieres transferir el liderazgo del clan? Dejarás de ser el lider.",
-        );
-
-        if (!confirmed) {
-            return;
-        }
-
-        setClanLeadershipTransferActionId(characterId);
-        setClanMemberActionMenu(null);
-        setClanError(null);
-        sendClanCommand(`/clanlider ${characterId}`);
-        window.setTimeout(() => setClanLeadershipTransferActionId(null), 700);
-    }
-
-    async function openClanDetail(clanId: string) {
-        setSelectedClanId(clanId);
-        setClanLoading(true);
-        setClanError(null);
-
-        try {
-            if (!selectedCharacterId) {
-                throw new Error("No hay personaje seleccionado.");
-            }
-
-            const response = await fetch(
-                `/api/clans/${encodeURIComponent(clanId)}`,
-                { cache: "no-store" },
-            );
-            const result = await response.json();
-
-            if (!response.ok) {
-                throw new Error(
-                    typeof result?.error === "string"
-                        ? result.error
-                        : "No se pudo cargar el clan.",
-                );
-            }
-
-            setSelectedClanDetails(result as ClanDetails);
-        } catch (error) {
-            setClanError(
-                error instanceof Error
-                    ? error.message
-                    : "No se pudo cargar el clan.",
-            );
-            return;
-        } finally {
-            setClanLoading(false);
-        }
-
-        setClanView("detail");
-    }
     const equippedArmor = React.useMemo(() => {
         if (!objectsDB) {
             return null;
@@ -1920,13 +1379,6 @@ export default function InventoryFloatingPanel({
         }
     }, [selectedSpell]);
 
-    React.useEffect(() => {
-        return () => {
-            if (hoverTimerRef.current) {
-                window.clearTimeout(hoverTimerRef.current);
-            }
-        };
-    }, []);
 
     React.useEffect(() => {
         setHardwareAccelerationWarning(detectHardwareAccelerationWarning());
@@ -2228,24 +1680,6 @@ export default function InventoryFloatingPanel({
         );
     }, [inventoryStartSlot, items, totalSlots]);
 
-    const showTooltipWithDelay = (item: InventoryItem) => {
-        if (hoverTimerRef.current) {
-            window.clearTimeout(hoverTimerRef.current);
-        }
-
-        hoverTimerRef.current = window.setTimeout(() => {
-            setHoveredItem(item);
-        }, HOVER_DELAY_MS);
-    };
-
-    const clearTooltip = () => {
-        if (hoverTimerRef.current) {
-            window.clearTimeout(hoverTimerRef.current);
-            hoverTimerRef.current = null;
-        }
-        setHoveredItem(null);
-    };
-
     const finishInventoryDrag = React.useCallback(
         (clientX: number, clientY: number) => {
             if (!draggedInventoryItem) {
@@ -2304,10 +1738,8 @@ export default function InventoryFloatingPanel({
         <>
             <div
                 ref={panelRef}
-                className="pointer-events-auto flex w-[min(92vw,320px)] flex-col overflow-hidden rounded-2xl border border-cyan-300/25 bg-slate-950/78 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.55)] backdrop-blur-xl"
+                className="pointer-events-auto flex w-[min(92vw,320px)] min-h-0 flex-1 flex-col overflow-hidden rounded-2xl border border-cyan-300/25 bg-slate-950/78 text-slate-100 shadow-[0_24px_80px_rgba(15,23,42,0.55)] backdrop-blur-xl"
                 style={{
-                    height: panelHeight,
-                    minHeight: panelHeight,
                     maxHeight: panelHeight,
                 }}
             >
@@ -2337,6 +1769,29 @@ export default function InventoryFloatingPanel({
                                         {hud?.nameCharacter || "Aventurero"}
                                     </h3>
                                 </div>
+                                {switchCharacterHref ? (
+                                    <Link
+                                        href={switchCharacterHref}
+                                        prefetch={false}
+                                        onClick={onSwitchCharacterClick}
+                                        className="group relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-amber-200/15 bg-black/20 text-amber-100/80 transition hover:border-amber-300/45 hover:bg-black/35 hover:text-amber-50"
+                                        aria-label={
+                                            switchCharacterLabel ??
+                                            "Cambiar personaje"
+                                        }
+                                        title={
+                                            switchCharacterLabel ??
+                                            "Cambiar personaje"
+                                        }
+                                    >
+                                        <span className="absolute inset-0 rounded-full bg-[radial-gradient(circle,rgba(251,191,36,0.16),transparent_62%)] opacity-0 transition group-hover:opacity-100" />
+                                        <Repeat
+                                            aria-hidden="true"
+                                            className="relative h-[16px] w-[16px]"
+                                            strokeWidth={1.8}
+                                        />
+                                    </Link>
+                                ) : null}
                                 <button
                                     type="button"
                                     onClick={() => setIsSettingsOpen(true)}
@@ -2458,7 +1913,6 @@ export default function InventoryFloatingPanel({
                                                                 item
                                                             ) {
                                                                 event.preventDefault();
-                                                                clearTooltip();
                                                                 setSelectedSlot(
                                                                     item.slot,
                                                                 );
@@ -2490,22 +1944,6 @@ export default function InventoryFloatingPanel({
                                                                 item,
                                                             )
                                                         }
-                                                        onMouseEnter={() =>
-                                                            item &&
-                                                            showTooltipWithDelay(
-                                                                item,
-                                                            )
-                                                        }
-                                                        onMouseLeave={
-                                                            clearTooltip
-                                                        }
-                                                        onFocus={() =>
-                                                            item &&
-                                                            showTooltipWithDelay(
-                                                                item,
-                                                            )
-                                                        }
-                                                        onBlur={clearTooltip}
                                                     >
                                                         {item ? (
                                                             <>
@@ -2541,24 +1979,10 @@ export default function InventoryFloatingPanel({
                                         </div>
                                     </div>
 
-                                    {hoveredItem ? (
-                                        <div className="rounded-2xl border border-amber-200/15 bg-black/45 px-3 py-2 text-[11px] leading-4 text-stone-200">
-                                            <p className="font-semibold text-amber-100">
-                                                {hoveredItem.name}
-                                            </p>
-                                            {hoveredItem.details ? (
-                                                <p className="mt-1 whitespace-pre-wrap text-stone-300/90">
-                                                    {hoveredItem.details}
-                                                </p>
-                                            ) : null}
-                                        </div>
-                                    ) : null}
-
                                     <EloRankBadgeCard
                                         rating={hud?.rating}
                                         wins={hud?.arenaWins}
                                         losses={hud?.arenaLosses}
-                                        className="mt-auto"
                                     />
                                 </div>
                             ) : (
@@ -2777,9 +2201,7 @@ export default function InventoryFloatingPanel({
                                         </button>
                                         <button
                                             type="button"
-                                            onClick={() =>
-                                                setIsClanModalOpen(true)
-                                            }
+                                            onClick={clan.openClanModal}
                                             className="inline-flex min-w-0 items-center justify-center gap-2 rounded-[10px] border border-[#4f3f2b] bg-[linear-gradient(180deg,#2d2218_0%,#17100a_100%)] px-3 py-1.5 text-center text-[11px] font-semibold text-amber-100 transition hover:border-[#8c6a43]"
                                         >
                                             <Shield className="h-4 w-4 text-amber-300" />
@@ -3472,797 +2894,7 @@ export default function InventoryFloatingPanel({
                 </div>
             ) : null}
 
-            {isClanModalOpen ? (
-                <div
-                    className="fixed inset-0 z-[84] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[3px]"
-                    onClick={closeClanModal}
-                >
-                    <div
-                        className="w-full max-w-3xl overflow-hidden rounded-[24px] border border-amber-200/20 bg-[#120c08]/96 text-stone-100 shadow-[0_28px_90px_rgba(0,0,0,0.6)]"
-                        onClick={(event) => event.stopPropagation()}
-                    >
-                        <div className="flex items-center justify-between gap-4 border-b border-amber-200/10 bg-[linear-gradient(180deg,rgba(127,78,35,0.28),rgba(18,12,8,0))] px-4 py-3">
-                            <div>
-                                <p className="text-[11px] uppercase tracking-[0.28em] text-amber-300/72">
-                                    Clanes
-                                </p>
-                                <h3 className="mt-1 text-lg font-semibold text-[#f2e5ca]">
-                                    {clanView === "detail" && detailClan
-                                        ? `<${detailClan.name}>`
-                                        : clanView === "create"
-                                          ? "Crear clan"
-                                          : currentClan
-                                            ? `<${currentClan.name}>`
-                                            : "Clanes disponibles"}
-                                </h3>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                {!currentClan && clanView !== "create" ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setClanView("create")}
-                                        className="rounded-[10px] border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-3 py-2 text-[11px] font-bold text-amber-100 transition hover:border-[#c39a6a]"
-                                    >
-                                        Crear clan
-                                    </button>
-                                ) : null}
-                                {currentClan ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setClanView("list")}
-                                        className="rounded-[10px] border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-3 py-2 text-[11px] font-bold text-amber-100 transition hover:border-[#c39a6a]"
-                                    >
-                                        Ver clanes
-                                    </button>
-                                ) : null}
-                                {clanView === "detail" ? (
-                                    <button
-                                        type="button"
-                                        onClick={() =>
-                                            setClanView(
-                                                currentClan ? "manage" : "list",
-                                            )
-                                        }
-                                        className="rounded-[10px] border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-3 py-2 text-[11px] font-bold text-amber-100 transition hover:border-[#c39a6a]"
-                                    >
-                                        Volver
-                                    </button>
-                                ) : null}
-                                {clanView === "create" ? (
-                                    <button
-                                        type="button"
-                                        onClick={() => setClanView("list")}
-                                        className="rounded-[10px] border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-3 py-2 text-[11px] font-bold text-amber-100 transition hover:border-[#c39a6a]"
-                                    >
-                                        Volver
-                                    </button>
-                                ) : null}
-                                <button
-                                    type="button"
-                                    onClick={() => void refreshClanOverview()}
-                                    className="rounded-[10px] border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-3 py-2 text-[11px] font-bold text-amber-100 transition hover:border-[#c39a6a]"
-                                >
-                                    Refrescar
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={closeClanModal}
-                                    className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-700 bg-black/20 text-stone-300 transition hover:border-stone-500 hover:text-white"
-                                    aria-label="Cerrar clanes"
-                                >
-                                    <X
-                                        aria-hidden="true"
-                                        className="h-4 w-4"
-                                        strokeWidth={1.8}
-                                    />
-                                </button>
-                            </div>
-                        </div>
-
-                        <div className="px-4 py-4">
-                            {clanView === "list" ? (
-                                <div>
-                                    <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                        <div className="flex items-center justify-between gap-2">
-                                            <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                                Clanes disponibles
-                                            </p>
-                                            <span className="text-[11px] text-stone-400">
-                                                {clanOverview?.clans.length ??
-                                                    0}
-                                            </span>
-                                        </div>
-                                        <div className="mt-3 max-h-[420px] space-y-3 overflow-y-auto pr-1">
-                                            {(clanOverview?.clans ?? []).map(
-                                                (clan) => (
-                                                    <div
-                                                        key={clan.id}
-                                                        className="rounded-[14px] border border-white/8 bg-white/3 px-3 py-3"
-                                                    >
-                                                        <div className="flex items-start justify-between gap-3">
-                                                            <div className="min-w-0">
-                                                                <div className="text-sm font-semibold text-stone-100">
-                                                                    {`<${clan.name}>`}
-                                                                </div>
-                                                                <div className="mt-1 text-xs text-stone-400">
-                                                                    {formatClanAlignment(
-                                                                        clan.alignment,
-                                                                    )}{" "}
-                                                                    • Lider{" "}
-                                                                    {
-                                                                        clan.leaderName
-                                                                    }
-                                                                </div>
-                                                                <div className="mt-1 text-xs text-stone-500">
-                                                                    Miembros{" "}
-                                                                    {
-                                                                        clan.memberCount
-                                                                    }{" "}
-                                                                    • Minimo{" "}
-                                                                    {
-                                                                        clan.minJoinLevel
-                                                                    }
-                                                                </div>
-                                                            </div>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() =>
-                                                                    openClanDetail(
-                                                                        clan.id,
-                                                                    )
-                                                                }
-                                                                aria-label={`Ver clan ${clan.name}`}
-                                                                className="shrink-0 rounded-[10px] border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-3 py-2 text-[11px] font-bold text-amber-100 transition hover:border-[#c39a6a]"
-                                                            >
-                                                                Ver clan
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                ),
-                                            )}
-                                            {!clanLoading &&
-                                            !clanError &&
-                                            !(
-                                                clanOverview?.clans.length ?? 0
-                                            ) ? (
-                                                <div className="rounded-[14px] border border-white/8 bg-white/3 px-3 py-4 text-sm text-stone-400">
-                                                    No hay clanes creados
-                                                    todavía.
-                                                </div>
-                                            ) : null}
-                                        </div>
-                                    </section>
-                                </div>
-                            ) : null}
-
-                            {clanView === "create" && !currentClan ? (
-                                <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                    <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                        Fundar nuevo clan
-                                    </p>
-
-                                    <div className="mt-3 rounded-[14px] border border-white/10 bg-black/30 p-3 space-y-2 text-xs">
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-stone-300">💎 Gema de Fundación (1x inventario):</span>
-                                            {hasFoundationGem ? (
-                                                <span className="font-semibold text-emerald-400">✓ Posees la gema</span>
-                                            ) : (
-                                                <span className="font-semibold text-rose-400">✗ No la posees</span>
-                                            )}
-                                        </div>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-stone-300">🏆 Nivel mínimo (30):</span>
-                                            {(hud?.level ?? 0) >= CLAN_CREATION_LEVEL_REQUIRED ? (
-                                                <span className="font-semibold text-emerald-400">✓ Nivel {hud?.level}</span>
-                                            ) : (
-                                                <span className="font-semibold text-rose-400">✗ Nivel {hud?.level ?? 0}/30</span>
-                                            )}
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                                        <label className="sm:col-span-2">
-                                            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
-                                                Nombre del clan
-                                            </span>
-                                            <input
-                                                type="text"
-                                                value={clanCreateName}
-                                                onChange={(event) =>
-                                                    setClanCreateName(
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                maxLength={18}
-                                                placeholder="Nombre del clan"
-                                                className="w-full rounded-2xl border border-stone-700 bg-stone-950/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
-                                            />
-                                        </label>
-                                        <label className="sm:col-span-2">
-                                            <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-stone-400">
-                                                Nivel mínimo para ingresar
-                                            </span>
-                                            <input
-                                                type="number"
-                                                min={1}
-                                                max={45}
-                                                value={clanCreateMinLevel}
-                                                onChange={(event) =>
-                                                    setClanCreateMinLevel(
-                                                        event.target.value,
-                                                    )
-                                                }
-                                                placeholder="Nivel minimo"
-                                                className="w-full rounded-2xl border border-stone-700 bg-stone-950/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
-                                            />
-                                        </label>
-                                    </div>
-                                    <button
-                                        type="button"
-                                        onClick={handleCreateClan}
-                                        className="mt-4 w-full rounded-2xl bg-amber-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-amber-200"
-                                    >
-                                        Fundar Clan
-                                    </button>
-                                </section>
-                            ) : null}
-
-                            {clanView === "detail" && detailClan ? (
-                                <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-                                    <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                        <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                            Información del clan
-                                        </p>
-                                        <h4 className="mt-2 text-xl font-semibold text-stone-100">
-                                            {`<${detailClan.name}>`}
-                                        </h4>
-                                        <p className="mt-1 text-sm text-stone-400">
-                                            {formatClanAlignment(
-                                                detailClan.alignment,
-                                            )}{" "}
-                                            • Lider {detailClan.leaderName}
-                                        </p>
-                                        <p className="mt-1 text-sm text-stone-400">
-                                            Miembros {detailClan.memberCount} •
-                                            Nivel minimo{" "}
-                                            {detailClan.minJoinLevel}
-                                        </p>
-                                        {!currentClan ? (
-                                            <>
-                                                {hasPendingRequestToSelectedClan ? (
-                                                    <div className="mt-3 rounded-[14px] border border-amber-300/20 bg-amber-400/10 px-3 py-3 text-sm text-amber-100">
-                                                        Ya enviaste una
-                                                        solicitud a este clan.
-                                                    </div>
-                                                ) : !canRequestJoinSelectedClan ? (
-                                                    <div className="mt-3 rounded-[14px] border border-rose-400/25 bg-rose-500/10 px-3 py-3 text-sm text-rose-100">
-                                                        {missingClanJoinRequirements.map(
-                                                            (issue) => (
-                                                                <p key={issue}>
-                                                                    {issue}
-                                                                </p>
-                                                            ),
-                                                        )}
-                                                    </div>
-                                                ) : (
-                                                    <>
-                                                        <textarea
-                                                            value={
-                                                                clanRequestMessage
-                                                            }
-                                                            onChange={(event) =>
-                                                                setClanRequestMessage(
-                                                                    event.target
-                                                                        .value,
-                                                                )
-                                                            }
-                                                            placeholder="Mensaje opcional para el lider"
-                                                            rows={6}
-                                                            className="mt-4 w-full rounded-2xl border border-stone-700 bg-stone-950/90 px-4 py-3 text-sm outline-none transition focus:border-amber-400"
-                                                        />
-                                                        <button
-                                                            type="button"
-                                                            onClick={
-                                                                handleRequestJoin
-                                                            }
-                                                            disabled={
-                                                                clanRequestSubmitting
-                                                            }
-                                                            className="mt-4 w-full rounded-2xl bg-cyan-300 px-4 py-3 text-sm font-semibold text-stone-950 transition hover:bg-cyan-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400"
-                                                        >
-                                                            {clanRequestSubmitting
-                                                                ? "Enviando solicitud..."
-                                                                : "Enviar solicitud"}
-                                                        </button>
-                                                    </>
-                                                )}
-                                            </>
-                                        ) : null}
-                                    </section>
-
-                                    <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                        <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                            Miembros
-                                        </p>
-                                        <div className="mt-3 max-h-[320px] space-y-2 overflow-y-auto pr-1">
-                                            {detailClan.members.map(
-                                                (member) => (
-                                                    <div
-                                                        key={member.characterId}
-                                                        className="rounded-[14px] border border-white/8 bg-white/3 px-3 py-3"
-                                                    >
-                                                        <div className="text-sm font-semibold text-stone-100">
-                                                            {member.name}
-                                                        </div>
-                                                        <div className="mt-1 text-xs text-stone-400">
-                                                            {formatClassName(
-                                                                member.classId,
-                                                            )}{" "}
-                                                            • Nivel{" "}
-                                                            {member.level} •{" "}
-                                                            {member.criminal
-                                                                ? "Criminal"
-                                                                : "Ciudadano"}
-                                                            {member.online ===
-                                                            null ? null : (
-                                                                <>
-                                                                    {" "}
-                                                                    •{" "}
-                                                                    <span
-                                                                        className={
-                                                                            member.online
-                                                                                ? "text-emerald-400"
-                                                                                : "text-rose-400"
-                                                                        }
-                                                                    >
-                                                                        {member.online
-                                                                            ? "Online"
-                                                                            : "Offline"}
-                                                                    </span>
-                                                                </>
-                                                            )}
-                                                        </div>
-                                                    </div>
-                                                ),
-                                            )}
-                                        </div>
-                                    </section>
-                                </div>
-                            ) : null}
-
-                            {clanView === "manage" && currentClan ? (
-                                <div className="grid gap-4 md:grid-cols-[1fr_1fr]">
-                                    <div className="space-y-4">
-                                        <section className="relative rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                            <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                                Tu clan
-                                            </p>
-                                            {isClanLeader ? (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        setIsClanDeleteDialogOpen(
-                                                            true,
-                                                        );
-                                                        setClanDeleteConfirmationText(
-                                                            "",
-                                                        );
-                                                    }}
-                                                    disabled={
-                                                        clanDeleteSubmitting
-                                                    }
-                                                    aria-label="Borrar clan"
-                                                    title="Borrar clan"
-                                                    className="absolute right-3 top-3 inline-flex h-7 w-7 items-center justify-center rounded-full border border-white/8 bg-black/20 text-stone-400 opacity-70 transition hover:border-rose-500/50 hover:bg-rose-950/40 hover:text-rose-200 hover:opacity-100 disabled:cursor-not-allowed disabled:border-white/5 disabled:bg-black/10 disabled:text-stone-600"
-                                                >
-                                                    <Trash2 className="h-3.5 w-3.5" />
-                                                </button>
-                                            ) : null}
-                                            <h4 className="mt-2 text-xl font-semibold text-stone-100">
-                                                {`<${currentClan.name}>`}
-                                            </h4>
-                                            <p className="mt-1 text-sm text-stone-400">
-                                                {formatClanAlignment(
-                                                    currentClan.alignment,
-                                                )}{" "}
-                                                • Lider {currentClan.leaderName}
-                                            </p>
-                                            <p className="mt-1 text-sm text-stone-400">
-                                                Miembros{" "}
-                                                {currentClan.memberCount} •
-                                                Nivel minimo{" "}
-                                                {currentClan.minJoinLevel}
-                                            </p>
-                                            {!isClanLeader && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleLeaveClan}
-                                                    disabled={
-                                                        clanLeaveSubmitting
-                                                    }
-                                                    className="mt-4 w-full rounded-2xl border border-[#8b6a47] bg-[linear-gradient(180deg,#46331f_0%,#26180e_100%)] px-4 py-3 text-sm font-semibold text-amber-100 transition hover:border-[#c39a6a] disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-stone-900 disabled:text-stone-400"
-                                                >
-                                                    {clanLeaveSubmitting
-                                                        ? "Saliendo del clan..."
-                                                        : "Salir del clan"}
-                                                </button>
-                                            )}
-                                        </section>
-
-                                        <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                            <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                                Miembros
-                                            </p>
-                                            <div className="mt-3 max-h-[300px] space-y-2 overflow-y-auto pr-1">
-                                                {currentClan.members.map(
-                                                    (member) => {
-                                                        const canKick =
-                                                            isClanLeader &&
-                                                            member.role !==
-                                                                "leader";
-                                                        const canManageRole =
-                                                            isClanLeader &&
-                                                            member.role !==
-                                                                "leader";
-                                                        const canTransferLeadership =
-                                                            isClanLeader &&
-                                                            member.role !==
-                                                                "leader";
-                                                        return (
-                                                            <div
-                                                                key={
-                                                                    member.characterId
-                                                                }
-                                                                className="rounded-[14px] border border-white/8 bg-white/3 px-3 py-3"
-                                                            >
-                                                                <div className="flex items-center justify-between gap-3">
-                                                                    <div className="min-w-0">
-                                                                        <div className="truncate text-sm font-semibold text-stone-100">
-                                                                            {
-                                                                                member.name
-                                                                            }
-                                                                        </div>
-                                                                        <div className="mt-1 text-xs text-stone-400">
-                                                                            {formatClanRole(
-                                                                                member.role,
-                                                                            )}{" "}
-                                                                            •{" "}
-                                                                            {formatClassName(
-                                                                                member.classId,
-                                                                            )}{" "}
-                                                                            •
-                                                                            Nivel{" "}
-                                                                            {
-                                                                                member.level
-                                                                            }{" "}
-                                                                            •{" "}
-                                                                            {member.criminal
-                                                                                ? "Criminal"
-                                                                                : "Ciudadano"}
-                                                                            {member.online ===
-                                                                            null ? null : (
-                                                                                <>
-                                                                                    {" "}
-                                                                                    •{" "}
-                                                                                    <span
-                                                                                        className={
-                                                                                            member.online
-                                                                                                ? "text-emerald-400"
-                                                                                                : "text-rose-400"
-                                                                                        }
-                                                                                    >
-                                                                                        {member.online
-                                                                                            ? "Online"
-                                                                                            : "Offline"}
-                                                                                    </span>
-                                                                                </>
-                                                                            )}
-                                                                        </div>
-                                                                    </div>
-                                                                    {canTransferLeadership ||
-                                                                    canManageRole ||
-                                                                    canKick ? (
-                                                                        <div>
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={(
-                                                                                    event,
-                                                                                ) => {
-                                                                                    const bounds =
-                                                                                        event.currentTarget.getBoundingClientRect();
-                                                                                    setClanMemberActionMenu(
-                                                                                        clanMemberActionMenu?.characterId ===
-                                                                                            member.characterId
-                                                                                            ? null
-                                                                                            : {
-                                                                                                  characterId:
-                                                                                                      member.characterId,
-                                                                                                  memberName:
-                                                                                                      member.name,
-                                                                                                  left: bounds.right,
-                                                                                                  top: bounds.bottom,
-                                                                                              },
-                                                                                    );
-                                                                                }}
-                                                                                aria-label={`Acciones para ${member.name}`}
-                                                                                className="inline-flex h-9 w-9 items-center justify-center rounded-[10px] border border-white/10 bg-black/20 text-stone-300 transition hover:border-white/20 hover:text-stone-100"
-                                                                            >
-                                                                                <MoreHorizontal className="h-4 w-4" />
-                                                                            </button>
-                                                                        </div>
-                                                                    ) : null}
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    },
-                                                )}
-                                            </div>
-                                        </section>
-                                    </div>
-
-                                    <div className="space-y-4">
-                                        {canReviewClanRequests ? (
-                                            <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                                <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                                    Solicitudes
-                                                </p>
-                                                <div className="mt-3 max-h-[420px] space-y-2 overflow-y-auto pr-1">
-                                                    {currentClan.requests
-                                                        .length ? (
-                                                        currentClan.requests.map(
-                                                            (request) => (
-                                                                <div
-                                                                    key={
-                                                                        request.id
-                                                                    }
-                                                                    className="rounded-[14px] border border-white/8 bg-white/3 px-3 py-3"
-                                                                >
-                                                                    <div className="text-sm font-semibold text-stone-100">
-                                                                        {
-                                                                            request.name
-                                                                        }
-                                                                    </div>
-                                                                    <div className="mt-1 text-xs text-stone-400">
-                                                                        {formatClassName(
-                                                                            request.classId,
-                                                                        )}{" "}
-                                                                        • Nivel{" "}
-                                                                        {
-                                                                            request.level
-                                                                        }{" "}
-                                                                        •{" "}
-                                                                        {request.criminal
-                                                                            ? "Criminal"
-                                                                            : "Ciudadano"}{" "}
-                                                                        •{" "}
-                                                                        <span
-                                                                            className={
-                                                                                request.online
-                                                                                    ? "text-emerald-400"
-                                                                                    : "text-rose-400"
-                                                                            }
-                                                                        >
-                                                                            {request.online
-                                                                                ? "Online"
-                                                                                : "Offline"}
-                                                                        </span>
-                                                                    </div>
-                                                                    <p className="mt-2 text-sm text-stone-300">
-                                                                        {request.message ||
-                                                                            "Sin mensaje"}
-                                                                    </p>
-                                                                    <div className="mt-3 flex gap-2">
-                                                                        <button
-                                                                            type="button"
-                                                                            onClick={() =>
-                                                                                handleClanReviewAction(
-                                                                                    request.id,
-                                                                                    "accept",
-                                                                                )
-                                                                            }
-                                                                            aria-label={`Aceptar solicitud de ${request.name}`}
-                                                                            disabled={Boolean(
-                                                                                clanReviewActionId,
-                                                                            )}
-                                                                            className="flex-1 rounded-2xl bg-emerald-300 px-3 py-2 text-sm font-semibold text-stone-950 transition hover:bg-emerald-200 disabled:cursor-not-allowed disabled:bg-stone-700 disabled:text-stone-400"
-                                                                        >
-                                                                            {clanReviewActionId ===
-                                                                            request.id
-                                                                                ? "Procesando..."
-                                                                                : "Aceptar"}
-                                                                        </button>
-                                                                        {isClanLeader ? (
-                                                                            <button
-                                                                                type="button"
-                                                                                onClick={() =>
-                                                                                    handleClanReviewAction(
-                                                                                        request.id,
-                                                                                        "reject",
-                                                                                    )
-                                                                                }
-                                                                                aria-label={`Rechazar solicitud de ${request.name}`}
-                                                                                disabled={Boolean(
-                                                                                    clanReviewActionId,
-                                                                                )}
-                                                                                className="flex-1 rounded-2xl border border-rose-700/60 bg-rose-950/70 px-3 py-2 text-sm font-semibold text-rose-100 transition hover:border-rose-500 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-stone-900 disabled:text-stone-400"
-                                                                            >
-                                                                                {clanReviewActionId ===
-                                                                                request.id
-                                                                                    ? "Procesando..."
-                                                                                    : "Rechazar"}
-                                                                            </button>
-                                                                        ) : null}
-                                                                    </div>
-                                                                </div>
-                                                            ),
-                                                        )
-                                                    ) : (
-                                                        <div className="rounded-[14px] border border-white/8 bg-white/3 px-3 py-4 text-sm text-stone-400">
-                                                            No hay solicitudes
-                                                            pendientes.
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </section>
-                                        ) : (
-                                            <section className="rounded-[18px] border border-white/8 bg-white/4 p-4">
-                                                <p className="text-[11px] uppercase tracking-[0.22em] text-amber-300/78">
-                                                    Estado del clan
-                                                </p>
-                                                <p className="mt-3 text-sm text-stone-300">
-                                                    Aquí puedes ver la
-                                                    información general del clan
-                                                    y sus miembros.
-                                                </p>
-                                            </section>
-                                        )}
-                                    </div>
-                                </div>
-                            ) : null}
-
-                            {clanLoading ? (
-                                <div className="mt-4 rounded-[14px] border border-white/8 bg-white/3 px-3 py-4 text-sm text-stone-400">
-                                    Cargando clanes...
-                                </div>
-                            ) : null}
-
-                            {clanError ? (
-                                <div className="mt-4 rounded-[14px] border border-rose-400/25 bg-rose-500/10 px-3 py-4 text-sm text-rose-100">
-                                    {clanError}
-                                </div>
-                            ) : null}
-                        </div>
-
-                        {isClanDeleteDialogOpen ? (
-                            <div
-                                className="fixed inset-0 z-[85] flex items-center justify-center bg-black/55 px-4 backdrop-blur-[3px]"
-                                onClick={closeClanDeleteDialog}
-                            >
-                                <div
-                                    className="w-full max-w-md rounded-[28px] border border-rose-400/20 bg-[linear-gradient(180deg,rgba(32,12,12,0.97),rgba(18,12,8,0.98))] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.6)]"
-                                    onClick={(event) => event.stopPropagation()}
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className="rounded-2xl border border-rose-400/25 bg-rose-400/10 p-3 text-rose-100">
-                                            <Trash2 className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-lg font-semibold text-white">
-                                                Borrar clan
-                                            </p>
-                                            <p className="mt-2 text-sm leading-6 text-stone-300">
-                                                Se eliminara el clan para todos
-                                                los miembros, online y offline.
-                                            </p>
-                                            <p className="mt-3 text-sm leading-6 text-stone-400">
-                                                Escribe{" "}
-                                                <span className="font-semibold text-white">
-                                                    BORRAR
-                                                </span>{" "}
-                                                para confirmar.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    <label className="mt-6 block">
-                                        <span className="text-xs font-medium uppercase tracking-[0.22em] text-stone-400">
-                                            Confirmacion
-                                        </span>
-                                        <input
-                                            type="text"
-                                            value={clanDeleteConfirmationText}
-                                            onChange={(event) =>
-                                                setClanDeleteConfirmationText(
-                                                    event.target.value,
-                                                )
-                                            }
-                                            autoComplete="off"
-                                            spellCheck={false}
-                                            disabled={clanDeleteSubmitting}
-                                            className="mt-2 w-full rounded-2xl border border-white/10 bg-white/5 px-4 py-3 text-sm text-white outline-none transition placeholder:text-stone-500 focus:border-rose-400/50 focus:bg-white/7 disabled:cursor-not-allowed disabled:opacity-60"
-                                            placeholder="BORRAR"
-                                        />
-                                    </label>
-
-                                    <div className="mt-6 flex justify-end gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={closeClanDeleteDialog}
-                                            disabled={clanDeleteSubmitting}
-                                            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={handleDeleteClan}
-                                            disabled={
-                                                clanDeleteSubmitting ||
-                                                clanDeleteConfirmationText.trim() !==
-                                                    "BORRAR"
-                                            }
-                                            className="rounded-full border border-rose-400/35 bg-rose-500/15 px-4 py-2 text-sm font-medium text-rose-100 transition hover:border-rose-400/55 hover:bg-rose-500/20 disabled:cursor-not-allowed disabled:opacity-60"
-                                        >
-                                            {clanDeleteSubmitting
-                                                ? "Borrando..."
-                                                : "Confirmar borrado"}
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : null}
-
-                        {isClanCreateConfirmOpen ? (
-                            <div
-                                className="fixed inset-0 z-[85] flex items-center justify-center bg-black/55 px-4 backdrop-blur-[3px]"
-                                onClick={() => setIsClanCreateConfirmOpen(false)}
-                            >
-                                <div
-                                    className="w-full max-w-md rounded-[28px] border border-amber-400/20 bg-[linear-gradient(180deg,rgba(24,20,12,0.97),rgba(14,10,6,0.98))] p-6 shadow-[0_28px_90px_rgba(0,0,0,0.6)]"
-                                    onClick={(event) => event.stopPropagation()}
-                                >
-                                    <div className="flex items-start gap-4">
-                                        <div className="rounded-2xl border border-amber-400/25 bg-amber-400/10 p-3 text-amber-100">
-                                            <Shield className="h-5 w-5" />
-                                        </div>
-                                        <div>
-                                            <p className="text-lg font-semibold text-white">
-                                                Confirmar Fundación de Clan
-                                            </p>
-                                            <p className="mt-2 text-sm leading-6 text-stone-300">
-                                                ¿Estás seguro de que deseas fundar el clan{" "}
-                                                <span className="font-semibold text-amber-300">
-                                                    &lt;{clanCreateName.trim()}&gt;
-                                                </span>?
-                                            </p>
-                                            <div className="mt-3 space-y-1 text-xs text-stone-400">
-                                                <p>• Se consumirá <span className="text-emerald-400 font-semibold">1x Gema de Fundación</span>.</p>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    <div className="mt-6 flex justify-end gap-3">
-                                        <button
-                                            type="button"
-                                            onClick={() => setIsClanCreateConfirmOpen(false)}
-                                            className="rounded-full border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-stone-200 transition hover:border-white/20 hover:bg-white/10"
-                                        >
-                                            Cancelar
-                                        </button>
-                                        <button
-                                            type="button"
-                                            onClick={confirmCreateClan}
-                                            className="rounded-full border border-amber-400/35 bg-amber-500/20 px-5 py-2 text-sm font-semibold text-amber-100 transition hover:border-amber-400 hover:bg-amber-500/30"
-                                        >
-                                            Confirmar Fundación
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        ) : null}
-                    </div>
-                </div>
-            ) : null}
+            <ClanPanel clan={clan} />
 
             {isHotkeySettingsOpen ? (
                 <div className="fixed inset-0 z-[85] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[3px]">
@@ -4433,83 +3065,7 @@ export default function InventoryFloatingPanel({
                 </div>
             ) : null}
 
-            {clanMemberActionMenu && clanMemberActionTarget
-                ? createPortal(
-                      <div
-                          className="fixed inset-0 z-[86]"
-                          onClick={() => setClanMemberActionMenu(null)}
-                      >
-                          <div
-                              className="absolute flex min-w-[190px] flex-col gap-2 rounded-[14px] border border-white/10 bg-[#1b140f]/95 p-2 shadow-[0_12px_32px_rgba(0,0,0,0.35)] backdrop-blur-sm"
-                              style={{
-                                  left: clanMemberActionMenu.left,
-                                  top: clanMemberActionMenu.top,
-                                  transform: "translate(-100%, 8px)",
-                              }}
-                              onClick={(event) => event.stopPropagation()}
-                          >
-                              <button
-                                  type="button"
-                                  onClick={() =>
-                                      handleTransferClanLeadership(
-                                          clanMemberActionTarget.characterId,
-                                          clanMemberActionTarget.name,
-                                      )
-                                  }
-                                  disabled={Boolean(
-                                      clanLeadershipTransferActionId,
-                                  )}
-                                  className="rounded-[10px] border border-amber-700/60 bg-amber-950/55 px-3 py-2 text-left text-[11px] font-semibold text-amber-100 transition hover:border-amber-500 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-stone-900 disabled:text-stone-400"
-                              >
-                                  {clanLeadershipTransferActionId ===
-                                  clanMemberActionTarget.characterId
-                                      ? "Procesando..."
-                                      : "Transferir liderazgo"}
-                              </button>
-                              <button
-                                  type="button"
-                                  onClick={() =>
-                                      handleClanRoleChange(
-                                          clanMemberActionTarget.characterId,
-                                          clanMemberActionTarget.role ===
-                                              "co_leader"
-                                              ? "member"
-                                              : "co_leader",
-                                      )
-                                  }
-                                  disabled={Boolean(clanRoleActionId)}
-                                  className="rounded-[10px] border border-sky-700/60 bg-sky-950/60 px-3 py-2 text-left text-[11px] font-semibold text-sky-100 transition hover:border-sky-500 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-stone-900 disabled:text-stone-400"
-                              >
-                                  {clanRoleActionId ===
-                                  clanMemberActionTarget.characterId
-                                      ? "Procesando..."
-                                      : clanMemberActionTarget.role ===
-                                          "co_leader"
-                                        ? "Quitar co-lider"
-                                        : "Hacer co-lider"}
-                              </button>
-                              <button
-                                  type="button"
-                                  onClick={() =>
-                                      handleClanKick(
-                                          clanMemberActionTarget.characterId,
-                                          clanMemberActionTarget.name,
-                                      )
-                                  }
-                                  aria-label={`Echar a ${clanMemberActionTarget.name}`}
-                                  disabled={Boolean(clanKickActionId)}
-                                  className="rounded-[10px] border border-rose-700/60 bg-rose-950/70 px-3 py-2 text-left text-[11px] font-semibold text-rose-100 transition hover:border-rose-500 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-stone-900 disabled:text-stone-400"
-                              >
-                                  {clanKickActionId ===
-                                  clanMemberActionTarget.characterId
-                                      ? "Procesando..."
-                                      : "Echar"}
-                              </button>
-                          </div>
-                      </div>,
-                      portalTarget ?? document.body,
-                  )
-                : null}
+            <ClanMemberActionMenu clan={clan} portalTarget={portalTarget} />
 
             {isSpellInfoOpen && selectedSpell ? (
                 <div

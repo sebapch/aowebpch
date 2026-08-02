@@ -51,7 +51,6 @@ type UseClientInputDiagnosticsOptions = {
     resolveBlockedGameplayKeyboardReason: (
         event: KeyboardEvent,
     ) => "document_not_focused" | "untrusted_event" | null;
-    macroKeyCodesRef: RefObject<Set<string>>;
     blockedKeyboardCodesRef: RefObject<Map<string, number>>;
     blockedKeyboardKeysRef: RefObject<Map<string, number>>;
 };

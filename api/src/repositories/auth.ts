@@ -195,7 +195,7 @@ function getStarterLoadout(
             items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
             items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
             items.push({ idItem: 479, amount: 1 }); // Arco Compuesto (Hit 7-9)
-            items.push({ idItem: 860, amount: 500 }); // Flechas
+            items.push({ idItem: 480, amount: 500 }); // Flechas
             items.push({ idItem: isLowRace ? 243 : 195, amount: 1 }); // Armadura de Placas Completa / E/G (Def 27-35)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
             items.push({ idItem: 131, amount: 1 }); // Casco de Hierro Completo (Def 15-20)
@@ -229,7 +229,7 @@ function getStarterLoadout(
             break;
         case "cazador":
             items.push({ idItem: 665, amount: 1 }); // Arco de Cazador (Hit 9-12)
-            items.push({ idItem: 860, amount: 500 }); // Flechas
+            items.push({ idItem: 480, amount: 500 }); // Flechas
             items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
             items.push({ idItem: isLowRace ? 243 : 195, amount: 1 }); // Armadura de Placas Completa / E/G (Def 27-35)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)

@@ -17,7 +17,6 @@ import { MapRenderer } from "../../components/game";
 import AdminIntervalsModal from "../../components/AdminIntervalsModal";
 import BuffStatusSidebar from "../../components/BuffStatusSidebar";
 import InventoryFloatingPanel from "../../components/InventoryFloatingPanel";
-import MacroBar from "../../components/MacroBar";
 import BailModal from "../../components/BailModal";
 import CharacterStatsModal from "../../components/CharacterStatsModal";
 import CraftingModal from "../../components/CraftingModal";
@@ -31,10 +30,8 @@ import {
     type MultiVoiceState,
 } from "../../lib/multiPeerVoice";
 import {
-    createEmptyMacros,
     normalizeCharacterSettings,
     type CharacterSettingsResponse,
-    type StoredMacro,
 } from "../../lib/character-settings";
 import {
     DEFAULT_HOTKEY_SETTINGS,
@@ -83,14 +80,12 @@ const CANVAS_BASE_HEIGHT = VIEWPORT_PIXEL_HEIGHT;
 const HUD_GAP = 10;
 const RIGHT_PANEL_WIDTH = 320;
 const DESKTOP_CONSOLE_HEIGHT = 126;
-const MACRO_BAR_ESTIMATED_HEIGHT = 80;
 const RIGHT_COLUMN_ACTIONS_ESTIMATED_HEIGHT = 112;
 const SHELL_VERTICAL_PADDING = 48;
 const SHELL_TOP_PADDING_FULLSCREEN = 0;
 const SHELL_BOTTOM_PADDING_FULLSCREEN = 0;
 const SHELL_HORIZONTAL_PADDING = 24;
 const SHELL_HORIZONTAL_PADDING_FULLSCREEN = 16;
-const COLUMN_SECTION_GAP = 12;
 const MAX_FULLSCREEN_HUD_SCALE = 1.5;
 const FULLSCREEN_HINT_DURATION_MS = 2600;
 const FULLSCREEN_PROMPT_MAX_WIDTH = 1200;
@@ -820,8 +815,6 @@ function HomeContent() {
     const [hotkeySettings, setHotkeySettings] = useState<HotkeySettings>(
         DEFAULT_HOTKEY_SETTINGS,
     );
-    const [macros, setMacros] =
-        useState<Array<StoredMacro | null>>(createEmptyMacros());
     const [isCharacterSettingsLoading, setIsCharacterSettingsLoading] =
         useState(true);
     const tradeStateRef = useRef<TradeState | null>(null);
@@ -916,10 +909,6 @@ function HomeContent() {
             height: DESKTOP_CONSOLE_HEIGHT,
         },
     );
-    const [macroBarSize, setMacroBarSize] = useState<MeasuredHudSize>({
-        width: CANVAS_BASE_WIDTH,
-        height: MACRO_BAR_ESTIMATED_HEIGHT,
-    });
     const [rightColumnSize, setRightColumnSize] = useState<MeasuredHudSize>({
         width: RIGHT_PANEL_WIDTH,
         height: CANVAS_BASE_HEIGHT + RIGHT_COLUMN_ACTIONS_ESTIMATED_HEIGHT,
@@ -1531,11 +1520,7 @@ function HomeContent() {
     ]);
 
     const minimumPinnedConsoleHeight =
-        CANVAS_BASE_HEIGHT +
-        DESKTOP_CONSOLE_HEIGHT +
-        MACRO_BAR_ESTIMATED_HEIGHT +
-        HUD_GAP +
-        COLUMN_SECTION_GAP;
+        CANVAS_BASE_HEIGHT + DESKTOP_CONSOLE_HEIGHT + HUD_GAP;
 
     const isDesktopConsoleLayout = isFullscreen
         ? viewport.width > 768
@@ -1564,19 +1549,6 @@ function HomeContent() {
         });
     }, []);
 
-    const handleMacroBarMeasure = useCallback((size: MeasuredHudSize) => {
-        setMacroBarSize((current) => {
-            if (
-                current.width === size.width &&
-                current.height === size.height
-            ) {
-                return current;
-            }
-
-            return size;
-        });
-    }, []);
-
     const handleRightColumnMeasure = useCallback((size: MeasuredHudSize) => {
         setRightColumnSize((current) => {
             if (
@@ -1591,14 +1563,12 @@ function HomeContent() {
     }, []);
 
     const hudScale = useMemo(() => {
-        if (!isFullscreen || !viewport.width || !viewport.height) {
+        if (!viewport.width || !viewport.height) {
             return 1;
         }
 
-        const leftColumnBaseHeight =
-            CANVAS_BASE_HEIGHT + COLUMN_SECTION_GAP + macroBarSize.height;
         const mainRowBaseHeight = Math.max(
-            leftColumnBaseHeight,
+            CANVAS_BASE_HEIGHT,
             rightColumnSize.height,
         );
         const totalBaseHeight =
@@ -1620,11 +1590,12 @@ function HomeContent() {
             return 1;
         }
 
-        return Math.min(MAX_FULLSCREEN_HUD_SCALE, nextScale);
+        const maxScale = isFullscreen ? MAX_FULLSCREEN_HUD_SCALE : 1;
+
+        return Math.min(maxScale, nextScale);
     }, [
         isDesktopConsoleLayout,
         isFullscreen,
-        macroBarSize.height,
         rightColumnSize.height,
         rightColumnSize.width,
         shellHorizontalPadding,
@@ -1644,13 +1615,6 @@ function HomeContent() {
             };
         }
 
-        if (!isFullscreen) {
-            return {
-                canvasWidth: CANVAS_BASE_WIDTH,
-                canvasHeight: CANVAS_BASE_HEIGHT,
-            };
-        }
-
         const scaledCanvasSize = Math.max(
             1,
             Math.floor(CANVAS_BASE_WIDTH * hudScale),
@@ -1660,7 +1624,7 @@ function HomeContent() {
             canvasWidth: scaledCanvasSize,
             canvasHeight: scaledCanvasSize,
         };
-    }, [hudScale, isFullscreen, viewport.height, viewport.width]);
+    }, [hudScale, viewport.height, viewport.width]);
 
     const toggleFullscreen = useCallback(async () => {
         const shellElement = gameShellRef.current;
@@ -2429,7 +2393,6 @@ function HomeContent() {
             lastSavedCharacterSettingsRef.current = null;
             setIsCharacterSettingsLoading(false);
             setHotkeySettings(DEFAULT_HOTKEY_SETTINGS);
-            setMacros(createEmptyMacros());
             return;
         }
 
@@ -2468,11 +2431,9 @@ function HomeContent() {
                     }
 
                     setHotkeySettings(normalized.hotkeys);
-                    setMacros(normalized.macros);
                     loadedCharacterSettingsIdRef.current = characterId;
                     lastSavedCharacterSettingsRef.current = JSON.stringify({
                         hotkeys: normalized.hotkeys,
-                        macros: normalized.macros,
                     });
                     setIsCharacterSettingsLoading(false);
                     return;
@@ -2483,7 +2444,6 @@ function HomeContent() {
 
             if (!cancelled) {
                 setHotkeySettings(DEFAULT_HOTKEY_SETTINGS);
-                setMacros(createEmptyMacros());
                 setIsCharacterSettingsLoading(false);
             }
         };
@@ -2509,7 +2469,6 @@ function HomeContent() {
 
         const payload = {
             hotkeys: hotkeySettings,
-            macros,
         };
         const serializedPayload = JSON.stringify(payload);
 
@@ -2552,7 +2511,6 @@ function HomeContent() {
 
                     lastSavedCharacterSettingsRef.current = JSON.stringify({
                         hotkeys: normalized.hotkeys,
-                        macros: normalized.macros,
                     });
                 })
                 .catch(() => undefined);
@@ -2561,7 +2519,7 @@ function HomeContent() {
         return () => {
             window.clearTimeout(timeoutId);
         };
-    }, [arenaMode, authSession?.selectedCharacterId, hotkeySettings, macros]);
+    }, [arenaMode, authSession?.selectedCharacterId, hotkeySettings]);
 
     const dismissHotkeyIntro = useCallback(() => {
         setIsHotkeyIntroOpen(false);
@@ -2884,7 +2842,6 @@ function HomeContent() {
                                     }
                                     runtimeTiming={runtimeTiming}
                                     hotkeySettings={hotkeySettings}
-                                    macros={macros}
                                     soundVolume={soundVolume}
                                     onMapChange={setSelectedMap}
                                     onStatusChange={handleStatusChange}
@@ -3270,62 +3227,6 @@ function HomeContent() {
                                 ) : null}
                             </div>
 
-                            {isCharacterSettingsLoading ? (
-                                <ScaledHudFrame
-                                    scale={hudScale}
-                                    baseWidth={CANVAS_BASE_WIDTH}
-                                    onMeasure={handleMacroBarMeasure}
-                                >
-                                    <div className="flex min-h-20 items-center justify-center rounded-[24px] border border-white/8 bg-stone-950/55 px-4 py-5 text-sm text-stone-400 shadow-xl backdrop-blur-md">
-                                        Cargando macros...
-                                    </div>
-                                </ScaledHudFrame>
-                            ) : (
-                                <ScaledHudFrame
-                                    scale={hudScale}
-                                    baseWidth={CANVAS_BASE_WIDTH}
-                                    onMeasure={handleMacroBarMeasure}
-                                >
-                                    <MacroBar
-                                        hud={hud}
-                                        connected={status.connected}
-                                        hotkeySettings={hotkeySettings}
-                                        macros={macros}
-                                        useItemRepeatMs={useItemRepeatMs}
-                                        onMacrosChange={setMacros}
-                                        onUseItem={(slot) =>
-                                            setUseItemURequest((current) => ({
-                                                slot,
-                                                token:
-                                                    (current?.token ?? 0) + 1,
-                                            }))
-                                        }
-                                        onRangeAttackRequest={() =>
-                                            setRangeAttackRequest(
-                                                (current) => ({
-                                                    token:
-                                                        (current?.token ?? 0) +
-                                                        1,
-                                                }),
-                                            )
-                                        }
-                                        onCastSpell={(spell) =>
-                                            setSpellTargetRequest(
-                                                (current) => ({
-                                                    slot: spell.slot,
-                                                    manaRequired:
-                                                        spell.manaRequired,
-                                                    name: spell.name,
-                                                    token:
-                                                        (current?.token ?? 0) +
-                                                        1,
-                                                }),
-                                            )
-                                        }
-                                        onSendCommand={sendChatMessage}
-                                    />
-                                </ScaledHudFrame>
-                            )}
                         </div>
 
                         <ScaledHudFrame
@@ -3335,7 +3236,10 @@ function HomeContent() {
                         >
                             <div
                                 className="flex w-[320px] flex-col"
-                                style={{ gap: "12px" }}
+                                style={{
+                                    gap: "12px",
+                                    height: `${CANVAS_BASE_HEIGHT}px`,
+                                }}
                             >
 
                                 <InventoryFloatingPanel
@@ -3565,53 +3469,49 @@ function HomeContent() {
                                     selectedCharacterId={
                                         authSession?.selectedCharacterId ?? null
                                     }
+                                    switchCharacterHref={
+                                        authSession
+                                            ? switchCharacterHref
+                                            : undefined
+                                    }
+                                    switchCharacterLabel={switchCharacterLabel}
+                                    onSwitchCharacterClick={
+                                        handleSwitchCharacterClick
+                                    }
                                 />
 
                                  <div className="pointer-events-auto flex w-full flex-col gap-2 rounded-2xl border border-stone-700/80 bg-stone-950/84 px-4 py-3 text-xs text-stone-100 shadow-2xl backdrop-blur-md">
-                                    <div className="flex items-center justify-center gap-3 uppercase tracking-[0.22em]">
-                                        {authSession ? (
-                                            <>
-                                                {arenaMode && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => void leaveArenaRoom()}
-                                                        className="text-amber-300 transition hover:text-amber-200"
-                                                    >
-                                                        {arenaLeavePending
-                                                            ? "Saliendo..."
-                                                            : "Salir de Arena"}
-                                                    </button>
-                                                )}
-                                                <Link
-                                                    href={switchCharacterHref}
-                                                    prefetch={false}
-                                                    onClick={
-                                                        handleSwitchCharacterClick
-                                                    }
-                                                    className="text-cyan-300 transition hover:text-cyan-200"
-                                                >
-                                                    {switchCharacterLabel}
-                                                </Link>
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Link
-                                                    href="/login"
-                                                    prefetch={false}
-                                                    className="text-cyan-300 transition hover:text-cyan-200"
-                                                >
-                                                    Login
-                                                </Link>
-                                                <Link
-                                                    href="/register"
-                                                    prefetch={false}
-                                                    className="text-stone-400 transition hover:text-stone-200"
-                                                >
-                                                    Registro
-                                                </Link>
-                                            </>
-                                        )}
-                                    </div>
+                                    {authSession && arenaMode ? (
+                                        <div className="flex items-center justify-center gap-3 uppercase tracking-[0.22em]">
+                                            <button
+                                                type="button"
+                                                onClick={() => void leaveArenaRoom()}
+                                                className="text-amber-300 transition hover:text-amber-200"
+                                            >
+                                                {arenaLeavePending
+                                                    ? "Saliendo..."
+                                                    : "Salir de Arena"}
+                                            </button>
+                                        </div>
+                                    ) : null}
+                                    {!authSession ? (
+                                        <div className="flex items-center justify-center gap-3 uppercase tracking-[0.22em]">
+                                            <Link
+                                                href="/login"
+                                                prefetch={false}
+                                                className="text-cyan-300 transition hover:text-cyan-200"
+                                            >
+                                                Login
+                                            </Link>
+                                            <Link
+                                                href="/register"
+                                                prefetch={false}
+                                                className="text-stone-400 transition hover:text-stone-200"
+                                            >
+                                                Registro
+                                            </Link>
+                                        </div>
+                                    ) : null}
                                     {authSession && !arenaMode ? (
                                         <div className="flex flex-col gap-2">
                                             <div className="grid grid-cols-3 gap-1.5">
@@ -3653,15 +3553,6 @@ function HomeContent() {
                                                         </button>
                                                     );
                                                 })}
-                                            </div>
-
-                                            <div className="text-center text-[11px] leading-5 tracking-[0.04em] text-stone-300/85">
-                                                En zona insegura cerrá el personaje
-                                                con{" "}
-                                                <span className="text-amber-300">
-                                                    /salir
-                                                </span>{" "}
-                                                o quedará conectado por 10 segundos.
                                             </div>
                                         </div>
                                     ) : null}
@@ -3960,7 +3851,7 @@ function HomeContent() {
                         <p className="mt-3 text-sm leading-6 text-stone-300">
                             Detectamos una ventana chica para el juego. Si
                             queres, podemos abrirlo en pantalla completa para
-                            que entren mejor la consola, el HUD y las macros.
+                            que entren mejor la consola y el HUD.
                         </p>
 
                         <div className="mt-6 flex justify-end gap-3">
