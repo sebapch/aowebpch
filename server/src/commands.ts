@@ -2909,7 +2909,7 @@ const command: CommandApi = {
                     }
 
                     if (user.pvpChar) {
-                        if (user.dead && user.spawnMap && user.spawnPos) {
+                        if (user.spawnMap && user.spawnPos) {
                             game.forceDismount(clientId);
                             game.telep(
                                 ws as CommandClient,
@@ -2920,18 +2920,10 @@ const command: CommandApi = {
                             );
                         }
                         break;
-                    } else if (user.dead || userInSafeZone) {
+                    } else {
                         const home = resolveHomeDestination(user);
                         game.forceDismount(clientId);
                         game.telep(ws as CommandClient, home.map, home.x, home.y, "/hogar");
-                    } else {
-                        handleProtocol.console(
-                            "Solo puedes usar /hogar estando muerto o en zona segura.",
-                            "white",
-                            0,
-                            0,
-                            ws as CommandClient,
-                        );
                     }
                     break;
 

@@ -199,12 +199,6 @@ export default function ChallengeVetoModal({
     const banThreshold = Math.ceil(totalExpectedVoters / 2); // 2 votes in 2v2
 
     const modalMaxWidth = mapPool.length > 3 ? "max-w-4xl" : "max-w-2xl";
-    const gridCols =
-        mapPool.length <= 2
-            ? "grid-cols-1 sm:grid-cols-2"
-            : mapPool.length === 3
-            ? "grid-cols-1 sm:grid-cols-3"
-            : "grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4";
 
     return (
         <div className="fixed inset-0 z-[95] flex items-center justify-center bg-black/75 px-4 py-6 backdrop-blur-sm">
@@ -232,7 +226,7 @@ export default function ChallengeVetoModal({
                 </div>
 
                 <div className="space-y-4 p-5">
-                    <div className={`grid gap-4 ${gridCols}`}>
+                    <div className="flex flex-wrap justify-center gap-4">
                         {mapPool.map((mapId) => {
                             const mapName = mapNames[mapId] ?? `Mapa ${mapId}`;
                             const isBanned = vetoState.bannedMapIds?.some((b) => b.mapId === mapId);
@@ -242,7 +236,7 @@ export default function ChallengeVetoModal({
                             return (
                                 <div
                                     key={mapId}
-                                    className={`relative flex flex-col justify-between overflow-hidden rounded-xl border transition ${
+                                    className={`relative flex w-full flex-col justify-between overflow-hidden rounded-xl border transition sm:w-[calc(50%-0.5rem)] md:w-[calc(33.333%-0.667rem)] ${
                                         isBanned
                                             ? "border-rose-500/30 bg-stone-900/60 opacity-60 grayscale-[40%]"
                                             : "border-white/10 bg-white/5 hover:border-emerald-500/40"

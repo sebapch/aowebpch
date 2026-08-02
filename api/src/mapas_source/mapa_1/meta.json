@@ -9,7 +9,7 @@
     "restringir": "No",
     "maxLevel": 0,
     "backup": 1,
-    "pk": 1,
+    "pk": 0,
     "isArena": true,
     "voiceChatEnabled": false,
     "arenaSpawns": {
