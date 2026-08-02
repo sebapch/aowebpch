@@ -109,36 +109,42 @@ function Funct(this: any) {
                 if (result && Array.isArray(result.ratingChanges) && result.ratingChanges.length > 0) {
                     const handleProtocol = require("./handleProtocol");
                     const runtimeRegistry = require("./runtimeRegistry");
+                    const socket = require("./socket");
                     const teamSizeLabel = `${result.teamSize ?? 2}v${result.teamSize ?? 2}`;
 
                     for (const change of result.ratingChanges) {
-                        const onlineUser = (Object.values(vars.personajes ?? {}) as any[]).find(
-                            (p) => p && String(p._id) === String(change.characterId) && p.connected && !p.cerrado,
-                        );
+                        try {
+                            const onlineUser = (Object.values(vars.personajes ?? {}) as any[]).find(
+                                (p) => p && String(p._id) === String(change.characterId) && p.connected && !p.cerrado,
+                            );
 
-                        if (onlineUser) {
-                            onlineUser.rating = change.after;
-                            if (change.won) {
-                                onlineUser.arenaWins = (onlineUser.arenaWins ?? 0) + 1;
-                            } else {
-                                onlineUser.arenaLosses = (onlineUser.arenaLosses ?? 0) + 1;
+                            if (onlineUser) {
+                                onlineUser.rating = change.after;
+                                if (change.won) {
+                                    onlineUser.arenaWins = (onlineUser.arenaWins ?? 0) + 1;
+                                } else {
+                                    onlineUser.arenaLosses = (onlineUser.arenaLosses ?? 0) + 1;
+                                }
+
+                                const client = runtimeRegistry.getClientById(onlineUser.id);
+                                if (client) {
+                                    const sign = change.delta >= 0 ? "+" : "";
+                                    const color = change.won ? "#00E676" : "#FF5252";
+                                    const outcome = change.won ? "¡VICTORIA!" : "DERROTA.";
+
+                                    handleProtocol.console(
+                                        `[Arena ${teamSizeLabel}] ${outcome} Cambio de ELO: ${sign}${change.delta} (${change.before} ➔ ${change.after})`,
+                                        color,
+                                        1,
+                                        0,
+                                        client,
+                                    );
+                                    handleProtocol.sendMyCharacter(onlineUser as any);
+                                    socket.send(client);
+                                }
                             }
-
-                            const client = runtimeRegistry.getClientById(onlineUser.id);
-                            if (client) {
-                                const sign = change.delta >= 0 ? "+" : "";
-                                const color = change.won ? "#00E676" : "#FF5252";
-                                const outcome = change.won ? "¡VICTORIA!" : "DERROTA.";
-
-                                handleProtocol.console(
-                                    `[Arena ${teamSizeLabel}] ${outcome} Cambio de ELO: ${sign}${change.delta} (${change.before} ➔ ${change.after})`,
-                                    color,
-                                    1,
-                                    0,
-                                    client,
-                                );
-                                handleProtocol.getMyCharacter(client, onlineUser);
-                            }
+                        } catch (error) {
+                            this.dumpError(error);
                         }
                     }
                 }
