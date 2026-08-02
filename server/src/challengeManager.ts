@@ -16,7 +16,6 @@ export {};
 const _ = require("lodash");
 const vars = require("./vars");
 const CHALLENGE_BASE_MAP_ID = 506;
-const CHALLENGE_INSTANCE_MAP_START = 2000;
 const CHALLENGE_VETO_STEP_TIMEOUT_MS = 15_000;
 // Fallback cuando un mapa esta marcado como arena en el editor pero todavia no
 // tiene spawns de equipo configurados (o para el mapa 506 antes de migrarlo).
@@ -426,7 +425,6 @@ function getVoiceRoomId(
 }
 
 const challengeManager = {
-    nextInstanceMapId: CHALLENGE_INSTANCE_MAP_START,
     openChallenges: {} as Record<string, OpenChallenge>,
     activeMatches: {} as Record<string, ActiveMatch>,
     vetoSessions: {} as Record<string, ChallengeVetoSession>,
@@ -465,16 +463,6 @@ const challengeManager = {
         );
     },
 
-    createInstanceMapId() {
-        while (vars.mapa[this.nextInstanceMapId] || vars.mapData[this.nextInstanceMapId]) {
-            this.nextInstanceMapId += 1;
-        }
-
-        const mapId = this.nextInstanceMapId;
-        this.nextInstanceMapId += 1;
-        return mapId;
-    },
-
     createMatchInstanceMap(baseMapId: number = CHALLENGE_BASE_MAP_ID) {
         const DYNAMIC_INSTANCE_MAP_START = 30_000;
         const DYNAMIC_INSTANCE_MAP_STRIDE = 50;
@@ -484,6 +472,14 @@ const challengeManager = {
 
         while (vars.mapa[mapId] || vars.mapData[mapId]) {
             slot += 1;
+
+            // Pasado el stride invadiriamos el rango del mapa base siguiente y
+            // el cliente decodificaria mal el id de instancia (ver
+            // getBaseMapIdFromDynamicInstance en el frontend).
+            if (slot >= DYNAMIC_INSTANCE_MAP_STRIDE) {
+                throw new Error(`No hay instancias libres para el mapa ${baseMapId}.`);
+            }
+
             mapId = DYNAMIC_INSTANCE_MAP_START + baseMapId * DYNAMIC_INSTANCE_MAP_STRIDE + slot;
         }
 

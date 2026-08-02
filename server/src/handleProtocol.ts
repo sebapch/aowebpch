@@ -90,7 +90,7 @@ type MarketOpenPayload = {
     }>;
 };
 
-type RetosOpenPayload = {
+export type RetosOpenPayload = {
     challenges: Array<{
         id: string;
         createdAt: number;
@@ -104,6 +104,10 @@ type RetosOpenPayload = {
             raceName: string;
         };
     }>;
+    matchmaking?: {
+        queuedTeamSizes: Array<2 | 3 | 4>;
+        counts: Record<2 | 3 | 4, { inQueue: number; required: number }>;
+    };
 };
 
 type ChallengeVetoStatePayload = {

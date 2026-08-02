@@ -458,8 +458,21 @@ export interface RetoEntry {
     }>;
 }
 
+export type MatchmakingTeamSize = 2 | 3 | 4;
+
+/**
+ * Estado de las colas de arena. Un jugador puede estar anotado en varios modos
+ * a la vez: la primera cola que se llene lo convoca y lo libera de las demás.
+ */
+export interface MatchmakingState {
+    queuedTeamSizes: MatchmakingTeamSize[];
+    counts: Record<MatchmakingTeamSize, { inQueue: number; required: number }>;
+}
+
 export interface RetosState {
     challenges: RetoEntry[];
+    /** Opcional para tolerar servidores anteriores a la multi-cola. */
+    matchmaking?: MatchmakingState;
 }
 
 export interface ChallengeVetoBannedMap {

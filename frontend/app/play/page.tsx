@@ -45,6 +45,7 @@ import type {
     CharacterStatsSnapshot,
     ChatChannel,
     MarketPriceSort,
+    MatchmakingTeamSize,
     PanelSnapshot,
     MarketState,
     PlayerHudState,
@@ -99,6 +100,9 @@ const LOGOUT_DENIED_PATTERN = /^\[Servidor\] No puedes salir /;
 const LOGOUT_CLOSING_MESSAGE = "[Servidor] Cerrando sesión...";
 const LOGOUT_DELAY_MS = 10000;
 const CHALLENGE_INSTANCE_MAP_START = 2000;
+const ARENA_TEAM_SIZES = [2, 3, 4] as const;
+/** Identidad estable para cuando el servidor todavía no mandó el estado de colas. */
+const EMPTY_ARENA_TEAM_SIZES: MatchmakingTeamSize[] = [];
 const RETOS_INFO_MESSAGES = new Set([
     "[Retos] Reto publicado.",
     "[Retos] Reto cancelado.",
@@ -758,8 +762,6 @@ function HomeContent() {
         null,
     );
     const [retosOpen, setRetosOpen] = useState(false);
-    const [isInArenaQueue, setIsInArenaQueue] = useState(false);
-    const [arenaQueueTeamSize, setArenaQueueTeamSize] = useState<number | null>(null);
     const [retosLoading, setRetosLoading] = useState(false);
     const [retosActionKey, setRetosActionKey] = useState<string | null>(null);
     const [retosError, setRetosError] = useState<string | null>(null);
@@ -874,6 +876,11 @@ function HomeContent() {
         setRetosLoading(false);
         setRetosActionKey(null);
     }, [retosState]);
+    // El servidor es la fuente de verdad de las colas de arena: un jugador
+    // puede estar anotado en varios modos a la vez.
+    const arenaMatchmaking = retosState?.matchmaking ?? null;
+    const queuedArenaTeamSizes =
+        arenaMatchmaking?.queuedTeamSizes ?? EMPTY_ARENA_TEAM_SIZES;
     const [soundVolume, setSoundVolume] = useState(1);
     const hasInitializedSoundVolumeRef = useRef(false);
     const hasSkippedInitialSoundVolumePersistRef = useRef(false);
@@ -1776,18 +1783,6 @@ function HomeContent() {
                     setLogoutPending(true);
                     setLogoutDeadline(null);
                     setLogoutSecondsRemaining(0);
-                }
-
-                const matchJoin = entry.text.match(/\[Arena (\d)v\d\] Te has unido/);
-                if (matchJoin) {
-                    setIsInArenaQueue(true);
-                    setArenaQueueTeamSize(Number(matchJoin[1]));
-                } else if (
-                    entry.text.includes("Has salido de la cola") ||
-                    entry.text.includes("¡PARTIDA ENCONTRADA!")
-                ) {
-                    setIsInArenaQueue(false);
-                    setArenaQueueTeamSize(null);
                 }
 
                 if (RETOS_INFO_MESSAGES.has(entry.text)) {
@@ -3515,9 +3510,12 @@ function HomeContent() {
                                     {authSession && !arenaMode ? (
                                         <div className="flex flex-col gap-2">
                                             <div className="grid grid-cols-3 gap-1.5">
-                                                {([2, 3, 4] as const).map((teamSize) => {
+                                                {ARENA_TEAM_SIZES.map((teamSize) => {
+                                                    // Cada modo se prende y apaga por separado: se
+                                                    // puede esperar en varias colas a la vez.
                                                     const isCurrentQueue =
-                                                        isInArenaQueue && arenaQueueTeamSize === teamSize;
+                                                        queuedArenaTeamSizes.includes(teamSize);
+                                                    const count = arenaMatchmaking?.counts?.[teamSize];
 
                                                     return (
                                                         <button
@@ -3525,13 +3523,9 @@ function HomeContent() {
                                                             type="button"
                                                             onClick={() => {
                                                                 if (isCurrentQueue) {
-                                                                    requestRetosState("dequeue2v2");
-                                                                    setIsInArenaQueue(false);
-                                                                    setArenaQueueTeamSize(null);
+                                                                    requestRetosState("dequeue2v2", { teamSize });
                                                                 } else {
                                                                     requestRetosState("enqueue2v2", { teamSize });
-                                                                    setIsInArenaQueue(true);
-                                                                    setArenaQueueTeamSize(teamSize);
                                                                 }
                                                             }}
                                                             className={`w-full rounded-xl border px-1 py-2 text-[11px] font-semibold uppercase tracking-wider transition ${
@@ -3766,11 +3760,18 @@ function HomeContent() {
                         setRetosActionKey(`cancel-${challengeId}`);
                         requestRetosState("cancel", { challengeId });
                     }}
-                    onEnqueueMatchmaking={(teamSize) => {
-                        setRetosActionKey(`enqueue-${teamSize}`);
-                        requestRetosState("enqueue2v2", { teamSize });
+                    queuedTeamSizes={queuedArenaTeamSizes}
+                    queueCounts={arenaMatchmaking?.counts ?? null}
+                    onToggleMatchmaking={(teamSize, isQueued) => {
+                        if (isQueued) {
+                            setRetosActionKey(`dequeue-${teamSize}`);
+                            requestRetosState("dequeue2v2", { teamSize });
+                        } else {
+                            setRetosActionKey(`enqueue-${teamSize}`);
+                            requestRetosState("enqueue2v2", { teamSize });
+                        }
                     }}
-                    onDequeueMatchmaking={() => {
+                    onDequeueAllMatchmaking={() => {
                         setRetosActionKey("dequeue");
                         requestRetosState("dequeue2v2");
                     }}

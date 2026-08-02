@@ -4448,11 +4448,35 @@ async function retosAction(ws: RuntimeClient) {
                 break;
             }
             case "enqueue2v2": {
-                arenaMatchmakingManager.enqueue(ws.id!, Number(payload.teamSize ?? 2));
+                // Se puede pedir un modo (teamSize) o varios a la vez (teamSizes).
+                const requestedSizes = Array.isArray(payload.teamSizes)
+                    ? payload.teamSizes.map((size) => Number(size))
+                    : [Number(payload.teamSize ?? 2)];
+                const failures: string[] = [];
+
+                for (const size of requestedSizes) {
+                    try {
+                        arenaMatchmakingManager.enqueue(ws.id!, size);
+                    } catch (error) {
+                        failures.push(
+                            error instanceof Error ? error.message : `No se pudo anotar a ${size}v${size}.`,
+                        );
+                    }
+                }
+
+                // Un modo rechazado no debe abortar los demas.
+                if (failures.length > 0 && failures.length === requestedSizes.length) {
+                    throw new Error(failures[0]);
+                }
+
+                for (const failure of failures) {
+                    handleProtocol.console(failure, "white", 0, 0, ws);
+                }
+
                 break;
             }
             case "dequeue2v2": {
-                arenaMatchmakingManager.dequeue(ws.id!);
+                arenaMatchmakingManager.dequeue(ws.id!, payload.teamSize);
                 break;
             }
             case "vetoban": {
@@ -4472,7 +4496,13 @@ async function retosAction(ws: RuntimeClient) {
             handleProtocol.console(message, ok ? "#E69500" : "white", 0, 0, ws);
         }
 
-        handleProtocol.openRetos(challengeManager.listChallengesForUserId(ws.id!), ws);
+        handleProtocol.openRetos(
+            {
+                ...challengeManager.listChallengesForUserId(ws.id!),
+                matchmaking: arenaMatchmakingManager.buildMatchmakingState(ws.id!),
+            },
+            ws,
+        );
     } catch (error) {
         const message = error instanceof Error ? error.message : "No se pudo procesar el reto.";
 
@@ -4483,7 +4513,13 @@ async function retosAction(ws: RuntimeClient) {
         handleProtocol.console(message, "white", 0, 0, ws);
 
         try {
-            handleProtocol.openRetos(challengeManager.listChallengesForUserId(ws.id!), ws);
+            handleProtocol.openRetos(
+                {
+                    ...challengeManager.listChallengesForUserId(ws.id!),
+                    matchmaking: arenaMatchmakingManager.buildMatchmakingState(ws.id!),
+                },
+                ws,
+            );
         } catch {
             return;
         }

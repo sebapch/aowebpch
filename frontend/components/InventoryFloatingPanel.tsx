@@ -5,7 +5,6 @@
 import Image from "next/image";
 import Link from "next/link";
 import React from "react";
-import { createPortal } from "react-dom";
 import { formatNumber } from "../lib/number-format";
 import {
     ChevronDown,
@@ -55,6 +54,13 @@ import { classLabels } from "../lib/character-labels";
 import { ClanMemberActionMenu } from "./clan/ClanMemberActionMenu";
 import { ClanPanel } from "./clan/ClanPanel";
 import { useClanPanel } from "./clan/useClanPanel";
+import { VitalBarsCanvas } from "./hud/VitalBarsCanvas";
+import { WorldMapModal } from "./hud/WorldMapModal";
+import { useWorldMap } from "./hud/useWorldMap";
+import {
+    getMinimapMarkerStyle,
+    MINIMAP_PREVIEW_SIZE,
+} from "./hud/worldMapGeometry";
 
 type InventoryFloatingPanelProps = {
     hud: PlayerHudState | null;
@@ -226,7 +232,6 @@ const HOTKEY_SECTIONS: HotkeySection[] = [
 
 const MIN_SLOTS = 21;
 const DOUBLE_ACTIVATE_WINDOW_MS = 240;
-const MINIMAP_PREVIEW_SIZE = 92;
 const DYNAMIC_INSTANCE_MAP_START = 30_000;
 const DYNAMIC_INSTANCE_MAP_STRIDE = 50;
 
@@ -243,171 +248,9 @@ function resolveBaseInstanceMapId(mapId: number | null | undefined): number | nu
         (mapId - DYNAMIC_INSTANCE_MAP_START) / DYNAMIC_INSTANCE_MAP_STRIDE,
     );
 }
-const DEFAULT_MAP_GRID_SIZE = 100;
-const MINIMAP_MARKER_MARGIN = 2;
-const WORLD_MAP_MARKER_SIZE = 10;
 const SPELL_LIST_ROW_HEIGHT = 24;
 const SPELL_LIST_AUTOSCROLL_EDGE_PX = 22;
 const SPELL_LIST_AUTOSCROLL_STEP = 12;
-const WORLD_MAP_GRID_URL = "/init/world-map.json";
-const WORLD_MAP_GENERAL_GRID_URL = "/init/world-map-grid-general.json";
-const WORLD_MAP_SRC = "/imgs/world-map.png";
-const WORLD_MAP_GENERAL_SRC = "/imgs/world-map-general.png";
-
-type WorldMapLayoutEntry = {
-    id: number;
-    gridX: number;
-    gridY: number;
-};
-
-type WorldMapGridData = {
-    generatedAt?: string;
-    totalCols: number;
-    totalRows: number;
-    maps: WorldMapLayoutEntry[];
-};
-
-type WorldMapConnectedPlayer = {
-    name: string;
-    map: number;
-    pos: { x: number; y: number };
-};
-
-type WorldMapGrid = {
-    maps: Map<number, { gridX: number; gridY: number }>;
-    mapIdsByGrid: Map<string, number>;
-    totalCols: number;
-    totalRows: number;
-};
-
-const worldMapGridPromises = new Map<string, Promise<WorldMapGridData>>();
-
-function loadWorldMapGrid(url: string) {
-    if (!worldMapGridPromises.has(url)) {
-        worldMapGridPromises.set(
-            url,
-            fetch(url, {
-                cache: "force-cache",
-            }).then(async (response) => {
-                if (!response.ok) {
-                    throw new Error(
-                        `No se pudo cargar ${url}: ${response.status}`,
-                    );
-                }
-
-                return (await response.json()) as WorldMapGridData;
-            }),
-        );
-    }
-
-    return worldMapGridPromises.get(url)!;
-}
-
-function buildWorldMapGrid(worldMapGridData: WorldMapGridData): WorldMapGrid {
-    const maps = new Map<number, { gridX: number; gridY: number }>();
-    const mapIdsByGrid = new Map<string, number>();
-
-    for (const map of worldMapGridData.maps) {
-        maps.set(map.id, { gridX: map.gridX, gridY: map.gridY });
-        mapIdsByGrid.set(`${map.gridX}:${map.gridY}`, map.id);
-    }
-
-    return {
-        maps,
-        mapIdsByGrid,
-        totalCols: worldMapGridData.totalCols,
-        totalRows: worldMapGridData.totalRows,
-    };
-}
-
-function getMinimapFrame(aspectRatio: number) {
-    const safeAspectRatio =
-        Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
-
-    if (safeAspectRatio >= 1) {
-        const width = MINIMAP_PREVIEW_SIZE;
-        const height = MINIMAP_PREVIEW_SIZE / safeAspectRatio;
-
-        return {
-            width,
-            height,
-            leftOffset: 0,
-            topOffset: (MINIMAP_PREVIEW_SIZE - height) / 2,
-        };
-    }
-
-    const width = MINIMAP_PREVIEW_SIZE * safeAspectRatio;
-    const height = MINIMAP_PREVIEW_SIZE;
-
-    return {
-        width,
-        height,
-        leftOffset: (MINIMAP_PREVIEW_SIZE - width) / 2,
-        topOffset: 0,
-    };
-}
-
-function getMinimapMarkerStyle(
-    pos: { x: number; y: number } | null | undefined,
-    aspectRatio: number,
-) {
-    if (!pos) {
-        return null;
-    }
-
-    const maxCoordinate = DEFAULT_MAP_GRID_SIZE;
-    const normalizedX = Math.max(
-        0,
-        Math.min(1, (pos.x - 1) / Math.max(1, maxCoordinate - 1)),
-    );
-    const normalizedY = Math.max(
-        0,
-        Math.min(1, (pos.y - 1) / Math.max(1, maxCoordinate - 1)),
-    );
-    const frame = getMinimapFrame(aspectRatio);
-    const usableWidth = Math.max(0, frame.width - MINIMAP_MARKER_MARGIN * 2);
-    const usableHeight = Math.max(0, frame.height - MINIMAP_MARKER_MARGIN * 2);
-
-    return {
-        left: `${frame.leftOffset + MINIMAP_MARKER_MARGIN + normalizedX * usableWidth}px`,
-        top: `${frame.topOffset + MINIMAP_MARKER_MARGIN + normalizedY * usableHeight}px`,
-    };
-}
-
-function getWorldMapMarkerStyle(
-    worldMapGrid: WorldMapGrid | null,
-    mapId: number | null,
-    pos: { x: number; y: number } | null | undefined,
-) {
-    if (!worldMapGrid || !mapId || !pos) {
-        return null;
-    }
-
-    const mapLayout = worldMapGrid.maps.get(mapId);
-
-    if (!mapLayout) {
-        return null;
-    }
-
-    const normalizedX = Math.max(
-        0,
-        Math.min(1, (pos.x - 0.5) / DEFAULT_MAP_GRID_SIZE),
-    );
-    const normalizedY = Math.max(
-        0,
-        Math.min(1, (pos.y - 0.5) / DEFAULT_MAP_GRID_SIZE),
-    );
-    const left =
-        ((mapLayout.gridX + normalizedX) / worldMapGrid.totalCols) * 100;
-    const top =
-        ((mapLayout.gridY + normalizedY) / worldMapGrid.totalRows) * 100;
-
-    return {
-        left: `${left}%`,
-        top: `${top}%`,
-    };
-}
-
 function ItemGraphic({
     graphicData,
     name,
@@ -439,151 +282,6 @@ function ItemGraphic({
                 }}
             />
         </div>
-    );
-}
-
-function VitalBarsCanvas({
-    hp,
-    maxHp,
-    mana,
-    maxMana,
-}: {
-    hp: number;
-    maxHp: number;
-    mana: number;
-    maxMana: number;
-}) {
-    const canvasRef = React.useRef<HTMLCanvasElement>(null);
-
-    React.useEffect(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) {
-            return;
-        }
-
-        const dpr = window.devicePixelRatio || 1;
-        const cssWidth = 156;
-        const cssHeight = 70;
-        canvas.width = Math.floor(cssWidth * dpr);
-        canvas.height = Math.floor(cssHeight * dpr);
-
-        const context = canvas.getContext("2d");
-        if (!context) {
-            return;
-        }
-
-        context.setTransform(dpr, 0, 0, dpr, 0, 0);
-        context.clearRect(0, 0, cssWidth, cssHeight);
-
-        const drawBar = ({
-            y,
-            label,
-            value,
-            max,
-            startColor,
-            endColor,
-        }: {
-            y: number;
-            label: string;
-            value: number;
-            max: number;
-            startColor: string;
-            endColor: string;
-        }) => {
-            const ratio = max > 0 ? Math.max(0, Math.min(1, value / max)) : 0;
-
-            context.font = "600 10px Inter, system-ui, sans-serif";
-            context.textBaseline = "top";
-            context.letterSpacing = "0.14em";
-            context.fillStyle = "rgba(214, 211, 209, 0.8)";
-            context.fillText(label.toUpperCase(), 0, y);
-
-            context.letterSpacing = "0";
-            context.font = "600 10px Inter, system-ui, sans-serif";
-            context.fillStyle = "#f5f5f4";
-            const valueLabel = `${value}/${max}`;
-            const valueMetrics = context.measureText(valueLabel);
-            context.fillText(valueLabel, cssWidth - valueMetrics.width, y);
-
-            const barY = y + 14;
-            const barHeight = 12;
-            const barRadius = 6;
-            const barWidth = cssWidth;
-
-            context.fillStyle = "rgba(0, 0, 0, 0.35)";
-            context.strokeStyle = "rgba(0, 0, 0, 0.35)";
-            context.lineWidth = 1;
-            context.beginPath();
-            context.roundRect(
-                0.5,
-                barY + 0.5,
-                barWidth - 1,
-                barHeight - 1,
-                barRadius,
-            );
-            context.fill();
-            context.stroke();
-
-            const innerX = 2;
-            const innerY = barY + 2;
-            const innerWidth = barWidth - 4;
-            const innerHeight = barHeight - 4;
-            context.fillStyle = "rgba(12, 10, 9, 0.85)";
-            context.beginPath();
-            context.roundRect(innerX, innerY, innerWidth, innerHeight, 4);
-            context.fill();
-
-            if (ratio <= 0) {
-                return;
-            }
-
-            const fillWidth = Math.max(4, innerWidth * ratio);
-            const gradient = context.createLinearGradient(
-                0,
-                innerY,
-                fillWidth,
-                innerY,
-            );
-            gradient.addColorStop(0, startColor);
-            gradient.addColorStop(1, endColor);
-            context.fillStyle = gradient;
-            context.beginPath();
-            context.roundRect(
-                innerX,
-                innerY,
-                Math.min(innerWidth, fillWidth),
-                innerHeight,
-                4,
-            );
-            context.fill();
-        };
-
-        drawBar({
-            y: 0,
-            label: "Vida",
-            value: hp,
-            max: maxHp,
-            startColor: "#951212",
-            endColor: "#f06b34",
-        });
-        drawBar({
-            y: 35,
-            label: "Mana",
-            value: mana,
-            max: maxMana,
-            startColor: "#0e436f",
-            endColor: "#2fb8ed",
-        });
-    }, [hp, mana, maxHp, maxMana]);
-
-    return (
-        <canvas
-            ref={canvasRef}
-            width={156}
-            height={70}
-            className="block h-[70px] w-[156px] max-w-full"
-            aria-hidden="true"
-        />
     );
 }
 
@@ -754,19 +452,6 @@ export default function InventoryFloatingPanel({
     const [dropSlot, setDropSlot] = React.useState<number | null>(null);
     const [mapPreviewErrored, setMapPreviewErrored] = React.useState(false);
     const [mapPreviewAspectRatio, setMapPreviewAspectRatio] = React.useState(1);
-    const [worldMapGridData, setWorldMapGridData] =
-        React.useState<WorldMapGridData | null>(null);
-    const [worldMapPlayers, setWorldMapPlayers] = React.useState<
-        WorldMapConnectedPlayer[]
-    >([]);
-    const [worldMapPlayersSampledAt, setWorldMapPlayersSampledAt] =
-        React.useState<string | null>(null);
-    const [worldMapPlayersLoading, setWorldMapPlayersLoading] =
-        React.useState(false);
-    const [worldMapPlayersError, setWorldMapPlayersError] = React.useState<
-        string | null
-    >(null);
-    const [isWorldMapOpen, setIsWorldMapOpen] = React.useState(false);
     const [isSettingsOpen, setIsSettingsOpen] = React.useState(false);
     const [hardwareAccelerationWarning, setHardwareAccelerationWarning] =
         React.useState<HardwareAccelerationWarning | null>(null);
@@ -1061,19 +746,16 @@ export default function InventoryFloatingPanel({
     );
     const isAdmin = hud?.privileges === 1;
     const worldMapTriggerRef = React.useRef<HTMLButtonElement | null>(null);
-    const worldMapGrid = React.useMemo(
-        () => (worldMapGridData ? buildWorldMapGrid(worldMapGridData) : null),
-        [worldMapGridData],
-    );
+    const worldMap = useWorldMap({
+        isAdmin,
+        previewMapId,
+        pos: hud?.pos,
+        triggerRef: worldMapTriggerRef,
+    });
+    const { toggleWorldMap } = worldMap;
     const mapPreviewSrc = previewMapId
         ? `/imgs_maps/${previewMapId}.png`
         : null;
-    const worldMapAssetSrc = worldMapGridData?.generatedAt
-        ? `${isAdmin ? WORLD_MAP_GENERAL_SRC : WORLD_MAP_SRC}?v=${encodeURIComponent(worldMapGridData.generatedAt)}`
-        : isAdmin
-          ? WORLD_MAP_GENERAL_SRC
-          : WORLD_MAP_SRC;
-    const adminWorldMapAlt = "Mapa del mundo completo";
     const minimapMarkerPosition = React.useMemo(() => {
         if (isChallengeInstanceMap) {
             return null;
@@ -1081,40 +763,6 @@ export default function InventoryFloatingPanel({
 
         return getMinimapMarkerStyle(hud?.pos, mapPreviewAspectRatio);
     }, [hud?.pos, isChallengeInstanceMap, mapPreviewAspectRatio]);
-    const worldMapMarkerPosition = React.useMemo(() => {
-        return getWorldMapMarkerStyle(worldMapGrid, previewMapId, hud?.pos);
-    }, [hud?.pos, previewMapId, worldMapGrid]);
-    const worldMapPlayerMarkers = React.useMemo(() => {
-        return worldMapPlayers
-            .map((player) => {
-                const markerStyle = getWorldMapMarkerStyle(
-                    worldMapGrid,
-                    player.map,
-                    player.pos,
-                );
-
-                if (!markerStyle) {
-                    return null;
-                }
-
-                return {
-                    id: `${player.name}-${player.map}-${player.pos.x}-${player.pos.y}`,
-                    left: markerStyle.left,
-                    top: markerStyle.top,
-                    title: `${player.name} (Mapa ${player.map} - ${player.pos.x}, ${player.pos.y})`,
-                };
-            })
-            .filter(
-                (
-                    marker,
-                ): marker is {
-                    id: string;
-                    left: string;
-                    top: string;
-                    title: string;
-                } => marker !== null,
-            );
-    }, [worldMapGrid, worldMapPlayers]);
     const partyMinimapMarkerPositions = React.useMemo(() => {
         if (isChallengeInstanceMap || !hud?.partyMembers?.length) {
             return [];
@@ -1168,44 +816,6 @@ export default function InventoryFloatingPanel({
             });
     }, [hud, isChallengeInstanceMap, mapPreviewAspectRatio, normalizedHudId]);
 
-    const closeWorldMap = React.useCallback(() => {
-        setIsWorldMapOpen(false);
-        worldMapTriggerRef.current?.blur();
-    }, []);
-    const handleLoadWorldMapPlayers = React.useCallback(async () => {
-        setWorldMapPlayers([]);
-        setWorldMapPlayersSampledAt(null);
-        setWorldMapPlayersError(null);
-        setWorldMapPlayersLoading(false);
-    }, []);
-    const handleWorldMapContextMenu = React.useCallback(
-        (event: React.MouseEvent<HTMLElement>) => {
-            event.preventDefault();
-        },
-        [],
-    );
-
-    React.useEffect(() => {
-        let cancelled = false;
-
-        loadWorldMapGrid(
-            isAdmin ? WORLD_MAP_GENERAL_GRID_URL : WORLD_MAP_GRID_URL,
-        )
-            .then((nextWorldMapGridData) => {
-                if (!cancelled) {
-                    setWorldMapGridData(nextWorldMapGridData);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setWorldMapGridData(null);
-                }
-            });
-
-        return () => {
-            cancelled = true;
-        };
-    }, [isAdmin]);
 
     React.useEffect(() => {
         if (!partyMembers.length) {
@@ -1217,22 +827,6 @@ export default function InventoryFloatingPanel({
         setMapPreviewErrored(false);
         setMapPreviewAspectRatio(1);
     }, [hud?.map]);
-
-    React.useEffect(() => {
-        if (!isWorldMapOpen) {
-            return;
-        }
-
-        const handleKeyDown = (event: KeyboardEvent) => {
-            if (event.key === "Escape") {
-                closeWorldMap();
-            }
-        };
-
-        window.addEventListener("keydown", handleKeyDown);
-
-        return () => window.removeEventListener("keydown", handleKeyDown);
-    }, [closeWorldMap, isWorldMapOpen]);
 
     const closeDropDialog = React.useCallback(() => {
         setDropSlot(null);
@@ -1510,7 +1104,7 @@ export default function InventoryFloatingPanel({
                 isHotkeyMatch(event, hotkeySettings.toggleWorldMap) &&
                 !event.repeat
             ) {
-                setIsWorldMapOpen((current) => !current);
+                toggleWorldMap();
                 event.preventDefault();
                 return;
             }
@@ -1554,6 +1148,7 @@ export default function InventoryFloatingPanel({
         selectedSlot,
         selectedSpell,
         submitDropRequest,
+        toggleWorldMap,
     ]);
 
     const inventoryStartSlot = React.useMemo(() => {
@@ -2214,7 +1809,7 @@ export default function InventoryFloatingPanel({
                                     <button
                                         ref={worldMapTriggerRef}
                                         type="button"
-                                        onClick={() => setIsWorldMapOpen(true)}
+                                        onClick={worldMap.openWorldMap}
                                         className="relative block h-[92px] w-[92px] overflow-hidden rounded-[10px] border border-[#705134] bg-[#0b0705] text-left shadow-[inset_0_1px_0_rgba(255,220,180,0.1)] transition hover:border-[#9b744f] focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-300/70"
                                         aria-label="Abrir mapa del mundo"
                                     >
@@ -2466,149 +2061,11 @@ export default function InventoryFloatingPanel({
                 </div>
             ) : null}
 
-            {isWorldMapOpen && typeof document !== "undefined"
-                ? createPortal(
-                      <div
-                          className="fixed inset-0 z-[82] flex items-center justify-center bg-black/70 p-3 backdrop-blur-[3px] sm:p-5"
-                          onClick={closeWorldMap}
-                      >
-                          <div
-                              className="relative w-full max-w-6xl overflow-hidden rounded-[24px] border border-amber-200/20 bg-[#120c08]/96 shadow-[0_28px_90px_rgba(0,0,0,0.6)]"
-                              onClick={(event) => event.stopPropagation()}
-                          >
-                              <div className="flex items-center justify-between gap-4 border-b border-amber-200/10 bg-[linear-gradient(180deg,rgba(127,78,35,0.28),rgba(18,12,8,0))] px-4 py-3 sm:px-5">
-                                  <div>
-                                      <p className="text-[11px] uppercase tracking-[0.28em] text-amber-300/72">
-                                          Navegacion
-                                      </p>
-                                      <h3 className="mt-1 text-lg font-semibold text-[#f2e5ca] sm:text-xl">
-                                          Mapa del mundo
-                                      </h3>
-                                      {isAdmin ? (
-                                          <div className="mt-2 flex flex-wrap items-center gap-2 text-[11px] text-stone-300">
-                                              <button
-                                                  type="button"
-                                                  onClick={
-                                                      handleLoadWorldMapPlayers
-                                                  }
-                                                  disabled={
-                                                      worldMapPlayersLoading
-                                                  }
-                                                  className="rounded-[10px] border border-sky-700/60 bg-sky-950/60 px-3 py-2 text-left font-semibold text-sky-100 transition hover:border-sky-500 disabled:cursor-not-allowed disabled:border-stone-700 disabled:bg-stone-900 disabled:text-stone-400"
-                                              >
-                                                  {worldMapPlayersLoading
-                                                      ? "Cargando jugadores..."
-                                                      : "Cargar todos los jugadores en el mapa"}
-                                              </button>
-                                              <span className="text-stone-400">
-                                                  {worldMapPlayerMarkers.length}{" "}
-                                                  visibles
-                                              </span>
-                                              {worldMapPlayersSampledAt ? (
-                                                  <span className="text-stone-500">
-                                                      Snapshot listo
-                                                  </span>
-                                              ) : null}
-                                          </div>
-                                      ) : null}
-                                      {isAdmin && worldMapPlayersError ? (
-                                          <p className="mt-2 text-xs text-rose-300">
-                                              {worldMapPlayersError}
-                                          </p>
-                                      ) : null}
-                                  </div>
-                                  <button
-                                      type="button"
-                                      onClick={closeWorldMap}
-                                      className="flex h-10 w-10 items-center justify-center rounded-full border border-stone-700 bg-black/20 text-stone-300 transition hover:border-stone-500 hover:text-white"
-                                      aria-label="Cerrar mapa del mundo"
-                                  >
-                                      <X
-                                          aria-hidden="true"
-                                          className="h-4 w-4"
-                                          strokeWidth={1.8}
-                                      />
-                                  </button>
-                              </div>
-
-                              <div className="flex h-[calc(100vh-7rem)] items-center justify-center bg-[#0b0705] p-2 sm:p-3">
-                                  <div
-                                      className="relative inline-block"
-                                      onContextMenu={handleWorldMapContextMenu}
-                                      title={
-                                          isAdmin
-                                              ? "Click derecho para teletransportarte"
-                                              : undefined
-                                      }
-                                  >
-                                      <img
-                                          src={worldMapAssetSrc}
-                                          alt={adminWorldMapAlt}
-                                          className="block max-h-[calc(100vh-8.5rem)] max-w-full object-contain"
-                                      />
-                                      {worldMapMarkerPosition ? (
-                                          <div className="pointer-events-none absolute inset-0">
-                                              {worldMapPlayerMarkers.map(
-                                                  (marker) => (
-                                                      <div
-                                                          key={marker.id}
-                                                          className="pointer-events-auto absolute h-[8px] w-[8px] rounded-full border border-white/70 bg-sky-400 shadow-[0_0_0_1px_rgba(8,47,73,0.9),0_0_6px_rgba(56,189,248,0.7)]"
-                                                          style={{
-                                                              left: marker.left,
-                                                              top: marker.top,
-                                                              transform:
-                                                                  "translate(-50%, -50%)",
-                                                          }}
-                                                          title={marker.title}
-                                                          aria-label={
-                                                              marker.title
-                                                          }
-                                                      />
-                                                  ),
-                                              )}
-                                              <div
-                                                  data-testid="world-map-self-marker"
-                                                  aria-hidden="true"
-                                                  className="absolute rounded-full border border-white/90 bg-[#ff3b22] shadow-[0_0_0_1px_rgba(90,14,2,0.9),0_0_5px_rgba(255,88,42,0.9)] before:absolute before:left-1/2 before:top-1/2 before:h-6 before:w-6 before:-translate-x-1/2 before:-translate-y-1/2 before:rounded-full before:border before:border-[#ff6a54]/80 before:bg-[#ff6a54]/10 before:content-['']"
-                                                  style={{
-                                                      left: worldMapMarkerPosition.left,
-                                                      top: worldMapMarkerPosition.top,
-                                                      width: `${WORLD_MAP_MARKER_SIZE}px`,
-                                                      height: `${WORLD_MAP_MARKER_SIZE}px`,
-                                                      transform:
-                                                          "translate(-50%, -50%)",
-                                                  }}
-                                              />
-                                          </div>
-                                      ) : worldMapPlayerMarkers.length > 0 ? (
-                                          <div className="pointer-events-none absolute inset-0">
-                                              {worldMapPlayerMarkers.map(
-                                                  (marker) => (
-                                                      <div
-                                                          key={marker.id}
-                                                          className="pointer-events-auto absolute h-[8px] w-[8px] rounded-full border border-white/70 bg-sky-400 shadow-[0_0_0_1px_rgba(8,47,73,0.9),0_0_6px_rgba(56,189,248,0.7)]"
-                                                          style={{
-                                                              left: marker.left,
-                                                              top: marker.top,
-                                                              transform:
-                                                                  "translate(-50%, -50%)",
-                                                          }}
-                                                          title={marker.title}
-                                                          aria-label={
-                                                              marker.title
-                                                          }
-                                                      />
-                                                  ),
-                                              )}
-                                          </div>
-                                      ) : null}
-                                  </div>
-                              </div>
-                          </div>
-                      </div>,
-                      portalTarget ?? document.body,
-                  )
-                : null}
+            <WorldMapModal
+                worldMap={worldMap}
+                isAdmin={isAdmin}
+                portalTarget={portalTarget}
+            />
 
             {isSettingsOpen ? (
                 <div className="fixed inset-0 z-[84] flex items-center justify-center bg-black/45 px-4 backdrop-blur-[3px]">

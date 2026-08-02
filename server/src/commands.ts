@@ -822,6 +822,17 @@ function splitClanCommandArgs(rawText: string) {
         .filter((value) => value.length > 0);
 }
 
+// Parsea los modos de arena de un comando: "/arena 2 4" -> [2, 4].
+// Sin argumentos devuelve los tres modos.
+function parseArenaTeamSizes(rawText: string): number[] {
+    const parsed = rawText
+        .split(/[\s,]+/)
+        .map((value) => Number(value.trim()))
+        .filter((value) => value === 2 || value === 3 || value === 4);
+
+    return parsed.length > 0 ? Array.from(new Set(parsed)) : [2, 3, 4];
+}
+
 function findOnlineCharacterByPersistedId(characterId?: string | null) {
     if (!characterId) {
         return;
@@ -2412,22 +2423,31 @@ const command: CommandApi = {
 
                 case "/arena":
                 case "/anotarse": {
-                    try {
-                        arenaMatchmakingManager.enqueue(clientId);
-                    } catch (err) {
-                        const message = err instanceof Error ? err.message : "No se pudo anotar a la arena.";
-                        handleProtocol.console(message, "white", 0, 0, ws as CommandClient);
+                    // Sin argumentos se anota a los tres modos a la vez; la
+                    // primera cola que se llene lo libera de las demas.
+                    for (const teamSize of parseArenaTeamSizes(nextText)) {
+                        try {
+                            arenaMatchmakingManager.enqueue(clientId, teamSize);
+                        } catch (err) {
+                            const message = err instanceof Error ? err.message : "No se pudo anotar a la arena.";
+                            handleProtocol.console(message, "white", 0, 0, ws as CommandClient);
+                        }
                     }
                     break;
                 }
 
                 case "/salirarena":
                 case "/cancelararena": {
-                    try {
-                        arenaMatchmakingManager.dequeue(clientId);
-                    } catch (err) {
-                        const message = err instanceof Error ? err.message : "No se pudo salir de la arena.";
-                        handleProtocol.console(message, "white", 0, 0, ws as CommandClient);
+                    // "/salirarena 3" sale solo de 3v3; sin argumentos, de todas.
+                    const requested = nextText.trim() ? parseArenaTeamSizes(nextText) : [undefined];
+
+                    for (const teamSize of requested) {
+                        try {
+                            arenaMatchmakingManager.dequeue(clientId, teamSize);
+                        } catch (err) {
+                            const message = err instanceof Error ? err.message : "No se pudo salir de la arena.";
+                            handleProtocol.console(message, "white", 0, 0, ws as CommandClient);
+                        }
                     }
                     break;
                 }

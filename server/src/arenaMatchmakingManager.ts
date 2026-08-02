@@ -1,6 +1,4 @@
-import type { GameApi } from "./game";
-import type { HandleProtocolApi } from "./handleProtocol";
-import type { SocketApi } from "./socket";
+import type { HandleProtocolApi, RetosOpenPayload } from "./handleProtocol";
 import type { RuntimeCharacter } from "./types/runtime";
 import { getCharacterById, getClientById } from "./runtimeRegistry";
 import * as safeZone from "./safeZone";
@@ -12,6 +10,11 @@ export type MatchmakingTeamSize = 2 | 3 | 4;
 
 const MATCHMAKING_TEAM_SIZES: MatchmakingTeamSize[] = [2, 3, 4];
 
+// Cada cuanto se re-evaluan las colas aunque nadie se anote. Sin esto una cola
+// puede quedar trabada con jugadores suficientes (por ejemplo cuando alguien
+// sale de una cola o es convocado por otra).
+const MATCHMAKING_TICK_MS = 3_000;
+
 type QueueEntry = {
     id: string;
     leaderId: string;
@@ -21,16 +24,13 @@ type QueueEntry = {
     joinedAt: number;
 };
 
-function getGame() {
-    return require("./game") as GameApi;
-}
+export type MatchmakingState = {
+    queuedTeamSizes: MatchmakingTeamSize[];
+    counts: Record<MatchmakingTeamSize, { inQueue: number; required: number }>;
+};
 
 function getHandleProtocol() {
     return require("./handleProtocol") as HandleProtocolApi;
-}
-
-function getSocket() {
-    return require("./socket") as SocketApi;
 }
 
 function getChallengeManager() {
@@ -70,12 +70,13 @@ function isMatchmakingTeamSize(value: unknown): value is MatchmakingTeamSize {
 
 export const arenaMatchmakingManager = {
     queue: [] as QueueEntry[],
+    tickTimer: null as ReturnType<typeof setTimeout> | null,
 
     createId() {
         return `queue-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     },
 
-    requireEligibleCharacter(user: RuntimeCharacter) {
+    requireEligibleCharacter(user: RuntimeCharacter, teamSize: MatchmakingTeamSize) {
         if (!user || user.cerrado || !user.connected) {
             throw new Error("Debes estar conectado para anotarte en la arena.");
         }
@@ -96,19 +97,143 @@ export const arenaMatchmakingManager = {
             throw new Error("Ya estás participando en un reto o partida activa.");
         }
 
-        if (this.isInQueue(user.id)) {
-            throw new Error("Ya estás anotado en la cola de la arena.");
+        if (this.isInQueue(user.id, teamSize)) {
+            throw new Error(`Ya estás anotado en la cola ${teamSize}v${teamSize}.`);
         }
     },
 
-    isInQueue(userId: string | number): boolean {
+    isInQueue(userId: string | number, teamSize?: MatchmakingTeamSize): boolean {
         const strId = String(userId);
-        return this.queue.some((entry) => entry.characterIds.includes(strId));
+        return this.queue.some(
+            (entry) =>
+                (teamSize === undefined || entry.teamSize === teamSize) &&
+                entry.characterIds.includes(strId),
+        );
     },
 
-    getQueueEntryForUser(userId: string | number): QueueEntry | undefined {
+    getQueueEntriesForUser(userId: string | number): QueueEntry[] {
         const strId = String(userId);
-        return this.queue.find((entry) => entry.characterIds.includes(strId));
+        return this.queue.filter((entry) => entry.characterIds.includes(strId));
+    },
+
+    getQueuedTeamSizes(userId: string | number): MatchmakingTeamSize[] {
+        const sizes = new Set(this.getQueueEntriesForUser(userId).map((entry) => entry.teamSize));
+        return MATCHMAKING_TEAM_SIZES.filter((size) => sizes.has(size));
+    },
+
+    buildMatchmakingState(userId: string | number): MatchmakingState {
+        const counts = {} as MatchmakingState["counts"];
+
+        for (const size of MATCHMAKING_TEAM_SIZES) {
+            counts[size] = {
+                inQueue: this.getTotalPlayersInQueue(size),
+                required: size * 2,
+            };
+        }
+
+        return {
+            queuedTeamSizes: this.getQueuedTeamSizes(userId),
+            counts,
+        };
+    },
+
+    // Empuja el estado de matchmaking al cliente reusando el paquete openRetos,
+    // que ya viaja como JSON. El listado de retos puede fallar si el personaje
+    // no tiene acceso a retos: en ese caso mandamos la lista vacia.
+    pushMatchmakingState(characterIds: Array<string | number>) {
+        const handleProtocol = getHandleProtocol();
+        const challengeManager = getChallengeManager();
+        const seen = new Set<string>();
+
+        for (const characterId of characterIds) {
+            const strId = String(characterId);
+
+            if (seen.has(strId)) {
+                continue;
+            }
+
+            seen.add(strId);
+
+            const client = getClientById(strId);
+
+            if (!client) {
+                continue;
+            }
+
+            let challenges: RetosOpenPayload["challenges"] = [];
+
+            try {
+                challenges = challengeManager.listChallengesForUserId(strId).challenges ?? [];
+            } catch {
+                challenges = [];
+            }
+
+            try {
+                handleProtocol.openRetos(
+                    {
+                        challenges,
+                        matchmaking: this.buildMatchmakingState(strId),
+                    },
+                    client,
+                );
+            } catch (error) {
+                funct.dumpError(error);
+            }
+        }
+    },
+
+    // Notifica a todos los que estan en alguna cola, para que los contadores
+    // de "jugadores anotados" se mantengan al dia en el HUD.
+    broadcastQueueState() {
+        this.pushMatchmakingState(this.queue.flatMap((entry) => entry.characterIds));
+    },
+
+    ensureTicker() {
+        if (this.tickTimer || this.queue.length === 0) {
+            return;
+        }
+
+        const scheduleNext = () => {
+            const timer = setTimeout(() => {
+                this.tickTimer = null;
+
+                if (this.queue.length === 0) {
+                    return;
+                }
+
+                try {
+                    const removed = this.pruneQueue();
+
+                    for (const teamSize of MATCHMAKING_TEAM_SIZES) {
+                        this.processQueue(teamSize);
+                    }
+
+                    if (removed.length > 0) {
+                        this.broadcastQueueState();
+                    }
+                } catch (error) {
+                    funct.dumpError(error);
+                }
+
+                if (this.queue.length > 0) {
+                    scheduleNext();
+                }
+            }, MATCHMAKING_TICK_MS);
+
+            timer.unref?.();
+            this.tickTimer = timer;
+        };
+
+        scheduleNext();
+    },
+
+    stopTicker() {
+        if (!this.tickTimer) {
+            return;
+        }
+
+        clearTimeout(this.tickTimer);
+        this.tickTimer = null;
     },
 
     enqueue(idUser: string | number, teamSize: unknown) {
@@ -122,7 +247,7 @@ export const arenaMatchmakingManager = {
             throw new Error("Personaje no encontrado.");
         }
 
-        this.requireEligibleCharacter(user);
+        this.requireEligibleCharacter(user, teamSize);
 
         let teamMembers: RuntimeCharacter[] = [];
         let isParty = false;
@@ -149,7 +274,7 @@ export const arenaMatchmakingManager = {
             }
 
             for (const member of members) {
-                this.requireEligibleCharacter(member);
+                this.requireEligibleCharacter(member, teamSize);
             }
 
             teamMembers = members;
@@ -181,38 +306,111 @@ export const arenaMatchmakingManager = {
         }
 
         this.processQueue(teamSize);
+        this.broadcastQueueState();
+        this.ensureTicker();
 
         return {
             ok: true,
             inQueue: true,
             teamSize,
             totalInQueue: currentTotal,
+            queuedTeamSizes: this.getQueuedTeamSizes(idUser),
         };
     },
 
-    dequeue(idUser: string | number) {
+    // Sin teamSize saca al jugador de todas las colas en las que este anotado.
+    dequeue(idUser: string | number, teamSize?: unknown) {
         const strId = String(idUser);
-        const entryIndex = this.queue.findIndex((e) => e.characterIds.includes(strId));
+        let targetSize: MatchmakingTeamSize | undefined;
 
-        if (entryIndex === -1) {
+        if (teamSize !== undefined && teamSize !== null) {
+            if (!isMatchmakingTeamSize(teamSize)) {
+                throw new Error("Modo de matchmaking inválido. Elegí 2v2, 3v3 o 4v4.");
+            }
+
+            targetSize = teamSize;
+        }
+
+        const removed: QueueEntry[] = [];
+
+        this.queue = this.queue.filter((entry) => {
+            const matches =
+                entry.characterIds.includes(strId) &&
+                (targetSize === undefined || entry.teamSize === targetSize);
+
+            if (matches) {
+                removed.push(entry);
+            }
+
+            return !matches;
+        });
+
+        if (removed.length === 0) {
+            if (targetSize !== undefined) {
+                throw new Error(`No estás en la cola ${targetSize}v${targetSize}.`);
+            }
+
             throw new Error("No estás en la cola de la arena.");
         }
 
-        const [entry] = this.queue.splice(entryIndex, 1);
+        for (const entry of removed) {
+            for (const charId of entry.characterIds) {
+                const member = getCharacterById(charId);
 
-        for (const charId of entry.characterIds) {
-            const member = getCharacterById(charId);
-
-            if (member) {
-                sendConsoleMessage(member, `[Arena ${entry.teamSize}v${entry.teamSize}] Has salido de la cola de matchmaking.`, "#FF5252");
+                if (member) {
+                    sendConsoleMessage(member, `[Arena ${entry.teamSize}v${entry.teamSize}] Has salido de la cola de matchmaking.`, "#FF5252");
+                }
             }
+        }
+
+        this.pushMatchmakingState(removed.flatMap((entry) => entry.characterIds));
+        this.broadcastQueueState();
+
+        if (this.queue.length === 0) {
+            this.stopTicker();
         }
 
         return {
             ok: true,
-            inQueue: false,
-            totalInQueue: this.getTotalPlayersInQueue(entry.teamSize),
+            inQueue: this.isInQueue(strId),
+            queuedTeamSizes: this.getQueuedTeamSizes(strId),
         };
+    },
+
+    // Al ser convocado por una cola, el jugador se libera automaticamente de las
+    // demas colas en las que estuviera anotado.
+    releaseFromOtherQueues(matchedCharacterIds: string[], exceptTeamSize: MatchmakingTeamSize) {
+        const matched = new Set(matchedCharacterIds.map((id) => String(id)));
+        const released: QueueEntry[] = [];
+
+        this.queue = this.queue.filter((entry) => {
+            if (entry.teamSize === exceptTeamSize) {
+                return true;
+            }
+
+            if (!entry.characterIds.some((id) => matched.has(id))) {
+                return true;
+            }
+
+            released.push(entry);
+            return false;
+        });
+
+        for (const entry of released) {
+            for (const charId of entry.characterIds) {
+                const member = getCharacterById(charId);
+
+                if (member) {
+                    sendConsoleMessage(
+                        member,
+                        `[Arena ${entry.teamSize}v${entry.teamSize}] Saliste de la cola porque entraste a una partida ${exceptTeamSize}v${exceptTeamSize}.`,
+                        "#E69500",
+                    );
+                }
+            }
+        }
+
+        return released;
     },
 
     getTotalPlayersInQueue(teamSize?: MatchmakingTeamSize): number {
@@ -221,7 +419,9 @@ export const arenaMatchmakingManager = {
             .reduce((acc, entry) => acc + entry.characterIds.length, 0);
     },
 
-    pruneQueue() {
+    pruneQueue(): QueueEntry[] {
+        const removed: QueueEntry[] = [];
+
         this.queue = this.queue.filter((entry) => {
             const validMembers = entry.characterIds
                 .map((id) => getCharacterById(id))
@@ -241,12 +441,18 @@ export const arenaMatchmakingManager = {
                     return true;
                 });
 
-            if (entry.isParty) {
-                return validMembers.length === entry.teamSize;
+            const keep = entry.isParty
+                ? validMembers.length === entry.teamSize
+                : validMembers.length === 1;
+
+            if (!keep) {
+                removed.push(entry);
             }
 
-            return validMembers.length === 1;
+            return keep;
         });
+
+        return removed;
     },
 
     processQueue(teamSize: MatchmakingTeamSize) {
@@ -354,6 +560,9 @@ export const arenaMatchmakingManager = {
             return;
         }
 
+        const matchedIds = allMatchedUsers.map((user) => String(user.id));
+        const releasedEntries = this.releaseFromOtherQueues(matchedIds, teamSize);
+
         for (const user of allMatchedUsers) {
             sendConsoleMessage(user, `¡PARTIDA ENCONTRADA! Entrando a la Arena ${teamSize}v${teamSize}...`, "#00E676");
         }
@@ -366,6 +575,17 @@ export const arenaMatchmakingManager = {
             for (const user of allMatchedUsers) {
                 sendConsoleMessage(user, `[Arena ${teamSize}v${teamSize}] Error al iniciar la partida. Regresando a la cola.`, "#FF5252");
             }
+
+            // Devolvemos a la cola tanto la partida fallida como las colas
+            // paralelas que habiamos liberado, para no dejar al jugador afuera.
+            this.queue.unshift(...selectedEntries, ...releasedEntries);
+        }
+
+        this.pushMatchmakingState(matchedIds);
+        this.broadcastQueueState();
+
+        if (this.queue.length === 0) {
+            this.stopTicker();
         }
     },
 };
