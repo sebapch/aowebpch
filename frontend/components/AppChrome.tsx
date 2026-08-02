@@ -14,7 +14,6 @@ const navItems = [
     { href: "/", label: "Inicio" },
     { href: "/characters", label: "Personajes" },
     { href: "/ranking", label: "Ranking" },
-    { href: "/updates", label: "Novedades" },
 ];
 
 function isActivePath(pathname: string, href: string) {

@@ -5,7 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import CharacterSpritePreview from "@/components/CharacterSpritePreview";
-import UpdatesPanel from "@/components/UpdatesPanel";
 import type { AuthErrorResponse, AuthSession } from "../../lib/auth";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
 
@@ -154,8 +153,7 @@ export default function CharactersPage() {
                 </div>
 
                 {activeSession ? (
-                    <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
-                        <div className="space-y-4">
+                    <div className="space-y-4">
                             <div className="flex justify-end">
                                 <Link
                                     href="/createcharacter"
@@ -321,11 +319,6 @@ export default function CharactersPage() {
                                     {error}
                                 </div>
                             ) : null}
-                        </div>
-
-                        <aside className="xl:sticky xl:top-8 xl:self-start">
-                            <UpdatesPanel mode="preview" />
-                        </aside>
                     </div>
                 ) : (
                     <div className="game-card p-6 text-slate-400 text-xs shadow-md">
