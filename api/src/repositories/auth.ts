@@ -182,63 +182,58 @@ function getStarterLoadout(
     switch (classKey) {
         case "mago":
             items.push({ idItem: 660, amount: 1 }); // Báculo Engarzado (+7 Daño Mágico)
-            items.push({ idItem: 400, amount: 1 }); // Vara de Mago (+5 Daño Mágico)
-            items.push({ idItem: isLowRace ? 558 : 518, amount: 1 }); // Túnica de Mago Oscuro / E/G
-            items.push({ idItem: 404, amount: 1 }); // Escudo de Tortuga
+            items.push({ idItem: 519, amount: 1 }); // Túnica Legendaria (Def 30-35)
             items.push({ idItem: 662, amount: 1 }); // Sombrero de Mago
             break;
         case "clerigo":
-            items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
-            items.push({ idItem: 990, amount: 1 }); // Mazo del Juicio (Hit 5-16)
-            items.push({ idItem: isLowRace ? 393 : 391, amount: 1 }); // Armadura de Placas Completa +2 / E/G (Def 45-50)
+            items.push({ idItem: 129, amount: 1 }); // Hacha de Guerra Dos Filos (Hit 9-18)
+            items.push({ idItem: isLowRace ? 243 : 195, amount: 1 }); // Armadura de Placas Completa / E/G (Def 27-35)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
-            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            items.push({ idItem: 131, amount: 1 }); // Casco de Hierro Completo (Def 15-20)
             break;
         case "guerrero":
             items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
             items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
-            items.push({ idItem: isLowRace ? 393 : 391, amount: 1 }); // Armadura de Placas Completa +2 / E/G (Def 45-50)
+            items.push({ idItem: 479, amount: 1 }); // Arco Compuesto (Hit 7-9)
+            items.push({ idItem: 860, amount: 500 }); // Flechas
+            items.push({ idItem: isLowRace ? 243 : 195, amount: 1 }); // Armadura de Placas Completa / E/G (Def 27-35)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
-            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            items.push({ idItem: 131, amount: 1 }); // Casco de Hierro Completo (Def 15-20)
             break;
         case "asesino":
-            items.push({ idItem: 559, amount: 1 }); // Daga de Plata (Hit 6-9 - Apuñalar)
+            items.push({ idItem: 367, amount: 1 }); // Daga +4 (Hit 5-8)
             items.push({ idItem: 124, amount: 1 }); // Katana (Hit 8-16)
-            items.push({ idItem: isLowRace ? 632 : 895, amount: 1 }); // Armadura Legendaria / Real E/G (Def 55-60)
+            items.push({ idItem: isLowRace ? 854 : 356, amount: 1 }); // Armadura de las Sombras / E/G (Def 30-37)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
-            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            items.push({ idItem: 131, amount: 1 }); // Casco de Hierro Completo (Def 15-20)
             break;
         case "bardo":
             items.push({ idItem: 399, amount: 1 }); // Cimitarra (Hit 7-15)
-            items.push({ idItem: 559, amount: 1 }); // Daga de Plata
-            items.push({ idItem: 864, amount: 1 }); // Laúd
-            items.push({ idItem: isLowRace ? 881 : 895, amount: 1 }); // Armadura Legendaria / Ciénaga
+            items.push({ idItem: 164, amount: 1 }); // Espada Corta (Hit 4-5)
+            items.push({ idItem: 696, amount: 1 }); // Laúd Mágico (+4 Daño Mágico)
+            items.push({ idItem: 519, amount: 1 }); // Túnica Legendaria (Def 30-35)
             items.push({ idItem: 404, amount: 1 }); // Escudo de Tortuga
-            items.push({ idItem: 1004, amount: 1 }); // Casco de Tigre (Def 6-9)
+            items.push({ idItem: 1002, amount: 1 }); // Casco de Lobo (Def 2-4)
             break;
         case "druida":
             items.push({ idItem: 399, amount: 1 }); // Cimitarra (Hit 7-15)
-            items.push({ idItem: 659, amount: 1 }); // Bastón Nudoso (+5 Daño Mágico)
-            items.push({ idItem: 863, amount: 1 }); // Flauta
-            items.push({ idItem: isLowRace ? 881 : 895, amount: 1 }); // Armadura Legendaria / Ciénaga
+            items.push({ idItem: 519, amount: 1 }); // Túnica Legendaria (Def 30-35)
             items.push({ idItem: 404, amount: 1 }); // Escudo de Tortuga
-            items.push({ idItem: 1004, amount: 1 }); // Casco de Tigre (Def 6-9)
+            items.push({ idItem: 1002, amount: 1 }); // Casco de Lobo (Def 2-4)
             break;
         case "paladin":
             items.push({ idItem: 403, amount: 1 }); // Espada de Plata (Hit 11-19)
-            items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
-            items.push({ idItem: isLowRace ? 393 : 391, amount: 1 }); // Armadura de Placas Completa +2 / E/G (Def 45-50)
+            items.push({ idItem: isLowRace ? 243 : 195, amount: 1 }); // Armadura de Placas Completa / E/G (Def 27-35)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
-            items.push({ idItem: 405, amount: 1 }); // Casco de Plata (Def 20-25)
+            items.push({ idItem: 131, amount: 1 }); // Casco de Hierro Completo (Def 15-20)
             break;
         case "cazador":
             items.push({ idItem: 665, amount: 1 }); // Arco de Cazador (Hit 9-12)
-            items.push({ idItem: 664, amount: 1 }); // Arco Compuesto Reforzado (Hit 5-10)
             items.push({ idItem: 860, amount: 500 }); // Flechas
             items.push({ idItem: 126, amount: 1 }); // Hacha Larga de Guerra (Hit 10-18)
-            items.push({ idItem: isLowRace ? 617 : 616, amount: 1 }); // Armadura de Guerrero Campeón / E/G (Def 80-85)
+            items.push({ idItem: isLowRace ? 243 : 195, amount: 1 }); // Armadura de Placas Completa / E/G (Def 27-35)
             items.push({ idItem: 130, amount: 1 }); // Escudo de Plata (Def 2-5)
-            items.push({ idItem: 370, amount: 1 }); // Capucha de Cazador (Def 15-20)
+            items.push({ idItem: 131, amount: 1 }); // Casco de Hierro Completo (Def 15-20)
             break;
     }
 

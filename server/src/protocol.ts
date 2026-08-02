@@ -3771,7 +3771,8 @@ function attackRange(ws: RuntimeClient) {
             user.spellsErrados++;
         }
 
-        game.quitarUserInvItem(ws.id, user.idItemArrow, 1);
+        // Flechas infinitas: no se gastan del inventario
+        // game.quitarUserInvItem(ws.id, user.idItemArrow, 1);
     } catch (err) {
         funct.dumpError(err);
     }
