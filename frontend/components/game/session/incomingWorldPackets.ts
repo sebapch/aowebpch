@@ -115,6 +115,8 @@ export async function handleIncomingWorldPacket({
                 ctx,
             });
 
+            ctx.setMapVoiceChatAvailable(packet.payload.voiceChatEnabled === true);
+
             for (const blockedTile of packet.payload.blockedTiles) {
                 await handleIncomingWorldPacket({
                     packet: {
@@ -324,9 +326,17 @@ export async function handleIncomingWorldPacket({
             ctx.emitChallengeVetoState(packet.payload);
             return true;
 
-        case "voiceSignal":
-            ctx.handleVoiceSignalPacket(packet.payload);
+        case "voiceSignal": {
+            const roomId = (packet.payload as { roomId?: unknown }).roomId;
+
+            if (typeof roomId === "string" && roomId.startsWith("prox:")) {
+                ctx.handleProximityVoiceSignalPacket(packet.payload);
+            } else {
+                ctx.handleVoiceSignalPacket(packet.payload);
+            }
+
             return true;
+        }
 
         case "closeTrade":
             ctx.emitTradeState(null);

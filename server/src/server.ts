@@ -116,6 +116,9 @@ function handleSocketClosed(ws: RuntimeClient) {
         return;
     }
 
+    const proximityVoiceApi = require("./proximityVoice") as { leaveAll: (idUser: string | number) => void };
+    proximityVoiceApi.leaveAll(ws.id);
+
     const user = (vars.personajes as RuntimeCharacters)[ws.id] as ServerCharacter | undefined;
 
     if (!user || user.cerrado) {

@@ -61,7 +61,8 @@ import {
 import { useOutgoingRequests } from "../session/useOutgoingRequests";
 import { useGameSession } from "../session/useGameSession";
 import { useTeamVoiceChat } from "../session/useTeamVoiceChat";
-import type { TeamVoiceState } from "../../../lib/teamVoice";
+import { useProximityVoiceChat } from "../session/useProximityVoiceChat";
+import type { MultiVoiceState } from "../../../lib/multiPeerVoice";
 import { handleIncomingGamePacket } from "../session/handleIncomingGamePacket";
 import { useRendererBootstrap } from "./useRendererBootstrap";
 import { useAssetPipeline } from "./useAssetPipeline";
@@ -199,6 +200,12 @@ interface MapRendererProps {
     chatRequest?: { message: string; token: number } | null;
     voiceActionRequest?: {
         action: "join" | "leave" | "mutePeer" | "unmutePeer";
+        peerId?: string;
+        token: number;
+    } | null;
+    proximityVoiceActionRequest?: {
+        action: "join" | "leave" | "mutePeer" | "unmutePeer";
+        peerId?: string;
         token: number;
     } | null;
     runtimeTiming?: RuntimeTimingConfig;
@@ -219,7 +226,9 @@ interface MapRendererProps {
     onAdminIntervalsOpen?: () => void;
     onAdminOverviewSnapshot?: (snapshot: PanelSnapshot) => void;
     onCharacterStatsSnapshot?: (snapshot: CharacterStatsSnapshot) => void;
-    onVoiceStateChange?: (state: TeamVoiceState) => void;
+    onVoiceStateChange?: (state: MultiVoiceState) => void;
+    onProximityVoiceStateChange?: (state: MultiVoiceState) => void;
+    onMapVoiceChatAvailabilityChange?: (enabled: boolean) => void;
     onPerformanceSample?: (sample: PerformanceSample) => void;
 }
 
@@ -693,6 +702,7 @@ export default function MapRenderer({
     spellTargetRequest,
     chatRequest,
     voiceActionRequest,
+    proximityVoiceActionRequest,
     runtimeTiming = DEFAULT_RUNTIME_TIMING,
     hotkeySettings = DEFAULT_HOTKEY_SETTINGS,
     macros = [],
@@ -712,6 +722,8 @@ export default function MapRenderer({
     onAdminOverviewSnapshot,
     onCharacterStatsSnapshot,
     onVoiceStateChange,
+    onProximityVoiceStateChange,
+    onMapVoiceChatAvailabilityChange,
     onPerformanceSample,
 }: MapRendererProps) {
     const canvasRef = useRef<HTMLDivElement>(null);
@@ -1334,6 +1346,25 @@ export default function MapRenderer({
         onVoiceStateChange,
     });
 
+    const {
+        handleVoiceSignalPacket: handleProximityVoiceSignalPacket,
+        joinVoiceChat: joinProximityVoiceChat,
+        leaveVoiceChat: leaveProximityVoiceChat,
+        setVoiceTransmitting: setProximityVoiceTransmitting,
+        setVoicePeerMuted: setProximityVoicePeerMuted,
+    } = useProximityVoiceChat({
+        websocketRef,
+        onVoiceStateChange: onProximityVoiceStateChange,
+    });
+
+    const setAnyVoiceTransmitting = React.useCallback(
+        (active: boolean) => {
+            setVoiceTransmitting(active);
+            setProximityVoiceTransmitting(active);
+        },
+        [setVoiceTransmitting, setProximityVoiceTransmitting],
+    );
+
     const lastVoiceActionTokenRef = useRef<number | null>(null);
 
     useEffect(() => {
@@ -1355,7 +1386,9 @@ export default function MapRenderer({
             return;
         }
 
-        setVoicePeerMuted(request.action === "mutePeer");
+        if (request.peerId) {
+            setVoicePeerMuted(request.peerId, request.action === "mutePeer");
+        }
     }, [
         joinVoiceChat,
         leaveVoiceChat,
@@ -1363,12 +1396,43 @@ export default function MapRenderer({
         voiceActionRequest,
     ]);
 
+    const lastProximityVoiceActionTokenRef = useRef<number | null>(null);
+
+    useEffect(() => {
+        const request = proximityVoiceActionRequest;
+
+        if (!request || lastProximityVoiceActionTokenRef.current === request.token) {
+            return;
+        }
+
+        lastProximityVoiceActionTokenRef.current = request.token;
+
+        if (request.action === "join") {
+            joinProximityVoiceChat();
+            return;
+        }
+
+        if (request.action === "leave") {
+            leaveProximityVoiceChat();
+            return;
+        }
+
+        if (request.peerId) {
+            setProximityVoicePeerMuted(request.peerId, request.action === "mutePeer");
+        }
+    }, [
+        joinProximityVoiceChat,
+        leaveProximityVoiceChat,
+        setProximityVoicePeerMuted,
+        proximityVoiceActionRequest,
+    ]);
+
     useKeyboardGameplay({
         isMounted,
         engineRef,
         websocketRef,
         hotkeySettingsRef,
-        setVoiceTransmitting,
+        setVoiceTransmitting: setAnyVoiceTransmitting,
         playerHudRef,
         movementKeyMapRef,
         movementPressCountsRef,
@@ -1880,6 +1944,8 @@ export default function MapRenderer({
                 emitRetosState,
                 emitChallengeVetoState,
                 handleVoiceSignalPacket,
+                handleProximityVoiceSignalPacket,
+                setMapVoiceChatAvailable: onMapVoiceChatAvailabilityChange ?? (() => {}),
                 emitBailState,
                 emitCraftingState,
                 onAdminIntervalsOpen,
@@ -1920,6 +1986,8 @@ export default function MapRenderer({
         ensureMapTile,
         flushBufferedRemoteEntities,
         handleVoiceSignalPacket,
+        handleProximityVoiceSignalPacket,
+        onMapVoiceChatAvailabilityChange,
         lockMovementInput,
         mergeHud,
         onAdminIntervalsOpen,

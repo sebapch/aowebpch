@@ -51,6 +51,8 @@ export type MapMetadata = {
     isArena?: boolean;
     /** Spawns de equipo para Retos. Ausente/incompleto: el servidor usa el fallback fijo. */
     arenaSpawns?: ArenaSpawnConfig;
+    /** Habilita el chat de voz por proximidad en mundo abierto en este mapa. */
+    voiceChatEnabled?: boolean;
 };
 
 /** `tiles` es row-major: indice `(y-1)*width + (x-1)`. */

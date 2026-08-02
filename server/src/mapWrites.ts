@@ -131,6 +131,7 @@ function normalizeMapMeta(meta: MapMetadata, mapId: number): MapMetadata {
         backup: toFiniteNumber(meta.backup) ?? 0,
         pk: toFiniteNumber(meta.pk) ?? 0,
         isArena: meta.isArena === true,
+        voiceChatEnabled: meta.voiceChatEnabled === true,
         ...(arenaSpawns ? { arenaSpawns } : {}),
     };
 }

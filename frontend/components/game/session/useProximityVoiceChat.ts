@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 import {
+    createProximityVoiceJoinPacket,
+    createProximityVoiceLeavePacket,
     createVoiceSignalPacket,
     type VoiceSignalPayload,
 } from "../../../lib/aowProtocol";
@@ -9,20 +11,27 @@ import {
     type MultiVoiceState,
 } from "../../../lib/multiPeerVoice";
 
-type UseTeamVoiceChatOptions = {
+/** Debe coincidir con `VOICE_PROXIMITY_RANGE` en `server/src/proximityVoice.ts`. */
+export const VOICE_PROXIMITY_RANGE = 7;
+
+type UseProximityVoiceChatOptions = {
     websocketRef: RefObject<WebSocket | null>;
     onVoiceStateChange?: ((state: MultiVoiceState) => void) | undefined;
 };
 
 /**
- * Chat de voz por equipo para los matches de arena (2v2/3v3/4v4): arma un
- * mesh 1-a-1 con cada compañero de equipo y expone los controles que usan el
- * HUD y el push to talk.
+ * Chat de voz por proximidad en mundo abierto: arma un mesh dinámico con
+ * quien esté cerca en mapas habilitados desde el editor (`voiceChatEnabled`).
+ * A diferencia de la voz de equipo, unirse/salir del canal es un aviso
+ * explícito al servidor (`proximityJoin`/`proximityLeave`): recién ahí
+ * empieza a calcular quién está en rango. El volumen por distancia lo maneja
+ * `MultiPeerVoiceChat` con los mensajes `{type:"distance"}` que manda el
+ * servidor cada vez que alguien unido al canal se mueve.
  */
-export function useTeamVoiceChat({
+export function useProximityVoiceChat({
     websocketRef,
     onVoiceStateChange,
-}: UseTeamVoiceChatOptions) {
+}: UseProximityVoiceChatOptions) {
     const [voiceState, setVoiceState] = useState<MultiVoiceState>(
         INITIAL_MULTI_VOICE_STATE,
     );
@@ -35,7 +44,7 @@ export function useTeamVoiceChat({
 
     const getVoiceChat = useCallback(() => {
         if (!voiceChatRef.current) {
-            voiceChatRef.current = new MultiPeerVoiceChat({
+            const chat = new MultiPeerVoiceChat({
                 sendSignal: (roomId, signal) => {
                     const socket = websocketRef.current;
 
@@ -50,6 +59,8 @@ export function useTeamVoiceChat({
                     onVoiceStateChangeRef.current?.(state);
                 },
             });
+            chat.setMaxDistanceRange(VOICE_PROXIMITY_RANGE);
+            voiceChatRef.current = chat;
         }
 
         return voiceChatRef.current;
@@ -72,11 +83,23 @@ export function useTeamVoiceChat({
 
     const joinVoiceChat = useCallback(() => {
         void getVoiceChat().join();
-    }, [getVoiceChat]);
+
+        const socket = websocketRef.current;
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(createProximityVoiceJoinPacket());
+        }
+    }, [getVoiceChat, websocketRef]);
 
     const leaveVoiceChat = useCallback(() => {
         getVoiceChat().leave();
-    }, [getVoiceChat]);
+
+        const socket = websocketRef.current;
+
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(createProximityVoiceLeavePacket());
+        }
+    }, [getVoiceChat, websocketRef]);
 
     const setVoiceTransmitting = useCallback(
         (active: boolean) => {

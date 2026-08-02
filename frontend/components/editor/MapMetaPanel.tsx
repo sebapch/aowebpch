@@ -174,6 +174,15 @@ export function MapMetaPanel({
                             />
                             Backup
                         </label>
+
+                        <label className="flex items-center gap-2 text-xs text-slate-300">
+                            <input
+                                type="checkbox"
+                                checked={meta.voiceChatEnabled === true}
+                                onChange={(event) => update("voiceChatEnabled", event.target.checked)}
+                            />
+                            Chat de voz por proximidad
+                        </label>
                     </div>
                 </div>
             </div>

@@ -67,6 +67,8 @@ export type MapMetadata = {
     isArena?: boolean;
     /** Spawns de equipo para Retos. Ausente/incompleto: el servidor usa el fallback fijo. */
     arenaSpawns?: ArenaSpawnConfig;
+    /** Habilita el chat de voz por proximidad en mundo abierto en este mapa. */
+    voiceChatEnabled?: boolean;
 };
 
 export const TERRENO_OPTIONS = ["BOSQUE", "NIEVE", "DESIERTO", "LOCAL", "CIUDAD"] as const;

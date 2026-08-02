@@ -212,7 +212,7 @@ export type VoiceIceServer = {
     credential?: string;
 };
 
-/** Handshake WebRTC que intercambian los dos jugadores de un mismo equipo 2v2. */
+/** Handshake WebRTC que intercambian dos jugadores conectados en una misma sala de voz. */
 export type VoicePeerSignal =
     | { kind: "ready"; reply: boolean }
     | { kind: "offer" | "answer"; sdp: string }
@@ -228,7 +228,8 @@ export type VoiceSignalPayload =
           iceServers: VoiceIceServer[];
       }
     | { type: "signal"; roomId: string; fromId: string; signal: VoicePeerSignal }
-    | { type: "closed"; roomId: string };
+    | { type: "closed"; roomId: string }
+    | { type: "distance"; roomId: string; distance: number };
 
 export interface CharacterSnapshot {
     id: number;
@@ -642,6 +643,7 @@ export interface AreaMetaSnapshot {
     map: number;
     name: string;
     blockedTiles: AreaBlockedTileSnapshot[];
+    voiceChatEnabled: boolean;
 }
 
 export interface SelfFlagsDelta {
@@ -1294,7 +1296,9 @@ function parseAreaMetaSnapshot(reader: PacketReader): AreaMetaSnapshot {
         });
     }
 
-    return { map, name, blockedTiles };
+    const voiceChatEnabled = reader.getByte() === 1;
+
+    return { map, name, blockedTiles, voiceChatEnabled };
 }
 
 function parseSelfMapMetaDelta(reader: PacketReader): SelfMapMetaDelta {
@@ -2294,9 +2298,22 @@ export function createRetosActionPacket(
     return writer.toArrayBuffer();
 }
 
-export function createVoiceSignalPacket(signal: VoicePeerSignal): ArrayBuffer {
+export function createVoiceSignalPacket(roomId: string, signal: VoicePeerSignal): ArrayBuffer {
     const writer = new PacketWriter(SERVER_PACKET_ID.voiceSignal);
-    writer.writeString(JSON.stringify(signal));
+    writer.writeString(JSON.stringify({ action: "signal", roomId, signal }));
+    return writer.toArrayBuffer();
+}
+
+/** Prende el mic del canal de voz por proximidad: recién ahí el servidor empieza a armar salas con quien esté cerca. */
+export function createProximityVoiceJoinPacket(): ArrayBuffer {
+    const writer = new PacketWriter(SERVER_PACKET_ID.voiceSignal);
+    writer.writeString(JSON.stringify({ action: "proximityJoin" }));
+    return writer.toArrayBuffer();
+}
+
+export function createProximityVoiceLeavePacket(): ArrayBuffer {
+    const writer = new PacketWriter(SERVER_PACKET_ID.voiceSignal);
+    writer.writeString(JSON.stringify({ action: "proximityLeave" }));
     return writer.toArrayBuffer();
 }
 

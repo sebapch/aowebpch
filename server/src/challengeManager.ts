@@ -411,8 +411,18 @@ function isPartyLeader(user: RuntimeCharacter) {
     return Boolean(user.partyId && user.partyLeaderId && String(user.partyLeaderId) === String(user.id));
 }
 
-function getVoiceRoomId(match: ActiveMatch, side: TeamSide) {
-    return `${match.id}:${side}`;
+/**
+ * Id determinístico de sala por par de compañeros, no por equipo entero: un
+ * team de 3v3/4v4 arma un mesh de N*(N-1)/2 salas 1-a-1, una por par.
+ */
+function getVoiceRoomId(
+    match: ActiveMatch,
+    side: TeamSide,
+    idA: string | number,
+    idB: string | number,
+) {
+    const [lo, hi] = [String(idA), String(idB)].sort();
+    return `team:${match.id}:${side}:${lo}:${hi}`;
 }
 
 const challengeManager = {
@@ -1718,60 +1728,53 @@ const challengeManager = {
         getHandleProtocol().voiceSignal(payload, client);
     },
 
-    getVoiceTeammate(match: ActiveMatch, user: RuntimeCharacter) {
-        const side = getParticipantSideFromMatch(match, user);
-
-        if (!side) {
-            return null;
-        }
-
-        const teammate = match.teams[side].participants.find(
-            (participant) => String(participant.id) !== String(user.id),
-        );
-
-        return teammate ? (getCharacterById(teammate.id) ?? null) : null;
-    },
-
     /**
-     * Avisa a cada integrante de un equipo 2v2 quién es su compañero de voz.
-     * El cliente sólo pide el micrófono si el jugador acepta unirse.
+     * Avisa a cada integrante de un equipo (2v2, 3v3 o 4v4) quién es cada
+     * compañero de voz: arma un mesh 1-a-1 por cada par dentro del mismo
+     * lado (N*(N-1)/2 salas). El cliente sólo pide el micrófono si el
+     * jugador acepta unirse.
      */
     openVoiceRooms(match: ActiveMatch) {
-        if (match.teamSize !== 2) {
-            return;
-        }
-
         const iceServers = getVoiceIceServers();
 
         for (const side of [1, 2] as TeamSide[]) {
-            const [first, second] = match.teams[side].participants;
+            const participants = match.teams[side].participants;
 
-            if (!first || !second) {
+            if (participants.length < 2) {
                 continue;
             }
 
-            const roomId = getVoiceRoomId(match, side);
-            // El de id menor arranca la negociación para que no haya oferta cruzada.
-            const initiatorId = String(first.id) < String(second.id) ? String(first.id) : String(second.id);
+            for (let i = 0; i < participants.length; i++) {
+                for (let j = i + 1; j < participants.length; j++) {
+                    const first = participants[i];
+                    const second = participants[j];
+                    const roomId = getVoiceRoomId(match, side, first.id, second.id);
+                    // El de id menor arranca la negociación para que no haya oferta cruzada.
+                    const initiatorId =
+                        String(first.id) < String(second.id) ? String(first.id) : String(second.id);
 
-            for (const [self, peer] of [
-                [first, second],
-                [second, first],
-            ] as const) {
-                this.sendVoicePayload(self.id, {
-                    type: "room",
-                    roomId,
-                    peerId: String(peer.id),
-                    peerName: peer.name,
-                    initiator: String(self.id) === initiatorId,
-                    iceServers,
-                });
+                    for (const [self, peer] of [
+                        [first, second],
+                        [second, first],
+                    ] as const) {
+                        this.sendVoicePayload(self.id, {
+                            type: "room",
+                            roomId,
+                            peerId: String(peer.id),
+                            peerName: peer.name,
+                            initiator: String(self.id) === initiatorId,
+                            iceServers,
+                        });
+                    }
+                }
+            }
 
-                const client = getClientById(self.id);
+            for (const participant of participants) {
+                const client = getClientById(participant.id);
 
                 if (client) {
                     getHandleProtocol().console(
-                        `[Voz] Podés hablar con ${peer.name}: unite desde el panel de voz del equipo.`,
+                        `[Voz] Podés hablar con tu equipo: unite desde el panel de voz.`,
                         "#00E676",
                         0,
                         0,
@@ -1783,16 +1786,17 @@ const challengeManager = {
     },
 
     closeVoiceRooms(match: ActiveMatch) {
-        if (match.teamSize !== 2) {
-            return;
-        }
-
         for (const side of [1, 2] as TeamSide[]) {
-            const roomId = getVoiceRoomId(match, side);
+            const participants = match.teams[side].participants;
 
-            for (const participant of match.teams[side].participants) {
-                delete this.voiceSignalRates[String(participant.id)];
-                this.sendVoicePayload(participant.id, { type: "closed", roomId });
+            for (let i = 0; i < participants.length; i++) {
+                delete this.voiceSignalRates[String(participants[i].id)];
+
+                for (let j = i + 1; j < participants.length; j++) {
+                    const roomId = getVoiceRoomId(match, side, participants[i].id, participants[j].id);
+                    this.sendVoicePayload(participants[i].id, { type: "closed", roomId });
+                    this.sendVoicePayload(participants[j].id, { type: "closed", roomId });
+                }
             }
         }
     },
@@ -1813,10 +1817,12 @@ const challengeManager = {
     },
 
     /**
-     * Reenvía la señalización WebRTC (oferta/respuesta/candidatos ICE) al compañero
-     * de equipo. El servidor nunca ve ni transporta el audio: sólo el handshake.
+     * Reenvía la señalización WebRTC (oferta/respuesta/candidatos ICE) al
+     * compañero de equipo dueño de esa sala puntual (en 3v3/4v4 cada jugador
+     * tiene varias salas simultáneas, una por compañero). El servidor nunca
+     * ve ni transporta el audio: sólo el handshake.
      */
-    relayVoiceSignal(idUser: string | number, signal: unknown) {
+    relayVoiceSignal(idUser: string | number, roomId: string, signal: unknown) {
         const user = getCharacterById(idUser);
 
         if (!user) {
@@ -1825,7 +1831,7 @@ const challengeManager = {
 
         const match = this.getBusyMatchByCharacter(user);
 
-        if (!match || match.finished || match.teamSize !== 2) {
+        if (!match || match.finished) {
             return;
         }
 
@@ -1839,7 +1845,13 @@ const challengeManager = {
             return;
         }
 
-        const teammate = this.getVoiceTeammate(match, user);
+        const teammate = match.teams[side].participants
+            .filter((participant) => String(participant.id) !== String(user.id))
+            .map((participant) => getCharacterById(participant.id))
+            .find(
+                (participant): participant is RuntimeCharacter =>
+                    Boolean(participant) && getVoiceRoomId(match, side, participant!.id, user.id) === roomId,
+            );
 
         if (!teammate) {
             return;
@@ -1847,7 +1859,7 @@ const challengeManager = {
 
         this.sendVoicePayload(teammate.id, {
             type: "signal",
-            roomId: getVoiceRoomId(match, side),
+            roomId,
             fromId: String(user.id),
             signal,
         });

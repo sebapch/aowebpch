@@ -5724,6 +5724,7 @@ function Game(this: GameApi) {
                         map: user.map,
                         name: mapName,
                         blockedTiles: blockedTilesForUser,
+                        voiceChatEnabled: vars.mapData[user.map]?.voiceChatEnabled === true,
                     },
                     ws,
                 );
@@ -5942,6 +5943,12 @@ function Game(this: GameApi) {
 
                 npcApi.removeOwnerSummons(clientId);
                 user.summonTargetNpcId = 0;
+
+                const proximityVoiceApi = require("./proximityVoice") as {
+                    leaveAll: (idUser: EntityId) => void;
+                };
+
+                proximityVoiceApi.leaveAll(clientId);
             }
 
             fishing.cancelFishing(clientId);

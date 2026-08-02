@@ -138,6 +138,7 @@ type AreaMetaSnapshot = {
         pos: Position;
         blocked: number;
     }>;
+    voiceChatEnabled: boolean;
 };
 
 type SelfFlagsDeltaPayload = {
@@ -713,6 +714,8 @@ function writeAreaMetaSnapshot(snapshot: AreaMetaSnapshot) {
         pkg.writeByte(tile.pos.y);
         pkg.writeByte(tile.blocked);
     }
+
+    pkg.writeByte(snapshot.voiceChatEnabled ? 1 : 0);
 }
 
 function writeSelfMapMetaDeltaPayload(payload: SelfMapMetaDeltaPayload) {

@@ -35,6 +35,7 @@ const harvesting = require("./harvesting");
 const crafting = require("./crafting");
 const smelting = require("./smelting");
 const challengeManager = require("./challengeManager");
+const proximityVoice = require("./proximityVoice");
 const { arenaMatchmakingManager } = require("./arenaMatchmakingManager");
 const LOGOUT_CANCELLED_MESSAGE = "[Servidor] La salida se canceló porque te moviste.";
 const MAX_PENDING_MOVE_QUEUE_LENGTH = 8;
@@ -2097,6 +2098,7 @@ function processUserMovement(ws: RuntimeClient, heading: number, moveId: number,
     updateUserAreaAfterMovement(ws, user, heading);
     syncPendingReviveCastVisibilityForUser(ws.id!);
     schedulePendingMovement(ws.id!);
+    proximityVoice.onUserMoved(user);
 }
 
 function buyItem(ws: RuntimeClient) {
@@ -4488,8 +4490,14 @@ async function retosAction(ws: RuntimeClient) {
 }
 
 /**
- * Señalización WebRTC del chat de voz por equipo. Sólo viaja el handshake
- * (oferta, respuesta y candidatos ICE); el audio va directo entre los jugadores.
+ * Señalización WebRTC del chat de voz (equipo o proximidad). Sólo viaja el
+ * handshake (oferta, respuesta y candidatos ICE); el audio va directo entre
+ * los jugadores. `action: "signal"` reenvía el handshake: el prefijo del
+ * roomId decide a qué manager pertenece ("team:" un match de arena, "prox:"
+ * un canal de proximidad en mundo abierto, mutuamente excluyentes por mapa).
+ * `proximityJoin`/`proximityLeave` prenden/apagan el mic del canal de
+ * proximidad, que a diferencia del de equipo necesita que el servidor sepa
+ * quién está "escuchable" para poder calcular quién está cerca de quién.
  */
 function voiceSignal(ws: RuntimeClient) {
     try {
@@ -4515,7 +4523,35 @@ function voiceSignal(ws: RuntimeClient) {
             return;
         }
 
-        challengeManager.relayVoiceSignal(ws.id!, payload);
+        if (!payload || typeof payload !== "object") {
+            return;
+        }
+
+        const { action, roomId, signal } = payload as {
+            action?: unknown;
+            roomId?: unknown;
+            signal?: unknown;
+        };
+
+        if (action === "proximityJoin") {
+            proximityVoice.join(ws.id!);
+            return;
+        }
+
+        if (action === "proximityLeave") {
+            proximityVoice.leaveAll(ws.id!);
+            return;
+        }
+
+        if (action !== "signal" || typeof roomId !== "string" || !roomId) {
+            return;
+        }
+
+        if (roomId.startsWith("team:")) {
+            challengeManager.relayVoiceSignal(ws.id!, roomId, signal);
+        } else if (roomId.startsWith("prox:")) {
+            proximityVoice.relayVoiceSignal(ws.id!, roomId, signal);
+        }
     } catch (err) {
         funct.dumpError(err);
     }

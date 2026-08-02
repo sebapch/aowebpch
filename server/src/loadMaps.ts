@@ -26,6 +26,7 @@ type MapMetadata = {
     pk?: number;
     isArena?: boolean;
     arenaSpawns?: ArenaSpawnConfig;
+    voiceChatEnabled?: boolean;
 };
 
 type TerrainTile = {
@@ -335,6 +336,7 @@ class LoadMaps {
             vars.mapData[mapNum].backup = toNumber(metadata.backup);
             vars.mapData[mapNum].pk = toNumber(metadata.pk);
             vars.mapData[mapNum].isArena = metadata.isArena === true;
+            vars.mapData[mapNum].voiceChatEnabled = metadata.voiceChatEnabled === true;
             vars.mapData[mapNum].arenaSpawns = {
                 team1: normalizeArenaSpawnList(metadata.arenaSpawns?.team1),
                 team2: normalizeArenaSpawnList(metadata.arenaSpawns?.team2),

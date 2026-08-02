@@ -24,12 +24,12 @@ import CraftingModal from "../../components/CraftingModal";
 import MarketModal from "../../components/MarketModal";
 import RetosModal from "../../components/RetosModal";
 import ChallengeVetoModal from "../../components/ChallengeVetoModal";
-import TeamVoicePanel from "../../components/TeamVoicePanel";
+import VoiceChatPanel from "../../components/VoiceChatPanel";
 import TradeModal from "../../components/TradeModal";
 import {
-    INITIAL_TEAM_VOICE_STATE,
-    type TeamVoiceState,
-} from "../../lib/teamVoice";
+    INITIAL_MULTI_VOICE_STATE,
+    type MultiVoiceState,
+} from "../../lib/multiPeerVoice";
 import {
     createEmptyMacros,
     normalizeCharacterSettings,
@@ -786,13 +786,23 @@ function HomeContent() {
     const [challengeOverlayText, setChallengeOverlayText] = useState<
         string | null
     >(null);
-    const [voiceState, setVoiceState] = useState<TeamVoiceState>(
-        INITIAL_TEAM_VOICE_STATE,
+    const [voiceState, setVoiceState] = useState<MultiVoiceState>(
+        INITIAL_MULTI_VOICE_STATE,
     );
     const [voiceActionRequest, setVoiceActionRequest] = useState<{
         action: "join" | "leave" | "mutePeer" | "unmutePeer";
+        peerId?: string;
         token: number;
     } | null>(null);
+    const [proximityVoiceState, setProximityVoiceState] = useState<MultiVoiceState>(
+        INITIAL_MULTI_VOICE_STATE,
+    );
+    const [proximityVoiceActionRequest, setProximityVoiceActionRequest] = useState<{
+        action: "join" | "leave" | "mutePeer" | "unmutePeer";
+        peerId?: string;
+        token: number;
+    } | null>(null);
+    const [mapVoiceChatEnabled, setMapVoiceChatEnabled] = useState(false);
     const [globalCanvasNotice, setGlobalCanvasNotice] =
         useState<GlobalCanvasNotice | null>(null);
     const [bailState, setBailState] = useState<BailOffer | null>(null);
@@ -2051,8 +2061,15 @@ function HomeContent() {
     }, []);
 
     const requestVoiceAction = useCallback(
-        (action: "join" | "leave" | "mutePeer" | "unmutePeer") => {
-            setVoiceActionRequest({ action, token: Date.now() });
+        (action: "join" | "leave" | "mutePeer" | "unmutePeer", peerId?: string) => {
+            setVoiceActionRequest({ action, peerId, token: Date.now() });
+        },
+        [],
+    );
+
+    const requestProximityVoiceAction = useCallback(
+        (action: "join" | "leave" | "mutePeer" | "unmutePeer", peerId?: string) => {
+            setProximityVoiceActionRequest({ action, peerId, token: Date.now() });
         },
         [],
     );
@@ -2862,6 +2879,9 @@ function HomeContent() {
                                     spellTargetRequest={spellTargetRequest}
                                     chatRequest={chatRequest}
                                     voiceActionRequest={voiceActionRequest}
+                                    proximityVoiceActionRequest={
+                                        proximityVoiceActionRequest
+                                    }
                                     runtimeTiming={runtimeTiming}
                                     hotkeySettings={hotkeySettings}
                                     macros={macros}
@@ -2894,22 +2914,52 @@ function HomeContent() {
                                         setCharacterStatsOpen(true);
                                     }}
                                     onVoiceStateChange={setVoiceState}
+                                    onProximityVoiceStateChange={
+                                        setProximityVoiceState
+                                    }
+                                    onMapVoiceChatAvailabilityChange={
+                                        setMapVoiceChatEnabled
+                                    }
                                 />
 
-                                <TeamVoicePanel
+                                <VoiceChatPanel
                                     state={voiceState}
                                     pushToTalkLabel={formatHotkeyBinding(
                                         hotkeySettings.pushToTalk,
                                     )}
+                                    emptyPeerLabel="Voz de equipo"
+                                    visible={voiceState.peers.length > 0}
                                     onJoin={() => requestVoiceAction("join")}
                                     onLeave={() => requestVoiceAction("leave")}
-                                    onTogglePeerMute={() =>
+                                    onTogglePeerMute={(peerId) => {
+                                        const peer = voiceState.peers.find(
+                                            (candidate) => candidate.peerId === peerId,
+                                        );
                                         requestVoiceAction(
-                                            voiceState.peerMuted
-                                                ? "unmutePeer"
-                                                : "mutePeer",
-                                        )
-                                    }
+                                            peer?.muted ? "unmutePeer" : "mutePeer",
+                                            peerId,
+                                        );
+                                    }}
+                                />
+
+                                <VoiceChatPanel
+                                    state={proximityVoiceState}
+                                    pushToTalkLabel={formatHotkeyBinding(
+                                        hotkeySettings.pushToTalk,
+                                    )}
+                                    emptyPeerLabel="Voz cercana"
+                                    visible={mapVoiceChatEnabled}
+                                    onJoin={() => requestProximityVoiceAction("join")}
+                                    onLeave={() => requestProximityVoiceAction("leave")}
+                                    onTogglePeerMute={(peerId) => {
+                                        const peer = proximityVoiceState.peers.find(
+                                            (candidate) => candidate.peerId === peerId,
+                                        );
+                                        requestProximityVoiceAction(
+                                            peer?.muted ? "unmutePeer" : "mutePeer",
+                                            peerId,
+                                        );
+                                    }}
                                 />
 
                                 {!arenaMode &&
