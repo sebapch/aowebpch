@@ -47,7 +47,7 @@ export default function LiveOnlineCounter() {
         };
     }, []);
 
-    if (online === null || online < 1) {
+    if (online === null) {
         return null;
     }
 
@@ -58,7 +58,7 @@ export default function LiveOnlineCounter() {
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
             </span>
             <span className="text-xs font-semibold text-slate-300">
-                {online} {online === 1 ? "jugador" : "jugadores"} en línea
+                Servidor Online
             </span>
         </div>
     );
