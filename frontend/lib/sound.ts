@@ -21,6 +21,12 @@ const MIN_DISTANCE_VOLUME = 0.18;
 const SOUND_POOL_SIZE = 12;
 const HTML5_SOUND_POOL_SIZE = 4;
 const MAX_CACHED_SOUNDS = 64;
+// Si un mismo sonido se retriggerea en ráfaga (ej. tomar pociones a
+// repetición con click + tecla), Howler puede terminar con varias
+// instancias solapadas que siguen sonando bastante después de que el
+// jugador dejó de tomar pociones. Si pasan IDLE_STOP_MS sin un nuevo
+// play() de ese soundId, cortamos todas sus instancias activas.
+const IDLE_STOP_MS = 5000;
 const SOUND_EXTENSION_OVERRIDES = new Map<
     number,
     (typeof SOUND_FILE_EXTENSIONS)[number]
@@ -33,6 +39,7 @@ export class GameSoundManager {
     private readonly basePath: string;
     private readonly unavailableSoundIds = new Set<number>();
     private readonly soundCache = new Map<number, Howl>();
+    private readonly idleStopTimers = new Map<number, number>();
     private readonly preferWebAudio: boolean;
     private masterVolume = 1;
     private preferredExtension: (typeof SOUND_FILE_EXTENSIONS)[number] =
@@ -68,6 +75,8 @@ export class GameSoundManager {
         if (!sound) {
             return;
         }
+
+        this.armIdleStopWatchdog(soundId, sound);
 
         const playbackId = sound.play();
         if (typeof playbackId === "number") {
@@ -110,8 +119,27 @@ export class GameSoundManager {
             sound.unload();
         }
 
+        for (const timerId of this.idleStopTimers.values()) {
+            window.clearTimeout(timerId);
+        }
+
         this.soundCache.clear();
+        this.idleStopTimers.clear();
         Howler.volume(1);
+    }
+
+    private armIdleStopWatchdog(soundId: number, sound: Howl): void {
+        const existingTimerId = this.idleStopTimers.get(soundId);
+        if (existingTimerId !== undefined) {
+            window.clearTimeout(existingTimerId);
+        }
+
+        const timerId = window.setTimeout(() => {
+            this.idleStopTimers.delete(soundId);
+            sound.stop();
+        }, IDLE_STOP_MS);
+
+        this.idleStopTimers.set(soundId, timerId);
     }
 
     private getOrCreateSound(soundId: number): Howl | null {

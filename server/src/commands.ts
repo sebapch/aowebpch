@@ -2147,6 +2147,29 @@ const command: CommandApi = {
                     );
                     break;
 
+                case "/onlinelist": {
+                    if (!hasStaffPrivileges(user)) {
+                        break;
+                    }
+
+                    const onlineUsers = getOnlineCharacters()
+                        .filter((char) => !(char as any).adminSummonedBot && char.nameCharacter)
+                        .map((char) => char.nameCharacter);
+
+                    if (onlineUsers.length === 0) {
+                        handleProtocol.console("[INFO] No hay usuarios conectados.", "#E69500", 0, 0, ws as CommandClient);
+                    } else {
+                        handleProtocol.console(
+                            `[INFO] Usuarios online (${onlineUsers.length}): ${onlineUsers.join(", ")}`,
+                            "#E69500",
+                            0,
+                            0,
+                            ws as CommandClient,
+                        );
+                    }
+                    break;
+                }
+
                 case "/global": {
                     const error = handleGlobalChat(user, nextText);
 
