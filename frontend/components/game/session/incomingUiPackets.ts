@@ -73,6 +73,10 @@ export async function handleIncomingUiPacket({
             });
             return true;
 
+        case "actOnline":
+            ctx.onOnlineUsersUpdate?.(packet.payload.usersOnline);
+            return true;
+
         case "animFX":
             if (!engine) {
                 return true;

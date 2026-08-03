@@ -30,6 +30,8 @@ type UseGameSessionOptions = {
     nextPingTokenRef: RefObject<number>;
     pingTextRef: RefObject<any>;
     pingDisplayTextRef: RefObject<string>;
+    onlineTextRef?: RefObject<any>;
+    onlineDisplayTextRef?: RefObject<string>;
     fpsDisplayTextRef: RefObject<string>;
     onPingSample?: (pingMs: number | null) => void;
     clearUseItemQueues: () => void;
@@ -87,6 +89,8 @@ export function useGameSession({
     nextPingTokenRef,
     pingTextRef,
     pingDisplayTextRef,
+    onlineTextRef,
+    onlineDisplayTextRef,
     fpsDisplayTextRef,
     onPingSample,
     clearUseItemQueues,
@@ -252,6 +256,16 @@ export function useGameSession({
                     pingTextRef.current,
                     pingDisplayTextRef.current,
                 );
+            }
+
+            if (onlineDisplayTextRef) {
+                onlineDisplayTextRef.current = "On: --";
+                if (onlineTextRef?.current) {
+                    setTextIfChanged(
+                        onlineTextRef.current,
+                        onlineDisplayTextRef.current,
+                    );
+                }
             }
         };
 

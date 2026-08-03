@@ -292,8 +292,9 @@ type PendingTileState = {
 const FPS_TEXT_OFFSET_X = 10;
 const FPS_TEXT_OFFSET_Y = 8;
 const PING_TEXT_OFFSET_Y = 22;
-const CLAN_SEGURO_TEXT_OFFSET_Y = 36;
-const DEBUG_COMBAT_TEXT_OFFSET_Y = 50;
+const ONLINE_TEXT_OFFSET_Y = 36;
+const CLAN_SEGURO_TEXT_OFFSET_Y = 50;
+const DEBUG_COMBAT_TEXT_OFFSET_Y = 64;
 const PROJECTILE_BASE_ANGLE_RADIANS = -Math.PI / 4;
 const PROJECTILE_MIN_DURATION_MS = 90;
 const PROJECTILE_MAX_DURATION_MS = 280;
@@ -737,6 +738,8 @@ export default function MapRenderer({
     const nextPingTokenRef = useRef(1);
     const pingTextRef = useRef<Text | null>(null);
     const pingDisplayTextRef = useRef("Ping: -- ms");
+    const onlineTextRef = useRef<Text | null>(null);
+    const onlineDisplayTextRef = useRef("On: --");
     const seguroTextRef = useRef<Text | null>(null);
     const clanSeguroTextRef = useRef<Text | null>(null);
     const debugCombatTextRef = useRef<Text | null>(null);
@@ -1516,6 +1519,7 @@ export default function MapRenderer({
         const app = engine?.app;
         const fpsText = (engine as any)?.fpsText as Text | undefined;
         const pingText = pingTextRef.current;
+        const onlineText = onlineTextRef.current;
         const clanSeguroText = clanSeguroTextRef.current;
 
         if (!engine || !app) return;
@@ -1528,6 +1532,10 @@ export default function MapRenderer({
         if (pingText) {
             pingText.x = FPS_TEXT_OFFSET_X;
             pingText.y = PING_TEXT_OFFSET_Y;
+        }
+        if (onlineText) {
+            onlineText.x = FPS_TEXT_OFFSET_X;
+            onlineText.y = ONLINE_TEXT_OFFSET_Y;
         }
         if (clanSeguroText) {
             clanSeguroText.x = FPS_TEXT_OFFSET_X;
@@ -1789,11 +1797,13 @@ export default function MapRenderer({
         localPendingMovesRef,
         playerHudRef,
         pingTextRef,
+        onlineTextRef,
         seguroTextRef,
         clanSeguroTextRef,
         debugCombatTextRef,
         fpsDisplayTextRef,
         pingDisplayTextRef,
+        onlineDisplayTextRef,
         onFpsSample: (fps) => emitPerformanceSample({ fps }),
         activeDialogMessagesRef,
         activeCastBarsRef,
@@ -1937,6 +1947,15 @@ export default function MapRenderer({
                 clearTargetingMode,
                 showDialogBubble,
                 onGlobalNotice,
+                onOnlineUsersUpdate: (usersOnline) => {
+                    onlineDisplayTextRef.current = `On: ${usersOnline}`;
+                    if (onlineTextRef.current) {
+                        setTextIfChanged(
+                            onlineTextRef.current,
+                            onlineDisplayTextRef.current,
+                        );
+                    }
+                },
                 renderEntityFX,
                 renderSpellProjectileVisual,
                 renderProjectileVisual,
@@ -2025,6 +2044,8 @@ export default function MapRenderer({
         nextPingTokenRef,
         pingTextRef,
         pingDisplayTextRef,
+        onlineTextRef,
+        onlineDisplayTextRef,
         fpsDisplayTextRef,
         onPingSample: (pingMs) => emitPerformanceSample({ pingMs }),
         clearUseItemQueues,

@@ -63,11 +63,13 @@ type UseRendererBootstrapOptions = {
     localPendingMovesRef: RefObject<any[]>;
     playerHudRef: RefObject<any>;
     pingTextRef: RefObject<any>;
+    onlineTextRef: RefObject<any>;
     seguroTextRef: RefObject<any>;
     clanSeguroTextRef: RefObject<any>;
     debugCombatTextRef: RefObject<any>;
     fpsDisplayTextRef: RefObject<string>;
     pingDisplayTextRef: RefObject<string>;
+    onlineDisplayTextRef: RefObject<string>;
     onFpsSample?: (fps: number | null) => void;
     activeDialogMessagesRef: RefObject<Map<number, any>>;
     activeCastBarsRef: RefObject<Map<number, any>>;
@@ -796,13 +798,23 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                 pingText.zIndex = 1000;
                 app.stage.addChild(pingText);
 
+                const onlineText = new Text({
+                    text: options.onlineDisplayTextRef.current,
+                    style: fpsStyle,
+                });
+                onlineText.resolution = 1;
+                onlineText.x = 10;
+                onlineText.y = 36;
+                onlineText.zIndex = 1000;
+                app.stage.addChild(onlineText);
+
                 const clanSeguroText = new Text({
                     text: "",
                     style: getHudStatusTextStyle(0xff3b30),
                 });
                 clanSeguroText.resolution = 1;
                 clanSeguroText.x = 10;
-                clanSeguroText.y = 36;
+                clanSeguroText.y = 50;
                 clanSeguroText.zIndex = 1000;
                 app.stage.addChild(clanSeguroText);
 
@@ -817,13 +829,14 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                 });
                 debugCombatText.resolution = 1;
                 debugCombatText.x = 10;
-                debugCombatText.y = 50;
+                debugCombatText.y = 64;
                 debugCombatText.zIndex = 1000;
                 debugCombatText.visible = false;
                 app.stage.addChild(debugCombatText);
 
                 (engine as any).fpsText = fpsText;
                 options.pingTextRef.current = pingText;
+                options.onlineTextRef.current = onlineText;
                 options.seguroTextRef.current = null;
                 options.clanSeguroTextRef.current = clanSeguroText;
                 options.updateSeguroIndicators(options.playerHudRef.current);
@@ -952,6 +965,7 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
         return () => {
             isDisposed = true;
             options.pingTextRef.current = null;
+            options.onlineTextRef.current = null;
             options.seguroTextRef.current = null;
             options.clanSeguroTextRef.current = null;
             options.debugCombatTextRef.current = null;

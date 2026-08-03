@@ -523,6 +523,7 @@ const socket: SocketApi = {
                         funct.sendTelegramMessage(`[Servidor-PVP] Usuario ${personajeWS.nameCharacter} desconectado.`);
 
                         funct.sendTelegramMessage(`[Servidor-PVP] Usuarios online: ${vars.usuariosOnlinePvP}`);
+                        this.actOnline(vars.usuariosOnlinePvP);
                     }
 
                     await arenaManager.onPlayerDisconnected(personajeWS);

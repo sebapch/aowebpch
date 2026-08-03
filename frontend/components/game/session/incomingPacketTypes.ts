@@ -104,6 +104,7 @@ export type IncomingPacketHandlerContext = {
     onGlobalNotice?:
         | ((notice: { text: string; durationMs: number }) => void)
         | undefined;
+    onOnlineUsersUpdate?: ((usersOnline: number) => void) | undefined;
     renderEntityFX: (engine: any, id: number, fxGrh: number) => Promise<void>;
     renderSpellProjectileVisual: (
         engine: any,

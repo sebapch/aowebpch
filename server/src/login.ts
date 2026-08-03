@@ -1192,6 +1192,7 @@ function Login(this: LoginApi) {
             vars.usuariosOnlinePvP++;
 
             funct.sendTelegramMessage(`[Servidor-PVP] Usuarios online: ${vars.usuariosOnlinePvP}`);
+            handleProtocol.actOnline(vars.usuariosOnlinePvP);
         }
 
         if (arenaRoomId) {
