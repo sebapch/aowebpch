@@ -129,11 +129,17 @@ export type MapSummary = {
 export const MAPS_SOURCE_DIR = path.resolve(__dirname, "../mapas_source");
 export const ACTIVE_MAPS_FILE = path.join(MAPS_SOURCE_DIR, "active_maps.json");
 export const API_MAPS_SOURCE_DIR = path.resolve(__dirname, "../../api/src/mapas_source");
+/**
+ * Unico directorio estatico de mapas que consume el cliente. Antes convivia con
+ * `public/maps_optimized/`, pero ese estaba en el `.gitignore` del frontend, no
+ * llegaba nunca al deploy y el cliente lo pedia solo como fallback: regenerarlo
+ * no tenia ningun efecto visible. Hoy los dos guardaban el mismo formato
+ * compacto, asi que quedo uno solo.
+ */
 export const FRONTEND_MAPS_DIR = path.resolve(__dirname, "../../frontend/public/maps");
-export const FRONTEND_MAPS_OPTIMIZED_DIR = path.resolve(__dirname, "../../frontend/public/maps_optimized");
-export const FRONTEND_STANDALONE_MAPS_OPTIMIZED_DIR = path.resolve(
+export const FRONTEND_STANDALONE_MAPS_DIR = path.resolve(
     __dirname,
-    "../../frontend/.next/standalone/frontend/public/maps_optimized",
+    "../../frontend/.next/standalone/frontend/public/maps",
 );
 
 export const DEFAULT_ACTIVE_MAPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 272];

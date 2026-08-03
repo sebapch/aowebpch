@@ -248,10 +248,16 @@ const npcs = require("./npcs") as NpcsApi;
 const runtimeTiming = require("./runtimeTiming");
 const handleProtocol = require("./handleProtocol") as HandleProtocolApi;
 const editorHttp = require("./editorHttp") as typeof import("./editorHttp");
+const mapHttp = require("./mapHttp") as typeof import("./mapHttp");
 
 function handleHttpRequest(request: any, response: any) {
     if (editorHttp.isEditorRequest(request.url)) {
         void editorHttp.handleEditorRequest(request, response);
+        return;
+    }
+
+    if (mapHttp.isMapAssetRequest(request.url)) {
+        mapHttp.handleMapAssetRequest(request, response);
         return;
     }
 

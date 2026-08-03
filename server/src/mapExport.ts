@@ -3,8 +3,7 @@ import path from "node:path";
 import { loadMapNpcPlacements } from "./mapNpcStorage";
 import {
     FRONTEND_MAPS_DIR,
-    FRONTEND_MAPS_OPTIMIZED_DIR,
-    FRONTEND_STANDALONE_MAPS_OPTIMIZED_DIR,
+    FRONTEND_STANDALONE_MAPS_DIR,
     MAPS_SOURCE_DIR,
     getMapDir,
     parseCoordinateKey,
@@ -13,7 +12,7 @@ import {
 
 /**
  * Compactado del formato fuente al formato optimizado que descarga el cliente
- * (`frontend/public/maps/` y `maps_optimized/`). Extraido de
+ * (`frontend/public/maps/`). Extraido de
  * `scripts/exportFrontendOptimizedMaps.ts` sin cambios de comportamiento.
  */
 
@@ -283,7 +282,7 @@ export function buildOptimizedMap(mapId: number, sourceDir: string = MAPS_SOURCE
  */
 export function exportOptimizedMap(
     mapId: number,
-    outputDirs: string[] = [FRONTEND_MAPS_OPTIMIZED_DIR, FRONTEND_MAPS_DIR, FRONTEND_STANDALONE_MAPS_OPTIMIZED_DIR],
+    outputDirs: string[] = [FRONTEND_MAPS_DIR, FRONTEND_STANDALONE_MAPS_DIR],
     sourceDir: string = MAPS_SOURCE_DIR,
 ): { optimizedMap: OptimizedMap; wroteTo: string[] } {
     const optimizedMap = buildOptimizedMap(mapId, sourceDir);

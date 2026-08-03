@@ -1,6 +1,7 @@
 import http from "node:http";
 import config = require("../config");
 import { handleEditorRequest, isEditorRequest } from "../editorHttp";
+import { handleMapAssetRequest, isMapAssetRequest } from "../mapHttp";
 
 /**
  * Levanta solo el router del editor, sin el resto del servidor de juego.
@@ -15,6 +16,11 @@ const port = Number(process.env.EDITOR_DEV_PORT ?? 7667);
 const server = http.createServer((request, response) => {
     if (isEditorRequest(request.url)) {
         void handleEditorRequest(request, response);
+        return;
+    }
+
+    if (isMapAssetRequest(request.url)) {
+        handleMapAssetRequest(request, response);
         return;
     }
 

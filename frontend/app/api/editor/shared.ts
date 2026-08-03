@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { AuthSession } from "../../../lib/auth";
 import { getApiBaseUrl } from "../../../lib/api-base-url";
+import { getGameServerHttpUrl } from "../../../lib/game-server-url";
 import { fetchApi, getSessionTokenFromCookie } from "../auth/shared";
 
 /**
@@ -12,12 +13,9 @@ import { fetchApi, getSessionTokenFromCookie } from "../auth/shared";
  * nunca del servidor de Next.
  */
 
-const DEFAULT_GAME_SERVER_HTTP_URL = "http://127.0.0.1:7666";
 const GAME_SERVER_TIMEOUT_MS = 30000;
 
-export function getGameServerHttpUrl(): string {
-    return process.env.GAME_SERVER_HTTP_URL?.trim() || DEFAULT_GAME_SERVER_HTTP_URL;
-}
+export { getGameServerHttpUrl };
 
 export type EditorAdmin = {
     accountName: string;

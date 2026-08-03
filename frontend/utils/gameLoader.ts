@@ -54,12 +54,24 @@ const DYNAMIC_INSTANCE_MAP_START = 30_000;
 const DYNAMIC_INSTANCE_MAP_STRIDE = 50;
 const CHALLENGE_INSTANCE_MAP_START = 2_000;
 const CHALLENGE_INSTANCE_BASE_MAP_ID = 506;
-const MAP_ASSET_VERSIONS: Partial<Record<number, string>> = {
-    166: "1.0",
-    286: "1.2",
-    287: "1.2",
-    288: "1.2",
-};
+
+/**
+ * Los mapas del mundo se piden primero al servidor de juego (`/api/maps/:id`),
+ * que los genera desde `mapas_source` y por lo tanto refleja lo que el editor
+ * acaba de guardar. El archivo estatico de `public/maps/` queda como respaldo:
+ * solo cambia con un redeploy del frontend, asi que si gana siempre, cualquier
+ * edicion de terreno u objetos es invisible hasta el proximo deploy.
+ *
+ * `NEXT_PUBLIC_LIVE_MAPS=false` apaga el camino en vivo y deja solo el estatico.
+ */
+const LIVE_MAPS_ENABLED = process.env.NEXT_PUBLIC_LIVE_MAPS !== "false";
+
+/**
+ * Si el servidor de juego no contesta, no reintentamos en cada cambio de mapa:
+ * el primer fallo apaga el camino en vivo para el resto de la sesion y todos
+ * los mapas siguientes van directo al estatico, sin esperar el timeout.
+ */
+let liveMapsUnavailable = false;
 
 function cloneMapData(mapData: MapData): MapData {
     return structuredClone(mapData);
@@ -83,12 +95,72 @@ export function clearMapCache(mapNumber?: number): void {
         mapValueCache.clear();
         mapRequestCache.clear();
         jsonValueCache.clear();
+        liveMapsUnavailable = false;
     }
 }
 
-function withMapAssetVersion(path: string, mapNumber: number): string {
-    const version = MAP_ASSET_VERSIONS[mapNumber] ?? Date.now();
-    return `${path}?v=${encodeURIComponent(version)}`;
+function withMapAssetVersion(path: string): string {
+    return `${path}?v=${Date.now()}`;
+}
+
+/**
+ * Mapa generado al vuelo por el servidor de juego. Devuelve `null` ante
+ * cualquier problema (apagado, sin servidor, timeout, mapa inexistente) para
+ * que quien llama caiga al archivo estatico.
+ */
+async function fetchLiveMap(mapNumber: number): Promise<unknown | null> {
+    if (!LIVE_MAPS_ENABLED || liveMapsUnavailable) {
+        return null;
+    }
+
+    try {
+        const response = await fetch(`/api/maps/${mapNumber}`, { cache: "no-store" });
+
+        if (!response.ok) {
+            // 404 es un mapa que no existe en `mapas_source` (mapas locales del
+            // cliente, por ejemplo): no dice nada del servidor, no lo apagamos.
+            if (response.status >= 500) {
+                liveMapsUnavailable = true;
+                console.warn(
+                    `Mapas en vivo deshabilitados para esta sesion: /api/maps/${mapNumber} respondio ${response.status}.`,
+                );
+            }
+
+            return null;
+        }
+
+        return await response.json();
+    } catch (error) {
+        liveMapsUnavailable = true;
+        console.warn(
+            "Mapas en vivo deshabilitados para esta sesion: no se pudo contactar al servidor de juego.",
+            error,
+        );
+        return null;
+    }
+}
+
+/** Mapa en vivo si esta disponible; si no, el archivo estatico del deploy. */
+async function fetchOptimizedMap(assetMapNumber: number): Promise<unknown> {
+    const liveMap = await fetchLiveMap(assetMapNumber);
+
+    if (liveMap) {
+        return liveMap;
+    }
+
+    // Sin `fetchJsonWithFallback`: su cache va por URL y el buster de version
+    // hace que cada carga genere una entrada nueva que nadie vuelve a leer.
+    // El cache de mapas ya lo lleva `mapValueCache`, por numero de mapa.
+    const staticPath = withMapAssetVersion(`/maps/mapa_${assetMapNumber}.json`);
+    const response = await fetch(staticPath);
+
+    if (!response.ok) {
+        throw new Error(
+            `Failed to load map ${assetMapNumber}: ${staticPath}: ${response.status} ${response.statusText}`,
+        );
+    }
+
+    return response.json();
 }
 
 async function fetchJsonWithFallback<T>(
@@ -590,20 +662,7 @@ export async function loadMapData(mapNumber: number): Promise<MapData> {
             }
 
             if (dynamicBaseMapNumber) {
-                const data = await fetchJsonWithFallback<MapData>(
-                    withMapAssetVersion(
-                        `/maps/mapa_${dynamicBaseMapNumber}.json`,
-                        dynamicBaseMapNumber,
-                    ),
-                    withMapAssetVersion(
-                        `/maps_optimized/mapa_${dynamicBaseMapNumber}.json`,
-                        dynamicBaseMapNumber,
-                    ),
-                    `map ${dynamicBaseMapNumber}`,
-                    {
-                        preferLocal: false,
-                    },
-                );
+                const data = await fetchOptimizedMap(dynamicBaseMapNumber);
                 const remappedData = remapMapDataKey(
                     decompressMap(data),
                     dynamicBaseMapNumber,
@@ -648,20 +707,7 @@ export async function loadMapData(mapNumber: number): Promise<MapData> {
                 : mapNumber >= 1000
                   ? 272
                   : mapNumber;
-            const data = await fetchJsonWithFallback<MapData>(
-                withMapAssetVersion(
-                    `/maps/mapa_${assetMapNumber}.json`,
-                    assetMapNumber,
-                ),
-                withMapAssetVersion(
-                    `/maps_optimized/mapa_${assetMapNumber}.json`,
-                    assetMapNumber,
-                ),
-                `map ${assetMapNumber}`,
-                {
-                    preferLocal: false,
-                },
-            );
+            const data = await fetchOptimizedMap(assetMapNumber);
             const decompressedData = remapMapDataKey(
                 decompressMap(data),
                 assetMapNumber,

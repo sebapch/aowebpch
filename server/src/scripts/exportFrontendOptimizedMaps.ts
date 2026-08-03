@@ -1,9 +1,9 @@
 import path from "node:path";
 import { exportOptimizedMapToDir } from "../mapExport";
-import { FRONTEND_MAPS_OPTIMIZED_DIR, MAPS_SOURCE_DIR, getActiveMapIds, listMapIds } from "../mapSource";
+import { FRONTEND_MAPS_DIR, MAPS_SOURCE_DIR, getActiveMapIds, listMapIds } from "../mapSource";
 
 const DEFAULT_SOURCE_DIR = MAPS_SOURCE_DIR;
-const DEFAULT_OUTPUT_DIR = FRONTEND_MAPS_OPTIMIZED_DIR;
+const DEFAULT_OUTPUT_DIR = FRONTEND_MAPS_DIR;
 
 function parseCliArgs(argv: string[]) {
     const mapIds = new Set<number>();

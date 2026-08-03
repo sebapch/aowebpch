@@ -2,7 +2,6 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import config = require("./config");
 import {
     FRONTEND_MAPS_DIR,
-    FRONTEND_MAPS_OPTIMIZED_DIR,
     MAPS_SOURCE_DIR,
     API_MAPS_SOURCE_DIR,
     type EditorMapBundle,
@@ -124,7 +123,6 @@ const routes: EditorRoute[] = [
                 source: fs.existsSync(MAPS_SOURCE_DIR),
                 api: fs.existsSync(API_MAPS_SOURCE_DIR),
                 frontendMaps: fs.existsSync(FRONTEND_MAPS_DIR),
-                frontendMapsOptimized: fs.existsSync(FRONTEND_MAPS_OPTIMIZED_DIR),
             },
         }),
     },

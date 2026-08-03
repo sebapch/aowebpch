@@ -23,6 +23,7 @@ import {
 } from "./mapSource";
 import { loadMapNpcPlacements, writeMapNpcPlacements } from "./mapNpcStorage";
 import { exportOptimizedMap } from "./mapExport";
+import { clearMapAssetCache } from "./mapHttp";
 import { type MapSide, planEdgeLink } from "./mapEdges";
 
 /**
@@ -177,6 +178,17 @@ function normalizeArenaSpawns(config: ArenaSpawnConfig | undefined): ArenaSpawnC
     return { team1, team2 };
 }
 
+/**
+ * Publica un mapa recien escrito en los tres consumidores de afuera de
+ * `mapas_source`: el archivo estatico del frontend, el cache del endpoint en
+ * vivo (`GET /maps/mapa_N.json`) y la copia que lee la api.
+ */
+function publishMap(mapId: number): void {
+    exportOptimizedMap(mapId);
+    clearMapAssetCache(mapId);
+    syncMapToApiSource(mapId);
+}
+
 /** Escribe `meta.json` solo si cambio algo. Devuelve si toco el archivo. */
 function writeMapMetaIfChanged(mapId: number, meta: MapMetadata): boolean {
     const normalized = normalizeMapMeta(meta, mapId);
@@ -207,8 +219,7 @@ export function saveMapBundle(mapId: number, bundle: EditorMapBundle): EditorMap
     writeJsonFileAtomic(path.join(mapDir, "terrain.json"), terrain);
     writeJsonFileAtomic(path.join(mapDir, "specials.json"), specials);
     writeMapNpcPlacements(mapId, spawns);
-    exportOptimizedMap(mapId);
-    syncMapToApiSource(mapId);
+    publishMap(mapId);
 
     return readMapBundle(mapId);
 }
@@ -222,8 +233,7 @@ export function saveMapNpcs(mapId: number, placements: MapNpcPlacement[]): MapNp
         mapId,
         placements.map((placement) => ({ ...placement, mapNum: mapId })),
     );
-    exportOptimizedMap(mapId);
-    syncMapToApiSource(mapId);
+    publishMap(mapId);
 
     return loadMapNpcPlacements(mapId);
 }
@@ -317,8 +327,7 @@ export function createMap(input: CreateMapInput): EditorMapBundle {
         triggers: {},
     });
     writeMapNpcPlacements(mapId, []);
-    exportOptimizedMap(mapId);
-    syncMapToApiSource(mapId);
+    publishMap(mapId);
 
     return readMapBundle(mapId);
 }
