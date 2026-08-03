@@ -105,8 +105,8 @@ export type RetosOpenPayload = {
         };
     }>;
     matchmaking?: {
-        queuedTeamSizes: Array<2 | 3 | 4>;
-        counts: Record<2 | 3 | 4, { inQueue: number; required: number }>;
+        queuedTeamSizes: Array<1 | 2 | 3 | 4>;
+        counts: Record<1 | 2 | 3 | 4, { inQueue: number; required: number }>;
     };
 };
 

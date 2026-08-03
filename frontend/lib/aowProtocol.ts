@@ -458,7 +458,7 @@ export interface RetoEntry {
     }>;
 }
 
-export type MatchmakingTeamSize = 2 | 3 | 4;
+export type MatchmakingTeamSize = 1 | 2 | 3 | 4;
 
 /**
  * Estado de las colas de arena. Un jugador puede estar anotado en varios modos

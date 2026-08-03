@@ -823,14 +823,14 @@ function splitClanCommandArgs(rawText: string) {
 }
 
 // Parsea los modos de arena de un comando: "/arena 2 4" -> [2, 4].
-// Sin argumentos devuelve los tres modos.
+// Sin argumentos devuelve todos los modos.
 function parseArenaTeamSizes(rawText: string): number[] {
     const parsed = rawText
         .split(/[\s,]+/)
         .map((value) => Number(value.trim()))
-        .filter((value) => value === 2 || value === 3 || value === 4);
+        .filter((value) => value === 1 || value === 2 || value === 3 || value === 4);
 
-    return parsed.length > 0 ? Array.from(new Set(parsed)) : [2, 3, 4];
+    return parsed.length > 0 ? Array.from(new Set(parsed)) : [1, 2, 3, 4];
 }
 
 function findOnlineCharacterByPersistedId(characterId?: string | null) {
@@ -2446,7 +2446,7 @@ const command: CommandApi = {
 
                 case "/arena":
                 case "/anotarse": {
-                    // Sin argumentos se anota a los tres modos a la vez; la
+                    // Sin argumentos se anota a todos los modos a la vez; la
                     // primera cola que se llene lo libera de las demas.
                     for (const teamSize of parseArenaTeamSizes(nextText)) {
                         try {

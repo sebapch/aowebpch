@@ -100,7 +100,7 @@ const LOGOUT_DENIED_PATTERN = /^\[Servidor\] No puedes salir /;
 const LOGOUT_CLOSING_MESSAGE = "[Servidor] Cerrando sesión...";
 const LOGOUT_DELAY_MS = 10000;
 const CHALLENGE_INSTANCE_MAP_START = 2000;
-const ARENA_TEAM_SIZES = [2, 3, 4] as const;
+const ARENA_TEAM_SIZES = [1, 2, 3, 4] as const;
 /** Identidad estable para cuando el servidor todavía no mandó el estado de colas. */
 const EMPTY_ARENA_TEAM_SIZES: MatchmakingTeamSize[] = [];
 const RETOS_INFO_MESSAGES = new Set([
@@ -3509,7 +3509,7 @@ function HomeContent() {
                                     ) : null}
                                     {authSession && !arenaMode ? (
                                         <div className="flex flex-col gap-2">
-                                            <div className="grid grid-cols-3 gap-1.5">
+                                            <div className="grid grid-cols-4 gap-1.5">
                                                 {ARENA_TEAM_SIZES.map((teamSize) => {
                                                     // Cada modo se prende y apaga por separado: se
                                                     // puede esperar en varias colas a la vez.

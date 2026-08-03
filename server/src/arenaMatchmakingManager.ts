@@ -6,9 +6,9 @@ import * as safeZone from "./safeZone";
 const vars = require("./vars");
 const funct = require("./functions");
 
-export type MatchmakingTeamSize = 2 | 3 | 4;
+export type MatchmakingTeamSize = 1 | 2 | 3 | 4;
 
-const MATCHMAKING_TEAM_SIZES: MatchmakingTeamSize[] = [2, 3, 4];
+const MATCHMAKING_TEAM_SIZES: MatchmakingTeamSize[] = [1, 2, 3, 4];
 
 // Cada cuanto se re-evaluan las colas aunque nadie se anote. Sin esto una cola
 // puede quedar trabada con jugadores suficientes (por ejemplo cuando alguien
@@ -238,7 +238,7 @@ export const arenaMatchmakingManager = {
 
     enqueue(idUser: string | number, teamSize: unknown) {
         if (!isMatchmakingTeamSize(teamSize)) {
-            throw new Error("Modo de matchmaking inválido. Elegí 2v2, 3v3 o 4v4.");
+            throw new Error("Modo de matchmaking inválido. Elegí 1v1, 2v2, 3v3 o 4v4.");
         }
 
         const user = getCharacterById(idUser);
@@ -252,7 +252,9 @@ export const arenaMatchmakingManager = {
         let teamMembers: RuntimeCharacter[] = [];
         let isParty = false;
 
-        if (user.partyId) {
+        // El 1v1 siempre se anota en solitario: la party se ignora en vez de
+        // bloquear, igual que en los retos directos (challengeManager.deriveTeam).
+        if (teamSize > 1 && user.partyId) {
             const partyLeaderId = String(user.partyLeaderId ?? "");
 
             if (partyLeaderId && partyLeaderId !== String(user.id)) {
@@ -325,7 +327,7 @@ export const arenaMatchmakingManager = {
 
         if (teamSize !== undefined && teamSize !== null) {
             if (!isMatchmakingTeamSize(teamSize)) {
-                throw new Error("Modo de matchmaking inválido. Elegí 2v2, 3v3 o 4v4.");
+                throw new Error("Modo de matchmaking inválido. Elegí 1v1, 2v2, 3v3 o 4v4.");
             }
 
             targetSize = teamSize;

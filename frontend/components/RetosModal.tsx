@@ -3,7 +3,7 @@
 import React from "react";
 import type { MatchmakingState, MatchmakingTeamSize, RetosState } from "../lib/aowProtocol";
 
-const MATCHMAKING_TEAM_SIZES: MatchmakingTeamSize[] = [2, 3, 4];
+const MATCHMAKING_TEAM_SIZES: MatchmakingTeamSize[] = [1, 2, 3, 4];
 
 type RetosModalProps = {
     challenges: RetosState["challenges"];
@@ -91,7 +91,7 @@ export default function RetosModal({
                             <div className="text-xs font-semibold text-emerald-400 flex items-center gap-1.5">
                                 <span>🎯</span> Matchmaking (Modo CS)
                             </div>
-                            <div className="grid grid-cols-3 gap-1.5">
+                            <div className="grid grid-cols-4 gap-1.5">
                                 {MATCHMAKING_TEAM_SIZES.map((teamSize) => {
                                     const isQueued = queuedTeamSizes.includes(teamSize);
                                     const count = queueCounts?.[teamSize];
