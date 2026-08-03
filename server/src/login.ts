@@ -858,7 +858,7 @@ function Login(this: LoginApi) {
 
                 if (personajeWS.privileges == 1 || personajeWS.privileges == 2) {
                     personajeWS.color = "#419900";
-                    personajeWS.clan = "<AOWeb Staff>";
+                    personajeWS.clan = "<CSAO Staff>";
                 } else {
                     personajeWS.color = "#808080";
                 }

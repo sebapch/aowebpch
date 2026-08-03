@@ -525,6 +525,14 @@ export default function InventoryFloatingPanel({
     }, [onUseItemURequest]);
 
     const requestHeldSelectedPotionUse = React.useCallback(() => {
+        // Safety net: si el keyup/blur no llega (foco robado por un modal,
+        // click fuera de la ventana, etc.) el intervalo quedaría repitiendo
+        // el uso de la poción para siempre. Verificamos el foco en cada tick.
+        if (document.hidden || !document.hasFocus()) {
+            stopHeldUseItem();
+            return;
+        }
+
         const item = selectedItemRef.current;
 
         if (!item || item.objType !== OBJECT_TYPE.pociones) {
@@ -595,10 +603,12 @@ export default function InventoryFloatingPanel({
         window.addEventListener("keydown", handleKeyDown);
         window.addEventListener("keyup", handleKeyUp);
         window.addEventListener("blur", stopHeldUseItem);
+        document.addEventListener("visibilitychange", stopHeldUseItem);
         return () => {
             window.removeEventListener("keydown", handleKeyDown);
             window.removeEventListener("keyup", handleKeyUp);
             window.removeEventListener("blur", stopHeldUseItem);
+            document.removeEventListener("visibilitychange", stopHeldUseItem);
             stopHeldUseItem();
         };
     }, [

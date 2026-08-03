@@ -874,7 +874,7 @@ async function refreshOnlineCharacterClanStateByPersistedId(characterId?: string
     onlineCharacter.seguroClanActivado = Boolean(summary.clanId);
 
     if (onlineCharacter.privileges === 1 || onlineCharacter.privileges === 2) {
-        onlineCharacter.clan = "<AOWeb Staff>";
+        onlineCharacter.clan = "<CSAO Staff>";
     } else {
         onlineCharacter.clan = summary.clanTag ?? "";
     }
