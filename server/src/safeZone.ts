@@ -38,7 +38,7 @@ export function isUnsafeArenaPosition(mapId: number | undefined, pos: Position |
         return false;
     }
 
-    return vars.mapa[zoneMapId]?.[pos.y]?.[pos.x]?.trigger === 6;
+    return Boolean(vars.mapData[zoneMapId]?.isArena && !isSafeZonePosition(mapId, pos));
 }
 
 export function getSafeZoneFlag(mapId: number | undefined, pos: Position | undefined): 0 | 1 {

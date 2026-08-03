@@ -916,7 +916,7 @@ function isJailTile(character: Pick<GameCharacter, "map" | "pos">): boolean {
 }
 
 function isBlockedBySafeZone(user: GameCharacter, userAttacked: GameCharacter): boolean {
-    return !isUnsafeArenaTile(user) || !isUnsafeArenaTile(userAttacked);
+    return safeZone.isSafeZonePosition(user.map, user.pos) || safeZone.isSafeZonePosition(userAttacked.map, userAttacked.pos);
 }
 
 function applyOpenWorldAttackRules(user: GameCharacter, userAttacked: GameCharacter, arenaCombat: boolean): boolean {
@@ -7097,7 +7097,7 @@ function Game(this: GameApi) {
             }
 
             if (
-                vars.mapData[user.map].pk &&
+                !arenaCombat &&
                 !user.isNpc &&
                 idUser != idUserAttacked &&
                 isBlockedBySafeZone(user, userAttacked)
@@ -7151,8 +7151,7 @@ function Game(this: GameApi) {
                 user.seguroClanActivado &&
                 isSameClan(idUser, idUserAttacked) &&
                 idUser !== idUserAttacked &&
-                isOffensiveSpell &&
-                isBlockedBySafeZone(user, userAttacked)
+                isOffensiveSpell
             ) {
                 withUserClient(idUser, (userClient) => {
                     handleProtocol.console("No puedes atacar a un miembro de tu clan.", "white", 0, 0, userClient);
@@ -7680,8 +7679,7 @@ function Game(this: GameApi) {
             if (
                 !arenaCombat &&
                 user.seguroClanActivado &&
-                isSameClan(idUser, idUserAttacked) &&
-                isBlockedBySafeZone(user, userAttacked)
+                isSameClan(idUser, idUserAttacked)
             ) {
                 withUserClient(idUser, (userClient) => {
                     handleProtocol.console("No puedes atacar a un miembro de tu clan.", "white", 0, 0, userClient);
@@ -7690,7 +7688,7 @@ function Game(this: GameApi) {
             }
 
             if (
-                vars.mapData[user.map].pk &&
+                !arenaCombat &&
                 !userAttacked.isNpc &&
                 idUser != idUserAttacked &&
                 isBlockedBySafeZone(user, userAttacked)
