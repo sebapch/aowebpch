@@ -3782,6 +3782,7 @@ function HomeContent() {
                 <ChallengeVetoModal
                     vetoState={challengeVetoState}
                     actionKey={retosActionKey}
+                    hud={hud}
                     onBanMap={(mapId) => {
                         setRetosActionKey(`vetoban-${mapId}`);
                         requestRetosState("vetoBan", {

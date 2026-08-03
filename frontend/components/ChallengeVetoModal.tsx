@@ -1,11 +1,12 @@
 "use client";
 
 import React from "react";
-import type { ChallengeVetoState } from "../lib/aowProtocol";
+import type { ChallengeVetoState, PlayerHudState } from "../lib/aowProtocol";
 
 type ChallengeVetoModalProps = {
     vetoState: ChallengeVetoState;
     actionKey: string | null;
+    hud?: PlayerHudState | null;
     onBanMap: (mapId: number) => void;
 };
 
@@ -35,10 +36,16 @@ function useCountdown(targetTimestamp?: number | null) {
 export default function ChallengeVetoModal({
     vetoState,
     actionKey,
+    hud,
     onBanMap,
 }: ChallengeVetoModalProps) {
     const votingSecondsLeft = useCountdown(vetoState.deadlineAt);
     const teleportSecondsLeft = useCountdown(vetoState.teleportAt);
+    const [locallyBannedMapId, setLocallyBannedMapId] = React.useState<number | null>(null);
+
+    React.useEffect(() => {
+        setLocallyBannedMapId(null);
+    }, [vetoState.vetoId]);
 
     const isTransitioning =
         vetoState.transitioning || Boolean(vetoState.selectedMapId && vetoState.teleportAt);
@@ -103,7 +110,30 @@ export default function ChallengeVetoModal({
     const votersByMap = vetoState.votersByMap ?? {};
     const userVotes = vetoState.userVotes ?? {};
 
-    const hasUserVoted = Boolean(actionKey?.startsWith("vetoban-"));
+    // Determine if current user has voted, and for which map
+    const userVotedMapId = React.useMemo(() => {
+        // 1. Check userVotes by player ID
+        if (hud?.id != null && userVotes[String(hud.id)] !== undefined) {
+            return userVotes[String(hud.id)];
+        }
+        // 2. Check votersByMap by character name
+        if (hud?.nameCharacter) {
+            for (const [mIdStr, voterList] of Object.entries(votersByMap)) {
+                if (Array.isArray(voterList) && voterList.includes(hud.nameCharacter)) {
+                    return Number(mIdStr);
+                }
+            }
+        }
+        // 3. Fallback to actionKey if currently sending vote
+        if (actionKey?.startsWith("vetoban-")) {
+            const parsed = Number(actionKey.split("-")[1]);
+            if (!isNaN(parsed)) return parsed;
+        }
+        // 4. Fallback to local state
+        return locallyBannedMapId;
+    }, [hud?.id, hud?.nameCharacter, userVotes, votersByMap, actionKey, locallyBannedMapId]);
+
+    const hasUserVoted = userVotedMapId !== null;
 
     if (isTransitioning && vetoState.selectedMapId) {
         const activeMapId = isSpinning
@@ -232,6 +262,7 @@ export default function ChallengeVetoModal({
                             const isBanned = vetoState.bannedMapIds?.some((b) => b.mapId === mapId);
                             const banVoteCount = votesByMap[mapId] ?? 0;
                             const voters = votersByMap[mapId] ?? [];
+                            const isMyVotedMap = userVotedMapId === mapId;
 
                             return (
                                 <div
@@ -295,19 +326,30 @@ export default function ChallengeVetoModal({
                                         <button
                                             type="button"
                                             disabled={isBanned || hasUserVoted || actionKey !== null}
-                                            onClick={() => onBanMap(mapId)}
+                                            onClick={() => {
+                                                setLocallyBannedMapId(mapId);
+                                                onBanMap(mapId);
+                                            }}
                                             className={`mt-3 w-full rounded-lg border py-2 text-center text-xs font-semibold transition ${
                                                 isBanned
                                                     ? "border-stone-800 bg-stone-900/80 text-stone-500 cursor-not-allowed"
+                                                    : isMyVotedMap
+                                                    ? "border-amber-500/50 bg-amber-500/20 text-amber-300 font-bold cursor-default shadow-sm shadow-amber-500/10"
                                                     : hasUserVoted
-                                                    ? "border-stone-700 bg-stone-800/80 text-stone-400 cursor-not-allowed"
+                                                    ? "border-stone-800 bg-stone-900/60 text-stone-500 cursor-not-allowed opacity-60"
+                                                    : actionKey !== null
+                                                    ? "border-stone-800 bg-stone-900/60 text-stone-400 cursor-wait opacity-70"
                                                     : "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25 active:scale-[0.98]"
-                                            } disabled:opacity-50`}
+                                            }`}
                                         >
                                             {isBanned
                                                 ? "🚫 Mapa Bloqueado"
+                                                : isMyVotedMap
+                                                ? "✔ Tu Voto (Banear)"
                                                 : hasUserVoted
                                                 ? "✔ Voto Registrado"
+                                                : actionKey !== null
+                                                ? "⏳ Registrando voto..."
                                                 : "🚫 Banear Mapa"}
                                         </button>
                                     </div>
