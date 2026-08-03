@@ -364,7 +364,10 @@ function decompressMap(optimizedMap: any) {
 
         for (let x = 1; x <= optimizedMap.w; x++) {
             mapData[x] = {};
-            for (let y = 1; y <= optimizedMap.h; y++) {
+        }
+
+        for (let y = 1; y <= optimizedMap.h; y++) {
+            for (let x = 1; x <= optimizedMap.w; x++) {
                 const value = optimizedMap.d[index++];
                 if (value === 0) continue; // Empty tile
 
