@@ -73,6 +73,7 @@ export async function listNpcSoldItemIds(): Promise<number[]> {
 const tradeEntrySchema = z.object({
     item: z.coerce.number().int().positive(),
     cant: z.coerce.number().int().nonnegative(),
+    price: z.coerce.number().int().nonnegative().optional(),
 });
 
 const gameNpcSchema = z
