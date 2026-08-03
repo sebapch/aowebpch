@@ -131,6 +131,10 @@ export const ACTIVE_MAPS_FILE = path.join(MAPS_SOURCE_DIR, "active_maps.json");
 export const API_MAPS_SOURCE_DIR = path.resolve(__dirname, "../../api/src/mapas_source");
 export const FRONTEND_MAPS_DIR = path.resolve(__dirname, "../../frontend/public/maps");
 export const FRONTEND_MAPS_OPTIMIZED_DIR = path.resolve(__dirname, "../../frontend/public/maps_optimized");
+export const FRONTEND_STANDALONE_MAPS_OPTIMIZED_DIR = path.resolve(
+    __dirname,
+    "../../frontend/.next/standalone/frontend/public/maps_optimized",
+);
 
 export const DEFAULT_ACTIVE_MAPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 272];
 

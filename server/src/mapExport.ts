@@ -4,6 +4,7 @@ import { loadMapNpcPlacements } from "./mapNpcStorage";
 import {
     FRONTEND_MAPS_DIR,
     FRONTEND_MAPS_OPTIMIZED_DIR,
+    FRONTEND_STANDALONE_MAPS_OPTIMIZED_DIR,
     MAPS_SOURCE_DIR,
     getMapDir,
     parseCoordinateKey,
@@ -282,7 +283,7 @@ export function buildOptimizedMap(mapId: number, sourceDir: string = MAPS_SOURCE
  */
 export function exportOptimizedMap(
     mapId: number,
-    outputDirs: string[] = [FRONTEND_MAPS_OPTIMIZED_DIR, FRONTEND_MAPS_DIR],
+    outputDirs: string[] = [FRONTEND_MAPS_OPTIMIZED_DIR, FRONTEND_MAPS_DIR, FRONTEND_STANDALONE_MAPS_OPTIMIZED_DIR],
     sourceDir: string = MAPS_SOURCE_DIR,
 ): { optimizedMap: OptimizedMap; wroteTo: string[] } {
     const optimizedMap = buildOptimizedMap(mapId, sourceDir);
