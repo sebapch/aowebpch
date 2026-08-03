@@ -30,6 +30,7 @@
         "export-editable-maps": "tsx src/scripts/exportEditableMaps.ts",
         "export-frontend-graphics": "tsx src/scripts/exportFrontendOptimizedGraphics.ts",
         "export-frontend-maps": "tsx src/scripts/exportFrontendOptimizedMaps.ts",
+        "export-frontend-maps:active": "tsx src/scripts/exportFrontendOptimizedMaps.ts --active-only",
         "export-client-objs": "tsx src/scripts/exportClientObjs.ts",
         "verify-map-roundtrip": "tsx src/scripts/verifyMapRoundtrip.ts",
         "verify-anticheat": "tsx src/scripts/verifyAntiCheat.ts",

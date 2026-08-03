@@ -1,6 +1,6 @@
 import path from "node:path";
 import { exportOptimizedMapToDir } from "../mapExport";
-import { FRONTEND_MAPS_OPTIMIZED_DIR, MAPS_SOURCE_DIR, listMapIds } from "../mapSource";
+import { FRONTEND_MAPS_OPTIMIZED_DIR, MAPS_SOURCE_DIR, getActiveMapIds, listMapIds } from "../mapSource";
 
 const DEFAULT_SOURCE_DIR = MAPS_SOURCE_DIR;
 const DEFAULT_OUTPUT_DIR = FRONTEND_MAPS_OPTIMIZED_DIR;
@@ -9,7 +9,14 @@ function parseCliArgs(argv: string[]) {
     const mapIds = new Set<number>();
     let sourceDir = DEFAULT_SOURCE_DIR;
     let outputDir = DEFAULT_OUTPUT_DIR;
+    let activeOnly = false;
+
     for (const arg of argv) {
+        if (arg === "--active-only") {
+            activeOnly = true;
+            continue;
+        }
+
         if (arg.startsWith("--source-dir=")) {
             sourceDir = path.resolve(process.cwd(), arg.slice("--source-dir=".length));
             continue;
@@ -39,6 +46,7 @@ function parseCliArgs(argv: string[]) {
     return {
         sourceDir,
         outputDir,
+        activeOnly,
         mapIds: [...mapIds].sort((left, right) => left - right),
     };
 }
@@ -54,8 +62,12 @@ function exportMap(mapId: number, sourceDir: string, outputDir: string): void {
 }
 
 function main(): void {
-    const { sourceDir, outputDir, mapIds } = parseCliArgs(process.argv.slice(2));
-    const resolvedMapIds = mapIds.length > 0 ? mapIds : listMapIds(sourceDir);
+    const { sourceDir, outputDir, activeOnly, mapIds } = parseCliArgs(process.argv.slice(2));
+    const resolvedMapIds = mapIds.length > 0
+        ? mapIds
+        : activeOnly
+        ? getActiveMapIds(sourceDir)
+        : listMapIds(sourceDir);
 
     if (resolvedMapIds.length === 0) {
         throw new Error("No se encontraron mapas para exportar.");

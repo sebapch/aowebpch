@@ -134,13 +134,14 @@ export const FRONTEND_MAPS_OPTIMIZED_DIR = path.resolve(__dirname, "../../fronte
 
 export const DEFAULT_ACTIVE_MAPS = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 272];
 
-export function getActiveMapIds(): number[] {
-    if (!fs.existsSync(ACTIVE_MAPS_FILE)) {
+export function getActiveMapIds(sourceDir: string = MAPS_SOURCE_DIR): number[] {
+    const activeFile = path.join(sourceDir, "active_maps.json");
+    if (!fs.existsSync(activeFile)) {
         return DEFAULT_ACTIVE_MAPS;
     }
 
     try {
-        const raw = fs.readFileSync(ACTIVE_MAPS_FILE, "utf8");
+        const raw = fs.readFileSync(activeFile, "utf8");
         const parsed = JSON.parse(raw);
 
         if (Array.isArray(parsed)) {
