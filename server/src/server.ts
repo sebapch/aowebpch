@@ -1049,3 +1049,29 @@ createDynamicScheduler(
 );
 
 void saveOnlineStatsSnapshot();
+
+async function gracefulShutdown(signal: string) {
+    console.log(`[Servidor] Recibida senal ${signal}. Reseteando estado de personajes conectados...`);
+    try {
+        await funct.fetchUrl("/internal/characters/reset-connected", {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+                Authorization: vars.tokenAuth,
+            },
+        });
+        console.log("[Servidor] Personajes desmarcados exitosamente.");
+    } catch (err) {
+        console.error("[Servidor] Error al resetear conectados en shutdown:", err);
+    }
+    process.exit(0);
+}
+
+process.on("SIGINT", () => {
+    void gracefulShutdown("SIGINT");
+});
+
+process.on("SIGTERM", () => {
+    void gracefulShutdown("SIGTERM");
+});
+

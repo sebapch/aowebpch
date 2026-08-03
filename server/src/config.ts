@@ -69,7 +69,7 @@ const config: RuntimeConfig = {
     nodeEnv: process.env.NODE_ENV ?? "development",
     isTestDeployment: process.env.AOWEB_TEST_MODE === "true",
     initialOnlineRecord: Number(process.env.INITIAL_ONLINE_RECORD ?? 0),
-    resetConnectedCharactersOnStartup: process.env.RESET_CONNECTED_CHARACTERS_ON_STARTUP === "true",
+    resetConnectedCharactersOnStartup: process.env.RESET_CONNECTED_CHARACTERS_ON_STARTUP !== "false",
     port: Number(process.env.PORT ?? 7666),
     apiBaseUrl: getRequiredEnv("API_BASE_URL", "http://127.0.0.1:3001"),
     tokenAuth: getRequiredEnv("TOKEN_AUTH", "changeme"),
