@@ -70,12 +70,12 @@ export default function AppChrome({ children }: AppChromeProps) {
         <>
             <header className="sticky top-0 z-50 border-b border-[#3d2719] bg-[#070a12]/95 backdrop-blur-md">
                 <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3">
-                    <Link href="/" className="flex items-center gap-2.5">
-                        <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#6e4624] bg-[#080b12] text-xs font-black tracking-widest text-[#d4a359]">
-                            AO
-                        </div>
+                    <Link href="/" className="flex items-baseline gap-1.5">
                         <span className="text-xl font-bold tracking-wider text-white">
                             CSAO<span className="text-[#d4a359]">2</span>
+                        </span>
+                        <span className="text-[10px] font-medium tracking-wider text-white/90">
+                            beta
                         </span>
                     </Link>
 

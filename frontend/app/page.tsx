@@ -42,8 +42,11 @@ export default function HomePage() {
                             <LiveOnlineCounter />
                         </div>
 
-                        <h1 className="text-4xl font-black uppercase tracking-wider text-white md:text-6xl">
-                            CSAO<span className="text-[#d4a359]">2</span>
+                        <h1 className="flex items-baseline gap-2.5 text-4xl font-black uppercase tracking-wider text-white md:text-6xl">
+                            <span>CSAO<span className="text-[#d4a359]">2</span></span>
+                            <span className="text-base font-medium tracking-wider text-white/90 normal-case md:text-xl">
+                                beta
+                            </span>
                         </h1>
 
                         <p className="text-lg font-semibold text-white md:text-2xl">
