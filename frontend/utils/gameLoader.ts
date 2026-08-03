@@ -75,12 +75,19 @@ function getBaseMapIdFromDynamicInstance(mapNumber: number): number | null {
     );
 }
 
-function withMapAssetVersion(path: string, mapNumber: number): string {
-    const version = MAP_ASSET_VERSIONS[mapNumber];
-    if (!version) {
-        return path;
+export function clearMapCache(mapNumber?: number): void {
+    if (mapNumber !== undefined) {
+        mapValueCache.delete(mapNumber);
+        mapRequestCache.delete(mapNumber);
+    } else {
+        mapValueCache.clear();
+        mapRequestCache.clear();
+        jsonValueCache.clear();
     }
+}
 
+function withMapAssetVersion(path: string, mapNumber: number): string {
+    const version = MAP_ASSET_VERSIONS[mapNumber] ?? Date.now();
     return `${path}?v=${encodeURIComponent(version)}`;
 }
 
