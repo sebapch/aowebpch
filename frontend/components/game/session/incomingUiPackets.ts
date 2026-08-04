@@ -196,7 +196,7 @@ export async function handleIncomingUiPacket({
             return true;
 
         case "playSound": {
-            if (!engine) {
+            if (!engine || packet.payload.soundId === 46) {
                 return true;
             }
 

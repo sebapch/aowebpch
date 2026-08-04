@@ -957,21 +957,8 @@ export default function MapRenderer({
                 return;
             }
 
-            // El servidor rechaza el uso de items estando muerto, así que no
-            // adelantamos un sonido que nunca va a existir.
-            if (engineRef.current?.user?.dead) {
-                return;
-            }
-
-            // Adelantamos el sonido propio: el servidor lo retransmite igual, y
-            // ese eco se descarta en el handler de `playSound`.
-            recordPredictedSoundEcho(
-                predictedSelfSoundsRef.current,
-                DRINK_SOUND_ID,
-            );
-
-            // Sin throttle: el envío ya está limitado por `nextUseItemAtRef`.
-            soundManagerRef.current?.play({ soundId: DRINK_SOUND_ID });
+            // Sonido de pociones desactivado a pedido del usuario.
+            return;
         },
         [],
     );

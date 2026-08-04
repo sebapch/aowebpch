@@ -4114,16 +4114,6 @@ function Game(this: GameApi) {
 
                     // El sonido va antes que la persistencia: es una acción que se
                     // repite en ráfaga y no puede quedar detrás de un PUT a la API.
-                    game.loopArea(ws, function (client: AreaTarget) {
-                        if (!client.isNpc) {
-                            if (!canReceiveCharacterEvent(client.id, user.id)) {
-                                return;
-                            }
-
-                            handleProtocol.playSound(user.id, vars.arSounds.SND_BEBER, vars.clients[client.id]);
-                        }
-                    });
-
                     if (isAdminSummonedBot(user)) {
                         broadcastCharacterVitalsDelta(user);
                     }
@@ -4137,16 +4127,6 @@ function Game(this: GameApi) {
                 case vars.objType.bebidas:
                     // game.quitarUserInvItem(clientId, idPos, 1);
                     scheduleCharacterItemsPersistence(user);
-
-                    game.loopArea(ws, function (client: AreaTarget) {
-                        if (!client.isNpc) {
-                            if (!canReceiveCharacterEvent(client.id, user.id)) {
-                                return;
-                            }
-
-                            handleProtocol.playSound(user.id, vars.arSounds.SND_BEBER, vars.clients[client.id]);
-                        }
-                    });
                     break;
                 case vars.objType.pergaminos:
                     user.spells = normalizeSpellRecord(user.spells);
@@ -4343,15 +4323,7 @@ function Game(this: GameApi) {
 
                 broadcastCharacterVitalsDelta(adminBot);
 
-                game.loopAreaPos(adminBot.map, adminBot.pos, function (target: GameCharacter) {
-                    withUserClient(target.id, (targetClient) => {
-                        if (!canReceiveCharacterEvent(target.id, adminBot.id)) {
-                            return;
-                        }
-
-                        handleProtocol.playSound(adminBot.id, vars.arSounds.SND_BEBER, targetClient);
-                    });
-                });
+                // Sound disabled for potion use
             }
         } catch (err) {
             funct.dumpError(err);
