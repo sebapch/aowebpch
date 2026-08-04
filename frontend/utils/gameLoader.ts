@@ -103,6 +103,46 @@ function withMapAssetVersion(path: string): string {
     return `${path}?v=${Date.now()}`;
 }
 
+const FETCH_RETRY_ATTEMPTS = 3;
+const FETCH_RETRY_DELAY_MS = 400;
+
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * `fetch` con reintentos ante fallas transitorias (blip de red, 5xx). Un 404
+ * no se reintenta: significa que el recurso genuinamente no existe, asi que
+ * insistir solo suma latencia. Sirve para absorber hiccups de red durante la
+ * carga de assets del juego, que antes bastaba con que fallaran una vez para
+ * tirar toda la pantalla de "Esta pagina no pudo cargarse".
+ */
+async function fetchWithRetry(url: string, init?: RequestInit): Promise<Response> {
+    let lastError: unknown;
+
+    for (let attempt = 1; attempt <= FETCH_RETRY_ATTEMPTS; attempt++) {
+        try {
+            const response = await fetch(url, init);
+
+            if (response.ok || response.status === 404 || attempt === FETCH_RETRY_ATTEMPTS) {
+                return response;
+            }
+
+            lastError = new Error(`${url}: ${response.status} ${response.statusText}`);
+        } catch (error) {
+            lastError = error;
+
+            if (attempt === FETCH_RETRY_ATTEMPTS) {
+                throw error;
+            }
+        }
+
+        await delay(FETCH_RETRY_DELAY_MS * attempt);
+    }
+
+    throw lastError;
+}
+
 /**
  * Mapa generado al vuelo por el servidor de juego. Devuelve `null` ante
  * cualquier problema (apagado, sin servidor, timeout, mapa inexistente) para
@@ -114,7 +154,7 @@ async function fetchLiveMap(mapNumber: number): Promise<unknown | null> {
     }
 
     try {
-        const response = await fetch(`/api/maps/${mapNumber}`, { cache: "no-store" });
+        const response = await fetchWithRetry(`/api/maps/${mapNumber}`, { cache: "no-store" });
 
         if (!response.ok) {
             // 404 es un mapa que no existe en `mapas_source` (mapas locales del
@@ -152,7 +192,7 @@ async function fetchOptimizedMap(assetMapNumber: number): Promise<unknown> {
     // hace que cada carga genere una entrada nueva que nadie vuelve a leer.
     // El cache de mapas ya lo lleva `mapValueCache`, por numero de mapa.
     const staticPath = withMapAssetVersion(`/maps/mapa_${assetMapNumber}.json`);
-    const response = await fetch(staticPath);
+    const response = await fetchWithRetry(staticPath);
 
     if (!response.ok) {
         throw new Error(
@@ -190,7 +230,7 @@ async function fetchJsonWithFallback<T>(
         let lastError: string | null = null;
 
         for (const assetPath of candidatePaths) {
-            const response = await fetch(assetPath);
+            const response = await fetchWithRetry(assetPath);
             if (!response.ok) {
                 lastError = `${assetPath}: ${response.status} ${response.statusText}`;
                 continue;

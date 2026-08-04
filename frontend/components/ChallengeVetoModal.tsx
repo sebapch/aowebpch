@@ -101,16 +101,14 @@ export default function ChallengeVetoModal({
         return () => window.clearTimeout(timerId);
     }, [isTransitioning, isTie, candidateMapIds, vetoState.selectedMapId]);
 
-    if (vetoState.resolved) {
-        return null;
-    }
-
     const mapNames = vetoState.mapNames ?? {};
     const votesByMap = vetoState.votesByMap ?? {};
     const votersByMap = vetoState.votersByMap ?? {};
     const userVotes = vetoState.userVotes ?? {};
 
     // Determine if current user has voted, and for which map
+    // (este hook tiene que correr siempre, incluso si mas abajo cortamos con
+    // `vetoState.resolved`: los hooks no pueden ser condicionales)
     const userVotedMapId = React.useMemo(() => {
         // 1. Check userVotes by player ID
         if (hud?.id != null && userVotes[String(hud.id)] !== undefined) {
@@ -132,6 +130,10 @@ export default function ChallengeVetoModal({
         // 4. Fallback to local state
         return locallyBannedMapId;
     }, [hud?.id, hud?.nameCharacter, userVotes, votersByMap, actionKey, locallyBannedMapId]);
+
+    if (vetoState.resolved) {
+        return null;
+    }
 
     const hasUserVoted = userVotedMapId !== null;
 

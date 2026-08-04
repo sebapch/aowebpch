@@ -125,14 +125,6 @@ const RETOS_ERROR_MESSAGES = new Set([
     "No puedes aceptar tu propio reto.",
 ]);
 const CONSOLE_DISCORD_URL = "https://discord.gg/GdxdT4tKf";
-const CONSOLE_FEEDBACK_FORM_URL = "https://forms.gle/Df2cmGExTBjjJhAR8";
-const WELCOME_CONSOLE_MESSAGES = {
-    discord:
-        "Bienvenido a AOWeb. Si quieres enterarte de las últimas actualizaciones del juego, puedes ingresar a nuestro Discord.",
-    feedback:
-        "- Si quieres reportar erorres o sugerir cambios, puedes hacerlo en: https://forms.gle/Df2cmGExTBjjJhAR8",
-    rules: "- Está completamente prohibido el uso de personajes cámara, cheats o cualquier programa externo que modifique el juego, como auto tomar pociones o auto removerse. El uso de los mismos terminará en un ban permanente, sin previo aviso.",
-} as const;
 const CHALLENGE_OVERLAY_PATTERN = /^\[Reto\]\s+(10|[0-9]|YA)$/;
 
 function isPrivateHostname(hostname: string): boolean {
@@ -507,41 +499,20 @@ function buildChatMessageForTab(
 }
 
 function renderConsoleEntryText(text: string) {
-    if (text === WELCOME_CONSOLE_MESSAGES.discord) {
-        const suffix = "Discord";
-        const prefix = text.slice(0, -`${suffix}.`.length);
-
+    if (text.includes("Discord")) {
+        const parts = text.split("Discord");
         return (
             <>
-                {prefix}
+                {parts[0]}
                 <a
                     href={CONSOLE_DISCORD_URL}
                     target="_blank"
                     rel="noreferrer"
                     className="font-semibold text-sky-300 underline underline-offset-2 hover:text-sky-200"
                 >
-                    {suffix}
+                    Discord
                 </a>
-                .
-            </>
-        );
-    }
-
-    if (text === WELCOME_CONSOLE_MESSAGES.feedback) {
-        const url = CONSOLE_FEEDBACK_FORM_URL;
-        const prefix = text.slice(0, -url.length);
-
-        return (
-            <>
-                {prefix}
-                <a
-                    href={url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="font-semibold text-sky-300 underline underline-offset-2 hover:text-sky-200"
-                >
-                    {url}
-                </a>
+                {parts.slice(1).join("Discord")}
             </>
         );
     }
