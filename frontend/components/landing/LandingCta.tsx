@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useState } from "react";
-import type { AuthErrorResponse, AuthSession } from "@/lib/auth";
+import { fetchAuthSession, type AuthSession } from "@/lib/auth";
 
 /**
  * CTA principal de la landing publica. La landing se renderiza en el servidor
@@ -15,28 +15,11 @@ export default function LandingCta() {
     useEffect(() => {
         let cancelled = false;
 
-        fetch("/api/auth/me", { cache: "no-store" })
-            .then(async (response) => {
-                if (!response.ok) {
-                    return null;
-                }
-
-                const result = (await response.json()) as
-                    | AuthSession
-                    | AuthErrorResponse;
-
-                return "error" in result ? null : result;
-            })
-            .then((result) => {
-                if (!cancelled) {
-                    setSession(result);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setSession(null);
-                }
-            });
+        fetchAuthSession().then((result) => {
+            if (!cancelled) {
+                setSession(result);
+            }
+        });
 
         return () => {
             cancelled = true;

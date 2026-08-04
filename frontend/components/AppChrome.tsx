@@ -4,7 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { LogOut } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { AuthErrorResponse, AuthSession } from "@/lib/auth";
+import { fetchAuthSession, type AuthSession } from "@/lib/auth";
 
 type AppChromeProps = {
     children: React.ReactNode;
@@ -28,41 +28,27 @@ export default function AppChrome({ children }: AppChromeProps) {
     const router = useRouter();
     const [session, setSession] = useState<AuthSession | null>(null);
 
+    const isGameRoute = pathname === "/play" || pathname === "/editor";
+
     useEffect(() => {
+        if (isGameRoute) {
+            return;
+        }
+
         let cancelled = false;
 
-        fetch("/api/auth/me", { cache: "no-store" })
-            .then(async (response) => {
-                if (!response.ok) {
-                    return null;
-                }
-
-                const result = (await response.json()) as
-                    | AuthSession
-                    | AuthErrorResponse;
-                if ("error" in result) {
-                    return null;
-                }
-
-                return result;
-            })
-            .then((result) => {
-                if (!cancelled) {
-                    setSession(result);
-                }
-            })
-            .catch(() => {
-                if (!cancelled) {
-                    setSession(null);
-                }
-            });
+        fetchAuthSession().then((result) => {
+            if (!cancelled) {
+                setSession(result);
+            }
+        });
 
         return () => {
             cancelled = true;
         };
-    }, [pathname]);
+    }, [pathname, isGameRoute]);
 
-    if (pathname === "/play" || pathname === "/editor") {
+    if (isGameRoute) {
         return <>{children}</>;
     }
 

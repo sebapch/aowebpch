@@ -616,6 +616,31 @@ async function getSessionRecord(
 ): Promise<AuthSessionRecord | null> {
     const sessionResult = await pool.query<AuthSessionRecord>(
         `
+      SELECT token, account_id, selected_character_id, created_at, expires_at
+      FROM auth_sessions
+      WHERE token = $1
+        AND expires_at > NOW()
+    `,
+        [token],
+    );
+
+    const session = sessionResult.rows[0];
+
+    if (!session) {
+        return null;
+    }
+
+    const remainingMs = session.expires_at.getTime() - Date.now();
+
+    // Solo renovamos si ya se consumio mas de la mitad del TTL: evita un
+    // UPDATE (escritura) en cada lectura de sesion, que hoy corre en cada
+    // /api/auth/me de cada pagina.
+    if (remainingMs >= SESSION_TTL_MS / 2) {
+        return session;
+    }
+
+    const renewResult = await pool.query<AuthSessionRecord>(
+        `
       UPDATE auth_sessions
       SET expires_at = NOW() + ($2 * INTERVAL '1 millisecond')
       WHERE token = $1
@@ -625,7 +650,7 @@ async function getSessionRecord(
         [token, SESSION_TTL_MS],
     );
 
-    return sessionResult.rows[0] ?? null;
+    return renewResult.rows[0] ?? session;
 }
 
 export async function createCharacterForSession(
@@ -1160,23 +1185,24 @@ export async function getPublicSessionByToken(
         return null;
     }
 
-    const accountResult = await pool.query<AccountRecord>(
-        `
+    const [accountResult, characters] = await Promise.all([
+        pool.query<AccountRecord>(
+            `
       SELECT *
       FROM accounts
       WHERE id = $1
       LIMIT 1
     `,
-        [session.account_id],
-    );
+            [session.account_id],
+        ),
+        getCharactersByAccountId(session.account_id),
+    ]);
 
     const account = accountResult.rows[0];
 
     if (!account) {
         return null;
     }
-
-    const characters = await getCharactersByAccountId(account.id);
 
     return toPublicSession(account, characters, session.selected_character_id);
 }

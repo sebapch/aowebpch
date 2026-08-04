@@ -2,7 +2,7 @@
 
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import type { AuthErrorResponse, AuthSession } from "../lib/auth";
+import { fetchAuthSession, type AuthSession } from "../lib/auth";
 
 type UseAuthRedirectOptions = {
     redirectTo: string;
@@ -47,18 +47,16 @@ export function useAuthRedirect({
 
         const loadSession = async () => {
             try {
-                const response = await fetch("/api/auth/me", { cache: "no-store" });
+                const result = await fetchAuthSession();
 
-                if (!response.ok) {
+                if (!result) {
                     if (!cancelled && when === "unauthenticated") {
                         router.replace(buildRedirectTarget());
                     }
                     return;
                 }
 
-                const result = (await response.json()) as AuthSession | AuthErrorResponse;
-
-                if (cancelled || "error" in result) {
+                if (cancelled) {
                     return;
                 }
 

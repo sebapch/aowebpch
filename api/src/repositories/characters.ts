@@ -397,6 +397,86 @@ async function getCharacterSpells(
     return result.rows;
 }
 
+function groupRowsByCharacterId<T extends { character_id: string }>(
+    rows: T[],
+    characterIds: string[],
+): Map<string, Omit<T, "character_id">[]> {
+    const grouped = new Map<string, Omit<T, "character_id">[]>();
+
+    for (const characterId of characterIds) {
+        grouped.set(characterId, []);
+    }
+
+    for (const { character_id, ...rest } of rows) {
+        grouped.get(character_id)?.push(rest);
+    }
+
+    return grouped;
+}
+
+async function getCharacterItemsBatch(
+    client: PoolClient,
+    characterIds: string[],
+): Promise<Map<string, CharacterItemRecord[]>> {
+    if (characterIds.length === 0) {
+        return new Map();
+    }
+
+    const result = await client.query<CharacterItemRecord & { character_id: string }>(
+        `
+      SELECT character_id, id_pos, id_item, cant, equipped
+      FROM character_items
+      WHERE character_id = ANY($1)
+      ORDER BY character_id ASC, id_pos ASC
+    `,
+        [characterIds],
+    );
+
+    return groupRowsByCharacterId(result.rows, characterIds);
+}
+
+async function getCharacterBankItemsBatch(
+    client: PoolClient,
+    characterIds: string[],
+): Promise<Map<string, CharacterBankItemRecord[]>> {
+    if (characterIds.length === 0) {
+        return new Map();
+    }
+
+    const result = await client.query<CharacterBankItemRecord & { character_id: string }>(
+        `
+      SELECT character_id, id_pos, id_item, cant
+      FROM character_bank_items
+      WHERE character_id = ANY($1)
+      ORDER BY character_id ASC, id_pos ASC
+    `,
+        [characterIds],
+    );
+
+    return groupRowsByCharacterId(result.rows, characterIds);
+}
+
+async function getCharacterSpellsBatch(
+    client: PoolClient,
+    characterIds: string[],
+): Promise<Map<string, CharacterSpellRecord[]>> {
+    if (characterIds.length === 0) {
+        return new Map();
+    }
+
+    const result = await client.query<CharacterSpellRecord & { character_id: string }>(
+        `
+      SELECT character_id, id_pos, id_spell
+      FROM character_spells
+      WHERE character_id = ANY($1)
+      ORDER BY character_id ASC, id_pos ASC
+    `,
+        [characterIds],
+    );
+
+    return groupRowsByCharacterId(result.rows, characterIds);
+}
+
 async function getCharacterRecord(
     client: PoolClient,
     characterId: string,
@@ -450,9 +530,11 @@ async function getFullCharacter(
         return null;
     }
 
-    const items = await getCharacterItems(client, characterId);
-    const bankItems = await getCharacterBankItems(client, characterId);
-    const spells = await getCharacterSpells(client, characterId);
+    const [items, bankItems, spells] = await Promise.all([
+        getCharacterItems(client, characterId),
+        getCharacterBankItems(client, characterId),
+        getCharacterSpells(client, characterId),
+    ]);
 
     return toCharacterResponse(character, items, bankItems, spells);
 }
@@ -1047,18 +1129,23 @@ export async function getCharactersByAccountId(
             [accountId],
         );
 
-        const characters: CharacterApiResponse[] = [];
+        const characterIds = characterResult.rows.map((character) => character.id);
 
-        for (const character of characterResult.rows) {
-            const items = await getCharacterItems(client, character.id);
-            const bankItems = await getCharacterBankItems(client, character.id);
-            const spells = await getCharacterSpells(client, character.id);
-            characters.push(
-                toCharacterResponse(character, items, bankItems, spells),
-            );
-        }
+        const [itemsByCharacter, bankItemsByCharacter, spellsByCharacter] =
+            await Promise.all([
+                getCharacterItemsBatch(client, characterIds),
+                getCharacterBankItemsBatch(client, characterIds),
+                getCharacterSpellsBatch(client, characterIds),
+            ]);
 
-        return characters;
+        return characterResult.rows.map((character) =>
+            toCharacterResponse(
+                character,
+                itemsByCharacter.get(character.id) ?? [],
+                bankItemsByCharacter.get(character.id) ?? [],
+                spellsByCharacter.get(character.id) ?? [],
+            ),
+        );
     } finally {
         client.release();
     }

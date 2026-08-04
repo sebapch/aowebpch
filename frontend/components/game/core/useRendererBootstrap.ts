@@ -313,22 +313,12 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                     options.mapNumber
                         ? options.pendingUserSnapshotRef.current
                         : null;
-                const initialVisibleBounds =
-                    await options.preloadInitialVisibleMapAssets(
-                        engine,
-                        initialSnapshot,
-                    );
-                await options.preloadCurrentSceneAssets(
-                    engine,
-                    initialSnapshot,
-                );
-                options.applyPendingTileStates(engine);
 
                 if (isDisposed || engine.isDestroyed) {
                     return;
                 }
 
-                const createPixiApp = async (attempt: number) => {
+                const createPixiApp = async (attempt: number): Promise<Application> => {
                     options.updateLoadingProgress(
                         "Renderizando mundo",
                         72,
@@ -375,10 +365,24 @@ export function useRendererBootstrap(options: UseRendererBootstrapOptions) {
                     }
                 };
 
-                const app = await createPixiApp(0);
+                // Los dos preloads de assets y la creacion del canvas/WebGL
+                // son independientes entre si (el canvas no usa ninguna
+                // textura precargada), asi que corren en paralelo en vez de
+                // en serie: el tiempo hasta el primer frame pasa a ser el
+                // del paso mas lento en vez de la suma de los tres.
+                const [initialVisibleBounds, , app] = await Promise.all([
+                    options.preloadInitialVisibleMapAssets(
+                        engine,
+                        initialSnapshot,
+                    ),
+                    options.preloadCurrentSceneAssets(engine, initialSnapshot),
+                    createPixiApp(0),
+                ]);
+                options.applyPendingTileStates(engine);
+
                 app.canvas.style.opacity = "0";
 
-                if (isDisposed) {
+                if (isDisposed || engine.isDestroyed) {
                     app.destroy({ removeView: true });
                     return;
                 }
