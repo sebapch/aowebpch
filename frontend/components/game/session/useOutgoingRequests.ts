@@ -133,6 +133,7 @@ type UseOutgoingRequestsOptions = OutgoingRequestProps & {
         action: string,
         details?: Record<string, unknown>,
     ) => void;
+    onUseItemSent: (item: InventoryItem | null) => void;
 };
 
 function getSocket(
@@ -219,6 +220,7 @@ export function useOutgoingRequests({
     clearExpiredCombatCooldowns,
     recordResourceUseItem,
     recordClientGameAction,
+    onUseItemSent,
     equipRequest,
     useItemClickRequest,
     useItemURequest,
@@ -340,6 +342,7 @@ export function useOutgoingRequests({
             ) ?? null;
         recordResourceUseItem(slot, inventoryItem, now);
         socket.send(createUseItemClickPacket(slot));
+        onUseItemSent(inventoryItem);
         recordClientGameAction("use_item_click", {
             slot,
             itemId: inventoryItem?.idItem ?? null,
@@ -355,6 +358,7 @@ export function useOutgoingRequests({
         clearExpiredCombatCooldowns,
         combatCooldownsRef,
         nextUseItemAtRef,
+        onUseItemSent,
         playerHudRef,
         recordClientGameAction,
         recordResourceUseItem,
@@ -411,6 +415,7 @@ export function useOutgoingRequests({
             ) ?? null;
         recordResourceUseItem(slot, inventoryItem, now);
         socket.send(createUseItemUPacket(slot));
+        onUseItemSent(inventoryItem);
         recordClientGameAction("use_item_u", {
             slot,
             itemId: inventoryItem?.idItem ?? null,
@@ -426,6 +431,7 @@ export function useOutgoingRequests({
         combatCooldownsRef,
         clearExpiredCombatCooldowns,
         nextUseItemAtRef,
+        onUseItemSent,
         playerHudRef,
         recordClientGameAction,
         recordResourceUseItem,

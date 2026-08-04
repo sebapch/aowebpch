@@ -119,6 +119,7 @@ export type IncomingPacketHandlerContext = {
         grhIndex: number,
     ) => Promise<void>;
     soundManagerRef: MutableRef<any>;
+    predictedSelfSoundsRef: MutableRef<Map<number, number[]>>;
     resolveEntitySoundPosition: (engine: any, entityId?: number) => any;
     setIsSceneReady: (ready: boolean) => void;
     disconnectSocket: () => void;

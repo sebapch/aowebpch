@@ -13,6 +13,8 @@ import { GraphicData, MapTile, SpellData } from "../../../types/game";
 import { getTileAt } from "../../../utils/gameLoader";
 import {
     createDialogPacket,
+    OBJECT_TYPE,
+    type InventoryItem,
     type ChatChannel,
     type CharacterStatsSnapshot,
     type PanelSnapshot,
@@ -39,7 +41,11 @@ import {
     DEFAULT_RUNTIME_TIMING,
     type RuntimeTimingConfig,
 } from "../../../lib/runtime-config";
-import { GameSoundManager, type SoundPosition } from "../../../lib/sound";
+import {
+    GameSoundManager,
+    recordPredictedSoundEcho,
+    type SoundPosition,
+} from "../../../lib/sound";
 import { DebugCombatOverlay } from "../overlays/DebugCombatOverlay";
 import { LoadingOverlay } from "../overlays/LoadingOverlay";
 import { NpcContextMenu } from "../overlays/NpcContextMenu";
@@ -360,6 +366,15 @@ const STEP_SOUNDS = {
 } as const;
 
 const MIN_STEP_SOUND_INTERVAL_MS = 70;
+
+// Sonido de beber (SND_BEBER en el servidor). Se reproduce localmente al enviar
+// la acción para que la poción se escuche sin esperar el eco del servidor.
+const DRINK_SOUND_ID = 46;
+const CONSUMABLE_OBJECT_TYPES: ReadonlySet<number> = new Set([
+    OBJECT_TYPE.pociones,
+    OBJECT_TYPE.comida,
+    OBJECT_TYPE.bebidas,
+]);
 
 type StepTerrain = keyof typeof STEP_SOUNDS;
 
@@ -787,6 +802,7 @@ export default function MapRenderer({
     const soundManagerRef = useRef<GameSoundManager | null>(null);
     const stepVariantRef = useRef<Map<number, 0 | 1>>(new Map());
     const lastStepSoundAtRef = useRef<Map<number, number>>(new Map());
+    const predictedSelfSoundsRef = useRef<Map<number, number[]>>(new Map());
     const runtimeTimingRef = useRef<RuntimeTimingConfig>(runtimeTiming);
     const panelSnapshotChunkBufferRef = useRef("");
     const panelSnapshotChunkExpectedIndexRef = useRef(0);
@@ -887,6 +903,7 @@ export default function MapRenderer({
     useEffect(() => {
         const stepVariant = stepVariantRef.current;
         const lastStepSoundAt = lastStepSoundAtRef.current;
+        const predictedSelfSounds = predictedSelfSoundsRef.current;
 
         return () => {
             if (movementInputResumeTimeoutRef.current !== null) {
@@ -897,6 +914,7 @@ export default function MapRenderer({
             soundManagerRef.current = null;
             stepVariant.clear();
             lastStepSoundAt.clear();
+            predictedSelfSounds.clear();
         };
     }, []);
 
@@ -929,6 +947,31 @@ export default function MapRenderer({
                 fadeInMs: 8,
                 fadeOutMs: 10,
             });
+        },
+        [],
+    );
+
+    const handleUseItemSent = React.useCallback(
+        (item: InventoryItem | null) => {
+            if (!item || !CONSUMABLE_OBJECT_TYPES.has(item.objType)) {
+                return;
+            }
+
+            // El servidor rechaza el uso de items estando muerto, así que no
+            // adelantamos un sonido que nunca va a existir.
+            if (engineRef.current?.user?.dead) {
+                return;
+            }
+
+            // Adelantamos el sonido propio: el servidor lo retransmite igual, y
+            // ese eco se descarta en el handler de `playSound`.
+            recordPredictedSoundEcho(
+                predictedSelfSoundsRef.current,
+                DRINK_SOUND_ID,
+            );
+
+            // Sin throttle: el envío ya está limitado por `nextUseItemAtRef`.
+            soundManagerRef.current?.play({ soundId: DRINK_SOUND_ID });
         },
         [],
     );
@@ -1456,6 +1499,7 @@ export default function MapRenderer({
         clearExpiredCombatCooldowns,
         recordResourceUseItem,
         recordClientGameAction,
+        onUseItemSent: handleUseItemSent,
         equipRequest,
         useItemClickRequest,
         useItemURequest,
@@ -1960,6 +2004,7 @@ export default function MapRenderer({
                 renderSpellProjectileVisual,
                 renderProjectileVisual,
                 soundManagerRef,
+                predictedSelfSoundsRef,
                 resolveEntitySoundPosition,
                 setIsSceneReady,
                 disconnectSocket,

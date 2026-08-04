@@ -568,6 +568,8 @@ export type ChatChannel =
     | "whisper";
 
 export const OBJECT_TYPE = {
+    comida: 1,
+    bebidas: 13,
     arboles: 4,
     armas: 2,
     armaduras: 3,

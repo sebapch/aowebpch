@@ -2462,6 +2462,9 @@ const MAX_BANK_SLOTS = 100;
 const NPC_TARGET_LOCK_MS = vars.npcAi.targetLockMs as number;
 const characterPersistenceQueue = new Map<string, Promise<void>>();
 const sharedVaultPersistenceQueue = new Map<string, Promise<void>>();
+// Ventana en la que se colapsan las escrituras de inventario diferidas.
+const ITEMS_PERSISTENCE_DEBOUNCE_MS = 2000;
+const pendingItemsPersistence = new Map<string, NodeJS.Timeout>();
 const sharedVaultSessions = new Map<string, SharedVaultSession>();
 const DEFAULT_PLAYER_COLOR = "#808080";
 const STAFF_COLOR = "#419900";
@@ -2754,6 +2757,44 @@ function queueCharacterPersistence(characterId: string, operation: () => Promise
 
     characterPersistenceQueue.set(characterId, tracked);
     return tracked;
+}
+
+/**
+ * Persistencia de inventario diferida y colapsada.
+ *
+ * Las acciones que se repiten en ráfaga (tomar pociones) no pueden esperar a un
+ * PUT contra la API: `queueCharacterPersistence` serializa por personaje, así que
+ * una escritura más lenta que el cooldown de la acción hace crecer la cadena sin
+ * límite y todo lo que se emita después del `await` (el sonido, por ejemplo) llega
+ * tarde. Acá sólo marcamos que hay que guardar y devolvemos el control enseguida.
+ */
+function scheduleCharacterItemsPersistence(user: GameCharacter): void {
+    if (!user._id || user.pvpChar || pendingItemsPersistence.has(user._id)) {
+        return;
+    }
+
+    const characterId = user._id;
+    const timer = setTimeout(() => {
+        pendingItemsPersistence.delete(characterId);
+
+        void persistCharacterItems(user).catch((err) => funct.dumpError(err));
+    }, ITEMS_PERSISTENCE_DEBOUNCE_MS);
+
+    timer.unref?.();
+    pendingItemsPersistence.set(characterId, timer);
+}
+
+function cancelPendingItemsPersistence(characterId?: string): void {
+    if (!characterId) {
+        return;
+    }
+
+    const timer = pendingItemsPersistence.get(characterId);
+
+    if (timer) {
+        clearTimeout(timer);
+        pendingItemsPersistence.delete(characterId);
+    }
 }
 
 function queueSharedVaultPersistence(vaultKey: string, operation: () => Promise<void>): Promise<void> {
@@ -3278,6 +3319,10 @@ async function persistCharacterSnapshot(
     if (!runtimeUser._id || runtimeUser.pvpChar) {
         return;
     }
+
+    // El snapshot ya escribe `items`: cualquier guardado diferido pendiente sobra
+    // y no queremos que dispare con el personaje ya desconectado.
+    cancelPendingItemsPersistence(runtimeUser._id);
 
     await queueCharacterPersistence(runtimeUser._id, async () => {
         try {
@@ -4067,14 +4112,8 @@ function Game(this: GameApi) {
                         return;
                     }
 
-                    // Pociones infinitas: no se gastan del inventario
-                    // game.quitarUserInvItem(clientId, idPos, 1);
-                    await persistCharacterItems(user);
-
-                    if (isAdminSummonedBot(user)) {
-                        broadcastCharacterVitalsDelta(user);
-                    }
-
+                    // El sonido va antes que la persistencia: es una acción que se
+                    // repite en ráfaga y no puede quedar detrás de un PUT a la API.
                     game.loopArea(ws, function (client: AreaTarget) {
                         if (!client.isNpc) {
                             if (!canReceiveCharacterEvent(client.id, user.id)) {
@@ -4084,12 +4123,20 @@ function Game(this: GameApi) {
                             handleProtocol.playSound(user.id, vars.arSounds.SND_BEBER, vars.clients[client.id]);
                         }
                     });
+
+                    if (isAdminSummonedBot(user)) {
+                        broadcastCharacterVitalsDelta(user);
+                    }
+
+                    // Pociones infinitas: no se gastan del inventario
+                    // game.quitarUserInvItem(clientId, idPos, 1);
+                    scheduleCharacterItemsPersistence(user);
                     break;
                 }
                 case vars.objType.comida:
                 case vars.objType.bebidas:
                     // game.quitarUserInvItem(clientId, idPos, 1);
-                    await persistCharacterItems(user);
+                    scheduleCharacterItemsPersistence(user);
 
                     game.loopArea(ws, function (client: AreaTarget) {
                         if (!client.isNpc) {

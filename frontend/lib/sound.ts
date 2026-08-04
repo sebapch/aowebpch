@@ -12,6 +12,13 @@ interface PlaySoundOptions {
     source?: SoundPosition;
     fadeInMs?: number;
     fadeOutMs?: number;
+    /**
+     * Identificador de la fuente lógica del sonido (típicamente
+     * `${soundId}:${entityId}`). Dos plays con la misma clave separados por menos
+     * de `throttleMs` colapsan en uno solo.
+     */
+    throttleKey?: string;
+    throttleMs?: number;
 }
 
 const SOUND_FILE_EXTENSIONS = ["ogg", "mp3", "wav"] as const;
@@ -35,11 +42,64 @@ const SOUND_EXTENSION_OVERRIDES = new Map<
     [24, "mp3"],
 ]);
 
+// Ventana en la que se espera el eco del servidor de un sonido ya reproducido
+// localmente. Cubre picos de ping sin arrastrar predicciones viejas.
+const PREDICTED_ECHO_TTL_MS = 3000;
+
+/**
+ * Cuando el cliente adelanta un sonido propio (ej. beber una poción al enviar el
+ * paquete), el servidor igual lo va a retransmitir. Estos helpers anotan cada
+ * predicción para poder descartar exactamente un eco por cada una y no escuchar
+ * el sonido dos veces.
+ */
+export function recordPredictedSoundEcho(
+    store: Map<number, number[]>,
+    soundId: number,
+    now = Date.now(),
+): void {
+    const pending = store.get(soundId) ?? [];
+
+    pending.push(now);
+    store.set(soundId, pending);
+}
+
+export function consumePredictedSoundEcho(
+    store: Map<number, number[]>,
+    soundId: number,
+    now = Date.now(),
+): boolean {
+    const pending = store.get(soundId);
+
+    if (!pending || pending.length === 0) {
+        return false;
+    }
+
+    const fresh = pending.filter(
+        (predictedAt) => now - predictedAt <= PREDICTED_ECHO_TTL_MS,
+    );
+
+    if (fresh.length === 0) {
+        store.delete(soundId);
+        return false;
+    }
+
+    fresh.shift();
+
+    if (fresh.length === 0) {
+        store.delete(soundId);
+    } else {
+        store.set(soundId, fresh);
+    }
+
+    return true;
+}
+
 export class GameSoundManager {
     private readonly basePath: string;
     private readonly unavailableSoundIds = new Set<number>();
     private readonly soundCache = new Map<number, Howl>();
     private readonly idleStopTimers = new Map<number, number>();
+    private readonly lastPlayAtByThrottleKey = new Map<string, number>();
     private readonly preferWebAudio: boolean;
     private masterVolume = 1;
     private preferredExtension: (typeof SOUND_FILE_EXTENSIONS)[number] =
@@ -57,6 +117,8 @@ export class GameSoundManager {
         source,
         fadeInMs = 0,
         fadeOutMs = 0,
+        throttleKey,
+        throttleMs = 0,
     }: PlaySoundOptions): void {
         if (typeof window === "undefined" || soundId <= 0) {
             return;
@@ -64,6 +126,18 @@ export class GameSoundManager {
 
         if (this.unavailableSoundIds.has(soundId)) {
             return;
+        }
+
+        if (throttleKey && throttleMs > 0) {
+            const now = performance.now();
+            const lastPlayAt =
+                this.lastPlayAtByThrottleKey.get(throttleKey) ?? -Infinity;
+
+            if (now - lastPlayAt < throttleMs) {
+                return;
+            }
+
+            this.lastPlayAtByThrottleKey.set(throttleKey, now);
         }
 
         const computedVolume = this.getVolume(listener, source);
@@ -125,6 +199,7 @@ export class GameSoundManager {
 
         this.soundCache.clear();
         this.idleStopTimers.clear();
+        this.lastPlayAtByThrottleKey.clear();
         Howler.volume(1);
     }
 

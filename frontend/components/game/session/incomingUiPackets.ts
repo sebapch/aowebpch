@@ -1,4 +1,10 @@
+import { consumePredictedSoundEcho } from "../../../lib/sound";
 import type { IncomingPacketHandlerArgs } from "./incomingPacketTypes";
+
+// El servidor no deja usar un item más seguido que `actionCooldowns.useItemMs`
+// (250 ms), así que descartar repeticiones más rápidas que esto nunca silencia
+// una acción legítima: sólo evita que una ráfaga apile instancias de audio.
+const MIN_ENTITY_SOUND_INTERVAL_MS = 180;
 
 export async function handleIncomingUiPacket({
     packet,
@@ -169,6 +175,8 @@ export async function handleIncomingUiPacket({
                         engine,
                         packet.payload.targetId,
                     ),
+                    throttleKey: `${packet.payload.soundId}:${packet.payload.targetId}`,
+                    throttleMs: MIN_ENTITY_SOUND_INTERVAL_MS,
                 });
             }
 
@@ -187,10 +195,26 @@ export async function handleIncomingUiPacket({
             );
             return true;
 
-        case "playSound":
+        case "playSound": {
             if (!engine) {
                 return true;
             }
+
+            const isOwnSound =
+                engine.user?.id != null && packet.payload.id === engine.user.id;
+
+            // Si el cliente ya adelantó este sonido al enviar la acción, el eco
+            // del servidor se descarta para no escucharlo dos veces.
+            if (
+                isOwnSound &&
+                consumePredictedSoundEcho(
+                    ctx.predictedSelfSoundsRef.current,
+                    packet.payload.soundId,
+                )
+            ) {
+                return true;
+            }
+
             ctx.soundManagerRef.current?.play({
                 soundId: packet.payload.soundId,
                 listener: ctx.resolveEntitySoundPosition(
@@ -201,8 +225,11 @@ export async function handleIncomingUiPacket({
                     engine,
                     packet.payload.id,
                 ),
+                throttleKey: `${packet.payload.soundId}:${packet.payload.id}`,
+                throttleMs: MIN_ENTITY_SOUND_INTERVAL_MS,
             });
             return true;
+        }
 
         case "error":
             ctx.setIsSceneReady(false);
