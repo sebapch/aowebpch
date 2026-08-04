@@ -5,7 +5,7 @@ import type { MultiVoiceState } from "../lib/multiPeerVoice";
 type VoiceChatPanelProps = {
     state: MultiVoiceState;
     pushToTalkLabel: string;
-    emptyPeerLabel: string;
+    emptyPeerLabel?: string;
     visible: boolean;
     onJoin: () => void;
     onLeave: () => void;
@@ -66,13 +66,21 @@ export default function VoiceChatPanel({
                     aria-hidden
                 />
 
-                <span className="max-w-[130px] truncate text-[11px] font-medium text-stone-200">
-                    {state.joined
-                        ? state.peers.length > 0
-                            ? `${state.peers.length} cerca`
-                            : emptyPeerLabel
-                        : emptyPeerLabel}
-                </span>
+                {state.joined ? (
+                    state.peers.length > 0 ? (
+                        <span className="max-w-[130px] truncate text-[11px] font-medium text-stone-200">
+                            {`${state.peers.length} cerca`}
+                        </span>
+                    ) : emptyPeerLabel ? (
+                        <span className="max-w-[130px] truncate text-[11px] font-medium text-stone-200">
+                            {emptyPeerLabel}
+                        </span>
+                    ) : null
+                ) : emptyPeerLabel ? (
+                    <span className="max-w-[130px] truncate text-[11px] font-medium text-stone-200">
+                        {emptyPeerLabel}
+                    </span>
+                ) : null}
 
                 {state.joined ? (
                     <button
@@ -111,17 +119,6 @@ export default function VoiceChatPanel({
                             <span className="max-w-[110px] truncate text-[10px] text-stone-300">
                                 {peer.peerName}
                             </span>
-                            <span
-                                className={`h-1.5 w-1.5 shrink-0 rounded-full transition-colors ${
-                                    state.transmitting ? "bg-emerald-400" : "bg-stone-700"
-                                }`}
-                                title={
-                                    state.transmitting
-                                        ? "Micrófono abierto"
-                                        : `Mantené ${pushToTalkLabel} para hablar`
-                                }
-                                aria-hidden
-                            />
                             <button
                                 type="button"
                                 onClick={() => onTogglePeerMute(peer.peerId)}

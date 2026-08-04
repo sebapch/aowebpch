@@ -2870,7 +2870,6 @@ function HomeContent() {
                                     pushToTalkLabel={formatHotkeyBinding(
                                         hotkeySettings.pushToTalk,
                                     )}
-                                    emptyPeerLabel="Voz cercana"
                                     visible={mapVoiceChatEnabled}
                                     onJoin={() => requestProximityVoiceAction("join")}
                                     onLeave={() => requestProximityVoiceAction("leave")}
