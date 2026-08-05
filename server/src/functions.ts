@@ -141,6 +141,16 @@ function Funct(this: any) {
                                     );
                                     handleProtocol.sendMyCharacter(onlineUser as any);
                                     socket.send(client);
+
+                                    const name = onlineUser.nameCharacter;
+                                    if (name) {
+                                        handleProtocol.consoleToAll(
+                                            `[Arena ${teamSizeLabel}] ${name} - ${outcome} Cambio de ELO: ${sign}${change.delta} (${change.before} ➔ ${change.after})`,
+                                            color,
+                                            1,
+                                            0,
+                                        );
+                                    }
                                 }
                             }
                         } catch (error) {

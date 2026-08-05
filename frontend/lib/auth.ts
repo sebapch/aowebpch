@@ -9,6 +9,7 @@ export type AuthCharacterSummary = {
     criminal: boolean;
     faction: "none" | "armada" | "caos";
     clanName: string | null;
+    rating: number;
     id_head: number;
     id_body: number;
     id_weapon: number;

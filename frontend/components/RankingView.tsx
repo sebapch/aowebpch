@@ -5,6 +5,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Crown, Flame, Trophy } from "lucide-react";
 import { formatNumber } from "@/lib/number-format";
+import { getRankDetails } from "@/lib/ranks";
 import type {
     RankingHeadSprite,
     RatingRankingEntry,
@@ -45,19 +46,6 @@ const classFilterOptions = [
     })),
 ];
 
-const eloTiers = [
-    { min: 1750, label: "Maestro", color: "#e879f9" },
-    { min: 1550, label: "Diamante", color: "#5ad4e6" },
-    { min: 1350, label: "Platino", color: "#8fd6c4" },
-    { min: 1150, label: "Oro", color: "#d4a359" },
-    { min: 1000, label: "Plata", color: "#9ca3af" },
-    { min: -Infinity, label: "Bronce", color: "#a1662f" },
-] as const;
-
-function getEloTier(rating: number) {
-    return eloTiers.find((tier) => rating >= tier.min) ?? eloTiers[eloTiers.length - 1];
-}
-
 function getWinRate(entry: RatingRankingEntry) {
     if (entry.gamesPlayed <= 0) {
         return null;
@@ -80,11 +68,6 @@ function getCharacterMeta(character: CharacterVisualMeta) {
     const raceLabel =
         raceLabels[character.idRaza] ?? `Raza ${character.idRaza}`;
     return `${classLabel} · ${raceLabel}`;
-}
-
-function getCharacterNameColor(character: CharacterVisualMeta) {
-    void character;
-    return "#808080";
 }
 
 function getClanTag(character: CharacterVisualMeta) {
@@ -301,7 +284,7 @@ export default function RankingView({
                             {podium.map((entry, index) => {
                                 const Icon = podiumIcons[index] ?? Trophy;
                                 const iconColor = podiumIconColors[index] ?? "#c7ccd6";
-                                const tier = getEloTier(entry.rating);
+                                const tier = getRankDetails(entry.rating).tier;
                                 const winRate = getWinRate(entry);
 
                                 return (
@@ -327,16 +310,16 @@ export default function RankingView({
                                                     </span>
                                                     <span
                                                         className="text-[10px] font-bold uppercase tracking-wider"
-                                                        style={{ color: tier.color }}
+                                                        style={{ color: tier.hexColor }}
                                                     >
-                                                        {tier.label}
+                                                        {tier.name}
                                                     </span>
                                                 </div>
 
                                                 <p
                                                     className="mt-2 truncate text-lg font-bold"
                                                     style={{
-                                                        color: getCharacterNameColor(entry),
+                                                        color: tier.hexColor,
                                                     }}
                                                 >
                                                     {entry.name}
@@ -391,7 +374,7 @@ export default function RankingView({
 
                                     <div>
                                         {rest.map((entry, index) => {
-                                            const tier = getEloTier(entry.rating);
+                                            const tier = getRankDetails(entry.rating).tier;
 
                                             return (
                                                 <div
@@ -413,7 +396,7 @@ export default function RankingView({
                                                             <p
                                                                 className="truncate text-sm font-bold"
                                                                 style={{
-                                                                    color: getCharacterNameColor(entry),
+                                                                    color: tier.hexColor,
                                                                 }}
                                                             >
                                                                 {entry.name}
@@ -435,9 +418,9 @@ export default function RankingView({
                                                         </span>
                                                         <span
                                                             className="text-[10px] font-bold uppercase tracking-wider"
-                                                            style={{ color: tier.color }}
+                                                            style={{ color: tier.hexColor }}
                                                         >
-                                                            {tier.label}
+                                                            {tier.name}
                                                         </span>
                                                     </div>
 

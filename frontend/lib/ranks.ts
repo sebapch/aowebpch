@@ -14,6 +14,7 @@ export type RankTierInfo = {
     badgeColor: string; // Tailwind/HEX gradient colors
     borderColor: string;
     textColor: string;
+    hexColor: string; // plain hex equivalent of textColor, for inline styles / canvas
     glowColor: string;
     iconSymbol: string;
 };
@@ -27,6 +28,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         badgeColor: "from-[#8C5338] via-[#B86F45] to-[#6E3C23]",
         borderColor: "border-[#b86f45]/60",
         textColor: "text-[#e8b598]",
+        hexColor: "#e8b598",
         glowColor: "rgba(184, 111, 69, 0.3)",
         iconSymbol: "🥉",
     },
@@ -38,6 +40,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         badgeColor: "from-[#71717A] via-[#A1A1AA] to-[#52525B]",
         borderColor: "border-zinc-400/60",
         textColor: "text-zinc-200",
+        hexColor: "#e4e4e7",
         glowColor: "rgba(161, 161, 170, 0.35)",
         iconSymbol: "🥈",
     },
@@ -49,6 +52,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         badgeColor: "from-[#B45309] via-[#F59E0B] to-[#78350F]",
         borderColor: "border-amber-400/70",
         textColor: "text-amber-200",
+        hexColor: "#fde68a",
         glowColor: "rgba(245, 158, 11, 0.4)",
         iconSymbol: "🥇",
     },
@@ -60,6 +64,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         badgeColor: "from-[#0369A1] via-[#38BDF8] to-[#075985]",
         borderColor: "border-sky-400/70",
         textColor: "text-sky-200",
+        hexColor: "#bae6fd",
         glowColor: "rgba(56, 189, 248, 0.45)",
         iconSymbol: "💎",
     },
@@ -71,6 +76,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         badgeColor: "from-[#6D28D9] via-[#A855F7] to-[#4C1D95]",
         borderColor: "border-purple-400/70",
         textColor: "text-purple-200",
+        hexColor: "#e9d5ff",
         glowColor: "rgba(168, 85, 247, 0.5)",
         iconSymbol: "👑",
     },
@@ -82,6 +88,7 @@ export const RANK_TIERS: RankTierInfo[] = [
         badgeColor: "from-[#BE123C] via-[#F43F5E] to-[#881337]",
         borderColor: "border-rose-400/80",
         textColor: "text-rose-200",
+        hexColor: "#fecdd3",
         glowColor: "rgba(244, 63, 94, 0.6)",
         iconSymbol: "🔥",
     },

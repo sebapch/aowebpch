@@ -96,6 +96,16 @@ function describeMicError(error: unknown): string {
     return "No se pudo acceder al micrófono.";
 }
 
+/** Cuánto esperar tras "disconnected" antes de asumir que no se va a recuperar sola. */
+const DISCONNECT_GRACE_MS = 4_000;
+/** Backoff entre reintentos de reconexión de un link (crece con cada intento, con techo). */
+const RECONNECT_BASE_DELAY_MS = 1_000;
+const RECONNECT_MAX_DELAY_MS = 8_000;
+const RECONNECT_MAX_ATTEMPTS = 5;
+/** Reintentos para recuperar el micrófono si el track se corta solo (dispositivo perdido). */
+const MIC_RECOVERY_MAX_ATTEMPTS = 3;
+const MIC_RECOVERY_DELAY_MS = 1_500;
+
 type PeerLink = {
     roomId: string;
     peerId: string;
@@ -108,6 +118,13 @@ type PeerLink = {
     isPeerReady: boolean;
     hasRemoteDescription: boolean;
     pendingCandidates: RTCIceCandidateInit[];
+
+    /** Intentos de reconexión consecutivos desde la última vez que se conectó bien. */
+    reconnectAttempts: number;
+    /** Timer del backoff de reconexión tras "failed" (o "disconnected" persistente). */
+    reconnectTimer: ReturnType<typeof setTimeout> | null;
+    /** Timer de gracia: espera a que "disconnected" se resuelva solo antes de forzar la reconexión. */
+    disconnectGraceTimer: ReturnType<typeof setTimeout> | null;
 
     /**
      * Reproductor del audio remoto. Es un elemento multimedia y no un grafo de
@@ -141,6 +158,8 @@ export class MultiPeerVoiceChat {
     private speakingIntervalId: ReturnType<typeof setInterval> | null = null;
     /** Rango máximo usado para traducir distancia -> volumen (sólo relevante en proximidad). */
     private maxDistanceRange = 0;
+    /** Evita reintentos de mic superpuestos si el track dispara "ended" más de una vez. */
+    private micRecoveryInFlight = false;
 
     constructor(options: MultiPeerVoiceChatOptions) {
         this.sendSignal = options.sendSignal;
@@ -192,6 +211,9 @@ export class MultiPeerVoiceChat {
                 isPeerReady: false,
                 hasRemoteDescription: false,
                 pendingCandidates: [],
+                reconnectAttempts: 0,
+                reconnectTimer: null,
+                disconnectGraceTimer: null,
                 audioSink: null,
                 connected: false,
                 speaking: false,
@@ -286,6 +308,7 @@ export class MultiPeerVoiceChat {
         this.localStream = stream;
         // Push to talk: el micrófono arranca cerrado y sólo se abre con la tecla.
         this.setTrackEnabled(false);
+        this.watchLocalTrackHealth(stream);
 
         this.patchState({ status: "joined", joined: true, error: null });
 
@@ -360,6 +383,89 @@ export class MultiPeerVoiceChat {
         });
     }
 
+    /**
+     * El mic puede morirse sin ningún evento de WebRTC: el navegador revoca
+     * el permiso, el sistema operativo le quita el device (auriculares
+     * bluetooth que se desconectan, otra app lo toma en modo exclusivo).
+     * `ended` es el único aviso que da el track en ese caso.
+     */
+    private watchLocalTrackHealth(stream: MediaStream): void {
+        stream.getAudioTracks().forEach((track) => {
+            track.onended = () => {
+                if (this.localStream !== stream || !this.state.joined) {
+                    return;
+                }
+
+                void this.recoverLocalTrack(1);
+            };
+        });
+    }
+
+    private async recoverLocalTrack(firstAttempt: number): Promise<void> {
+        if (this.micRecoveryInFlight || !this.state.joined) {
+            return;
+        }
+
+        this.micRecoveryInFlight = true;
+
+        try {
+            for (let attempt = firstAttempt; attempt <= MIC_RECOVERY_MAX_ATTEMPTS; attempt += 1) {
+                if (!this.state.joined) {
+                    return;
+                }
+
+                let stream: MediaStream;
+
+                try {
+                    stream = await navigator.mediaDevices.getUserMedia({
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true,
+                        },
+                    });
+                } catch {
+                    if (attempt >= MIC_RECOVERY_MAX_ATTEMPTS) {
+                        this.patchState({ error: "Se perdió el micrófono y no se pudo reconectar." });
+                        return;
+                    }
+
+                    await new Promise((resolve) => setTimeout(resolve, MIC_RECOVERY_DELAY_MS));
+                    continue;
+                }
+
+                if (!this.state.joined) {
+                    stream.getTracks().forEach((track) => track.stop());
+                    return;
+                }
+
+                const wasTransmitting = this.state.transmitting;
+
+                this.localStream?.getTracks().forEach((track) => track.stop());
+                this.localStream = stream;
+                this.setTrackEnabled(wasTransmitting);
+                this.watchLocalTrackHealth(stream);
+
+                const newTrack = stream.getAudioTracks()[0];
+
+                if (newTrack) {
+                    for (const link of this.links.values()) {
+                        const sender = link.connection
+                            ?.getSenders()
+                            .find((candidate) => candidate.track?.kind === "audio");
+
+                        void sender?.replaceTrack(newTrack).catch(() => undefined);
+                    }
+                }
+
+                this.patchState({ error: null });
+                return;
+            }
+        } finally {
+            this.micRecoveryInFlight = false;
+        }
+    }
+
     private createPeerConnection(link: PeerLink): void {
         const connection = new RTCPeerConnection({ iceServers: link.iceServers as RTCIceServer[] });
 
@@ -380,19 +486,35 @@ export class MultiPeerVoiceChat {
         connection.onconnectionstatechange = () => {
             if (connection.connectionState === "connected") {
                 link.connected = true;
+                link.reconnectAttempts = 0;
+                this.clearRecoveryTimers(link);
                 this.patchState({ status: "joined", error: null });
                 this.emitPeers();
                 return;
             }
 
             if (connection.connectionState === "failed") {
-                this.patchState({ error: `No se pudo conectar con ${link.peerName}.` });
+                link.connected = false;
+                this.emitPeers();
+                this.scheduleLinkRecovery(link, `No se pudo conectar con ${link.peerName}.`);
                 return;
             }
 
             if (connection.connectionState === "disconnected") {
                 link.connected = false;
                 this.emitPeers();
+
+                // "disconnected" suele resolverse solo en unos segundos (blip de red).
+                // Recién si sigue así pasado el margen de gracia, se fuerza la reconexión.
+                if (link.disconnectGraceTimer === null) {
+                    link.disconnectGraceTimer = setTimeout(() => {
+                        link.disconnectGraceTimer = null;
+
+                        if (link.connection === connection && connection.connectionState === "disconnected") {
+                            this.scheduleLinkRecovery(link, `Se cortó la conexión con ${link.peerName}.`);
+                        }
+                    }, DISCONNECT_GRACE_MS);
+                }
             }
         };
 
@@ -595,6 +717,8 @@ export class MultiPeerVoiceChat {
     }
 
     private closePeerConnection(link: PeerLink): void {
+        this.clearRecoveryTimers(link);
+
         if (link.audioSink) {
             link.audioSink.pause();
             link.audioSink.srcObject = null;
@@ -620,6 +744,61 @@ export class MultiPeerVoiceChat {
     private resetPeerConnection(link: PeerLink): void {
         this.closePeerConnection(link);
         this.createPeerConnection(link);
+    }
+
+    private clearRecoveryTimers(link: PeerLink): void {
+        if (link.reconnectTimer !== null) {
+            clearTimeout(link.reconnectTimer);
+            link.reconnectTimer = null;
+        }
+
+        if (link.disconnectGraceTimer !== null) {
+            clearTimeout(link.disconnectGraceTimer);
+            link.disconnectGraceTimer = null;
+        }
+    }
+
+    /**
+     * Auto-recuperación de un link roto: reintenta con backoff creciente hasta
+     * un tope, en vez de dejar la conexión muerta para siempre (que es lo que
+     * pasaba antes: "failed" sólo mostraba un error y ahí quedaba).
+     */
+    private scheduleLinkRecovery(link: PeerLink, errorMessage: string): void {
+        if (!this.state.joined || !this.links.has(link.roomId)) {
+            return;
+        }
+
+        this.patchState({ error: errorMessage });
+
+        if (link.reconnectTimer !== null) {
+            return;
+        }
+
+        if (link.reconnectAttempts >= RECONNECT_MAX_ATTEMPTS) {
+            return;
+        }
+
+        const delay = Math.min(
+            RECONNECT_BASE_DELAY_MS * 2 ** link.reconnectAttempts,
+            RECONNECT_MAX_DELAY_MS,
+        );
+
+        link.reconnectAttempts += 1;
+        link.reconnectTimer = setTimeout(() => {
+            link.reconnectTimer = null;
+            this.attemptLinkRecovery(link);
+        }, delay);
+    }
+
+    /** Rearma la conexión del link y le avisa al otro lado para que también se resincronice. */
+    private attemptLinkRecovery(link: PeerLink): void {
+        if (!this.state.joined || !this.links.has(link.roomId)) {
+            return;
+        }
+
+        this.resetPeerConnection(link);
+        this.sendSignal(link.roomId, { kind: "ready", reply: false });
+        this.maybeStartNegotiation(link);
     }
 
     private teardownLink(link: PeerLink): void {

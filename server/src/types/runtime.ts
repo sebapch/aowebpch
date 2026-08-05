@@ -365,6 +365,7 @@ export type RuntimeCharacter = {
     challengeTeam?: 1 | 2 | null;
     challengeTeamColor?: 1 | 2 | null;
     challengeLockedUntil?: number;
+    rating?: number;
     adminSummonedBot?: boolean;
     adminSummonedBotOwnerId?: EntityId;
     [key: string]: unknown;

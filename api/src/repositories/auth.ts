@@ -177,7 +177,7 @@ function getStarterLoadout(
         { idItem: 39, amount: 500 }, // Poción Verde (Agilidad)
     ];
 
-    const spells = [9, 10, 15, 18, 20, 23, 25];
+    const spells = [21, 10, 15, 18, 20, 23, 25]; // 21 = Inmovilizar (reemplaza a Paralizar, id 9)
 
     switch (classKey) {
         case "mago":
@@ -538,6 +538,7 @@ function toAuthCharacterSummary(
         criminal: character.criminal,
         faction: character.faction,
         clanName: character.clanName ?? null,
+        rating: Number(character.rating ?? 1200),
         id_head:
             useLastAppearance && character.idLastHead > 0
                 ? character.idLastHead

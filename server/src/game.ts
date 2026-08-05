@@ -2466,12 +2466,27 @@ const sharedVaultPersistenceQueue = new Map<string, Promise<void>>();
 const ITEMS_PERSISTENCE_DEBOUNCE_MS = 2000;
 const pendingItemsPersistence = new Map<string, NodeJS.Timeout>();
 const sharedVaultSessions = new Map<string, SharedVaultSession>();
-const DEFAULT_PLAYER_COLOR = "#808080";
 const STAFF_COLOR = "#419900";
 const CHALLENGE_TEAM_COLORS: Record<1 | 2, string> = {
     1: "#3333ff",
     2: "#ef4444",
 };
+// Mismos umbrales/colores que RANK_TIERS en frontend/lib/ranks.ts (paquetes
+// separados, no se puede importar directo desde el server).
+const RANK_TIER_COLORS: Array<{ minElo: number; color: string }> = [
+    { minElo: 1450, color: "#fecdd3" }, // maestro
+    { minElo: 1400, color: "#e9d5ff" }, // diamante
+    { minElo: 1350, color: "#bae6fd" }, // platino
+    { minElo: 1300, color: "#fde68a" }, // oro
+    { minElo: 1250, color: "#e4e4e7" }, // plata
+    { minElo: 0, color: "#e8b598" }, // bronce
+];
+
+function getRankColorForRating(rating: number): string {
+    const safeRating = Math.max(0, Math.round(rating));
+    const tier = RANK_TIER_COLORS.find((entry) => safeRating >= entry.minElo);
+    return tier?.color ?? RANK_TIER_COLORS[RANK_TIER_COLORS.length - 1].color;
+}
 const MARKET_DEFAULT_LISTING_HOURS = 24;
 const MARKET_MAX_LISTING_HOURS = 72;
 const MARKET_PUBLICATION_FEE_BPS = 200;
@@ -2701,7 +2716,10 @@ function getRewardsFieldName(faction: CharacterFaction): "factionRewardsArmada" 
 }
 
 function getDefaultCharacterColor(
-    user: Pick<GameCharacter, "privileges" | "criminal" | "faction" | "challengeTeamColor">,
+    user: Pick<
+        GameCharacter,
+        "privileges" | "criminal" | "faction" | "challengeTeamColor" | "rating"
+    >,
 ): string {
     const teamColorSide = Number(user.challengeTeamColor ?? 0);
 
@@ -2713,7 +2731,7 @@ function getDefaultCharacterColor(
         return STAFF_COLOR;
     }
 
-    return DEFAULT_PLAYER_COLOR;
+    return getRankColorForRating(user.rating ?? 1200);
 }
 
 function getFactionScoreValue(user: GameCharacter, faction: CharacterFaction): number {

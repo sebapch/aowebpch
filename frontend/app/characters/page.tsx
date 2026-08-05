@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import CharacterSpritePreview from "@/components/CharacterSpritePreview";
 import type { AuthErrorResponse, AuthSession } from "../../lib/auth";
 import { useAuthRedirect } from "../../hooks/useAuthRedirect";
+import { getRankDetails } from "@/lib/ranks";
 
 type DeleteCandidate = {
     id: string;
@@ -28,7 +29,7 @@ function getCharacterNamePresentation(character: AuthSession["characters"][numbe
         return { label: "Administrador", color: "#419900" };
     }
 
-    return { label: "Jugador", color: "#808080" };
+    return { label: "Jugador", color: getRankDetails(character.rating).tier.hexColor };
 }
 
 export default function CharactersPage() {

@@ -68,6 +68,23 @@ function isMatchmakingTeamSize(value: unknown): value is MatchmakingTeamSize {
     return MATCHMAKING_TEAM_SIZES.includes(value as MatchmakingTeamSize);
 }
 
+// Anuncia por consola a TODO el servidor que un jugador se anoto a la cola,
+// para llamar la atencion y sumar mas jugadores.
+function announceQueueJoin(teamSize: MatchmakingTeamSize, joinedMembers: RuntimeCharacter[], totalInQueue: number) {
+    const required = teamSize * 2;
+
+    for (const member of joinedMembers) {
+        const name = member.nameCharacter;
+
+        if (!name) {
+            continue;
+        }
+
+        const message = `[Arena ${teamSize}v${teamSize}] ${name} se ha anotado. (${totalInQueue}/${required} jugadores anotados)`;
+        getHandleProtocol().consoleToAll(message, "#00E676", 1, 0);
+    }
+}
+
 export const arenaMatchmakingManager = {
     queue: [] as QueueEntry[],
     tickTimer: null as ReturnType<typeof setTimeout> | null,
@@ -306,6 +323,8 @@ export const arenaMatchmakingManager = {
                 "#00E676",
             );
         }
+
+        announceQueueJoin(teamSize, teamMembers, currentTotal);
 
         this.processQueue(teamSize);
         this.broadcastQueueState();

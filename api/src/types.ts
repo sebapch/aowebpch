@@ -325,6 +325,7 @@ export type AuthCharacterSummary = {
     criminal: boolean;
     faction: CharacterFaction;
     clanName: string | null;
+    rating: number;
     id_head: number;
     id_body: number;
     id_weapon: number;
